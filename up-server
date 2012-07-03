@@ -1,0 +1,4 @@
+#!/bin/sh -e
+
+ifconfig $dev up
+ifconfig $dev inet6 add $1
