@@ -4,13 +4,15 @@ import upnpigd
 
 VIFIB_NET = "2001:db8:42::/48"
 
+# TODO : - should we use slapos certificates or
+#          use new ones we create for openvpn ?
+
 def openvpn(*args, **kw):
     args = ['openvpn',
         '--dev', 'tap',
-        '--ca', ca_path,
-        '--cert', cert_path,
-        '--key', key_path,
-        '--nobind',
+        '--ca', config.ca,
+        '--cert', config.cert,
+        '--key', config.key,
         '--persist-tun',
         '--persist-key',
         '--user' 'nobody',
@@ -38,13 +40,12 @@ def server(*args, **kw):
          *args, **kw)
 
 def client(ip, *args, **kw):
-    return openvpn(remote=ip, *args, **kw)
+    return openvpn('--nobind', remote=ip, *args, **kw)
 
-# How do we get our vifib_ip ?
+# TODO : How do we get our vifib ip ?
 
 def babel(network_ip, network_mask, verbose_level):
-    args = [ '-S', '/var/lib/babeld/state',
-            '-I', 'redistribute local ip %s/%s' % (network_ip,network_mask),
+    args = ['-I', 'redistribute local ip %s/%s' % (network_ip, network_mask),
             '-I', 'redistribute local deny',
             # Route VIFIB ip adresses
             '-I', 'in ip %s' % VIFIB_NET,
@@ -55,28 +56,30 @@ def babel(network_ip, network_mask, verbose_level):
             # Don't route other addresses
             '-I', 'in ip deny',
             '-d', str(verbose_level),
-            '-s'
+            '-s',
             ]
+    if config.babel_state:
+        args += '-S', config.babel_state
+    # TODO : add list of interfaces to use with babel
     return Popen(args)
 
 def main():
+    global config
     parser = argparse.ArgumentParser(
             description="Resilient virtual private network application")
     _ = parser.add_argument
-    _('--ca', required=True,
-            help="Path to ca.crt file")
-    _('--cert', required=True,
-            help="Path to host certificate file")
-    _('--key', required=True,
-            help="Path to host key file")
     _('--dh', required=True,
             help="Path to dh file")
-    _('--verbose', '-v', action='count',
-            help="Defines the verbose level")
-    args=parser.parse_args()
+    _('--babel-state',
+            help="Path to babeld state-file")
+    #_('--verbose', '-v', action='count',
+    #        help="Defines the verbose level")
+    _('openvpn_args', nargs=argparse.REMAINDER,
+            help="Common OpenVPN options (e.g. certificates)")
+    config = parser.parse_args()
+    # TODO : set the certificates and ker paths, in global variables
     # how to setup openvpn connections :
     server = server(dev='server', verb=3)
-    pass
 
 if __name__ == "__main__":
     main()
