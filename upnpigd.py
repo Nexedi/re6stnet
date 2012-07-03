@@ -31,3 +31,4 @@ def GetExternalInfo(localPort):
 		return  ForwardViaUPnP(localPort)
 	except Exception:
 		return (GetLocalIp(), localPort)
+
