@@ -6,7 +6,6 @@ import random
 
 VIFIB_NET = "2001:db8:42::/48"
 
-
 # TODO : How do we get our vifib ip ?
 
 def babel(network_ip, network_mask, verbose_level):
@@ -32,13 +31,6 @@ def getConfig():
     global config
     parser = argparse.ArgumentParser(description='Resilient virtual private network application')
     _ = parser.add_argument
-    _('--dh', required=True, help='Path to dh file')
-    _('--babel-state', help='Path to babeld state-file')
-    _('--verbose', '-v', default='0', help='Defines the verbose level')
-    _('--ca', required=True, help='Path to the certificate authority')
-    _('--key', required=True, help='Path to the rsa_key')
-    _('--cert', required=True, help='Pah to the certificate')
-    # connections establishement
     _('--max-peer', help='the number of peers that can connect to the server', default='10')
         # TODO : use it
     _('--client-count', help='the number servers the peers try to connect to', default = '2')
@@ -46,8 +38,17 @@ def getConfig():
         # TODO : use it
     _('--refresh-count', help='The number of connections to drop when refreshing the connections', default='1')
         # TODO : use it
+    _('--dh', required=True,
+            help='Path to dh file')
+    _('--babel-state', 
+            help='Path to babeld state-file')
+    _('--verbose', '-v', default='0', 
+            help='Defines the verbose level')
     # Temporary args
     _('--ip', required=True, help='IPv6 of the server')
+    # Openvpn options
+    _('openvpn_args', nargs=argparse.REMAINDER,
+            help="Common OpenVPN options (e.g. certificates)")
     config = parser.parse_args()
 
 def startNewConnection():
