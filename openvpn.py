@@ -8,9 +8,10 @@ def openvpn(*args, **kw):
         '--script-security', '2',
         '--user', 'nobody',
         '--group', 'nogroup',
-        '--verb', config.verbose,
+        #'--verb', str(config.verbose),
         ] + list(args) + config.openvpn_args
-    print repr(args)
+    if config.verbose >= 5:
+        print repr(args)
     return subprocess.Popen(args, **kw)
 
 # TODO : set iface up when creating a server/client

@@ -1,10 +1,14 @@
 #!/usr/bin/env python
-import argparse, errno, os, subprocess, sys, time
+import argparse, errno, os, sqlite3, subprocess, sys, time
+import traceback
 import upnpigd
 import openvpn
 import random
 
 VIFIB_NET = "2001:db8:42::/48"
+connection_dict = {} # to remember current connections
+avalaible_peer_list = [('10.1.4.2', 1194), ('10.1.4.3', 1194), ('10.1.3.2', 1194)]
+free_interface_set = set(('client1', 'client2'))
 
 # TODO : How do we get our vifib ip ?
 
@@ -16,7 +20,7 @@ def babel(network_ip, network_mask, verbose_level):
             '-C', 'in ip %s' % VIFIB_NET,
             # Route only addresse in the 'local' network,
             # or other entire networks
-            #'-C', 'in ip %s/%s' % (network_ip,network_mask),
+            '-C', 'in ip %s/%s' % (network_ip,network_mask),
             #'-C', 'in ip ::/0 le %s' % network_mask,
             # Don't route other addresses
             '-C', 'in ip deny',
@@ -26,27 +30,33 @@ def babel(network_ip, network_mask, verbose_level):
     if config.babel_state:
         args += '-S', config.babel_state
     # TODO : add list of interfaces to use with babel
-    return subprocess.Popen(args)
+    return subprocess.Popen(args + list(free_interface_set))
 
 def getConfig():
     global config
-    parser = argparse.ArgumentParser(description='Resilient virtual private network application')
+    parser = argparse.ArgumentParser(
+            description='Resilient virtual private network application')
     _ = parser.add_argument
-    _('--max-peer', help='the number of peers that can connect to the server', default='10')
-        # TODO : use it
-    _('--client-count', help='the number servers the peers try to connect to', default = '2')
-    _('--refresh-time', help='the time (seconds) to wait before changing the connections', default = '20')
-        # TODO : use it
-    _('--refresh-count', help='The number of connections to drop when refreshing the connections', default='1')
-        # TODO : use it
+    _('--client-count', default=2, type=int,
+            help='the number servers the peers try to connect to')
+    # TODO : use max-peer, refresh-time, refresh-count
+    _('--max-peer', default=10, type=int
+            help='the number of peers that can connect to the server')
+    _('--refresh-time', default=20, type=int
+            help='the time (seconds) to wait before changing the connections')
+    _('--refresh-count', default=1, type=int
+            help='The number of connections to drop when refreshing the connections')
+    _('--db', default='/var/lib/vifibnet/peers.db',
+            help='Path to peers database')
     _('--dh', required=True,
             help='Path to dh file')
-    _('--babel-state',
+    _('--babel-state', default='/var/lib/vifibnet/babel_state',
             help='Path to babeld state-file')
-    _('--verbose', '-v', default='0',
+    _('--verbose', '-v', default=0, type=int,
             help='Defines the verbose level')
     # Temporary args
-    _('--ip', required=True, help='IPv6 of the server')
+    _('--ip', required=True,
+            help='IPv6 of the server')
     # Openvpn options
     _('openvpn_args', nargs=argparse.REMAINDER,
             help="Common OpenVPN options (e.g. certificates)")
@@ -54,60 +64,85 @@ def getConfig():
     if config.openvpn_args[0] == "--":
         del config.openvpn_args[0]
 
+# TODO : start n connections in one try ( only 1 database acces )
+# TODO : use port and proto in openvpn client
 def startNewConnection():
     try:
-        peer = random.choice(avalaiblePeers.keys())
-        if config.verbose > 2:
-            print 'Establishing a connection with ' + peer
-        del avalaiblePeers[peer]
-        connections[peer] = openvpn.client(config, peer)
+        for id, ip, port, proto in peer_db.execute(
+            "SELECT id, ip, port, proto FROM peers WHERE used = 0"):
+            if config.verbose >= 2:
+                print 'Establishing a connection with %s' % ip
+            iface = free_interface_set.pop()
+            connection_dict[id] = ( openvpn.client(ip, '--dev', iface) , iface)
+            peer_db.execute("UPDATE peers SET used = 1 WHERE id = ?", (id,))
+            break
+    except KeyError:
+        if config.verbose >= 2:
+            print "Can't establish connection with %s : no available interface" % ip
+        pass
     except Exception:
+        traceback.print_exc()
+
+def killConnection(id):
+    try:
+        if config.verbose >= 2:
+            print 'Killing the connection with ' + peer
+        p, iface = connection_dict.pop(id)
+        p.kill()
+        free_interface_set.add(iface)
+        peer_db.execute("UPDATE peers SET used = 0 WHERE id = ?", (id,))
+    except KeyError:
+        if config.verbose >= 1:
+            print "Can't kill connection to " + peer + ": no existing connection"
+        pass
+    except Exception:
+        if config.verbose >= 1:
+            print "Can't kill connection to " + peer + ": uncaught error"
         pass
 
-# TODO :
-def killConnection(peer):
-    if config.verbose > 2:
-        print 'Killing the connection with ' + peer
-    subprocess.Popen.kill(connections[peer])
-    del connections[peer]
-    avalaiblePeers[peer] = 1194 # TODO : give the real port
 
 def refreshConnections():
+    # Kill some random connections
     try:
         for i in range(0, int(config.refresh_count)):
-            peer = random.choice(connections.keys())
-            killConnection(peer)
+            id = random.choice(connection_dict.keys())
+            killConnection(id)
     except Exception:
         pass
-
-    for i in range(len(connections),  int(config.client_count)):
+    # Establish new connections
+    for i in range(len(connection_dict),  int(config.client_count)):
         startNewConnection()
 
 def main():
-    # init variables
-    global connections
-    global avalaiblePeers # the list of peers we can connect to
-    avalaiblePeers = { '10.1.4.2' : 1194, '10.1.4.3' : 1194, '10.1.3.2' : 1194 }
-    connections = {} # to remember current connections
+    # Get arguments
     getConfig()
     (externalIp, externalPort) = upnpigd.GetExternalInfo(1194)
-    try:
-        del avalaiblePeers[externalIp]
-    except Exception:
-        pass
 
-    # establish connections
-    serverProcess = openvpn.server(config, config.ip)
-    for i in range(0, int(config.client_count)):
+    # Setup database
+    global peer_db # stop using global variables for everything ?
+    peer_db = sqlite3.connect(config.db, isolation_level=None)
+    peer_db.execute("""CREATE TABLE IF NOT EXISTS peers
+             ( id INTEGER PRIMARY KEY AUTOINCREMENT,
+             ip TEXT NOT NULL,
+             port INTEGER NOT NULL,
+             proto TEXT NOT NULL,
+             used INTEGER NOT NULL)""")
+    peer_db.execute("CREATE INDEX IF NOT EXISTS _peers_used ON peers(used)")
+    peer_db.execute("UPDATE peers SET used = 0")
+
+    # Establish connections
+    serverProcess = openvpn.server(config.ip, '--dev', 'vifibnet')
+    for i in range(config.client_count):
         startNewConnection()
 
     # main loop
     try:
         while True:
+            # TODO : use select to get openvpn events from pipes
             time.sleep(float(config.refresh_time))
             refreshConnections()
     except KeyboardInterrupt:
-        pass
+        return 1
 
 if __name__ == "__main__":
     main()
