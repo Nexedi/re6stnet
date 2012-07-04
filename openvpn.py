@@ -1,6 +1,6 @@
 import subprocess
 
-def openvpn(config, *args):
+def openvpn(config, *args ):
     args = ['openvpn',
         '--dev', 'tap',
         '--ca', config.ca,
@@ -12,8 +12,15 @@ def openvpn(config, *args):
         '--user', 'nobody',
         '--group', 'nogroup',
         '--verb', config.verbose
-        ] + list(args)
-    return subprocess.Popen(args)
+        ] + list(args) + config.openvpn_args
+    #stdin = kw.pop('stdin', None)
+    #stdout = kw.pop('stdout', None)
+    #stderr = kw.pop('stderr', None)
+    #for i in kw.iteritems():
+    #    args.append('--%s=%s' % i)
+    return subprocess.Popen(args
+            #stdin=stdin, stdout=stdout, stderr=stderr,
+            )
 
 # TODO : set iface up when creating a server/client
 # ! check working directory before launching up script ?
@@ -29,8 +36,8 @@ def server(config, ip):
 
 def client(config, serverIp):
     return openvpn(config,
-            '--nobind',
-            '--tls-client',
-            '--remote', serverIp,
-            '--up', 'up-client')
+        '--nobind',
+        '--tls-client',
+        '--remote', serverIp,
+        '--up', 'up-client')
 
