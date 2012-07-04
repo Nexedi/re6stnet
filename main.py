@@ -8,23 +8,24 @@ VIFIB_NET = "2001:db8:42::/48"
 # TODO : How do we get our vifib ip ?
 
 def babel(network_ip, network_mask, verbose_level):
-    args = ['-I', 'redistribute local ip %s/%s' % (network_ip, network_mask),
-            '-I', 'redistribute local deny',
+    args = ['babeld',
+            '-C', 'redistribute local ip %s/%s' % (network_ip, network_mask),
+            '-C', 'redistribute local deny',
             # Route VIFIB ip adresses
-            '-I', 'in ip %s' % VIFIB_NET,
+            '-C', 'in ip %s' % VIFIB_NET,
             # Route only addresse in the 'local' network,
             # or other entire networks
-            #'-I', 'in ip %s/%s' % (network_ip,network_mask),
-            #'-I', 'in ip ::/0 le %s' % network_mask,
+            #'-C', 'in ip %s/%s' % (network_ip,network_mask),
+            #'-C', 'in ip ::/0 le %s' % network_mask,
             # Don't route other addresses
-            '-I', 'in ip deny',
+            '-C', 'in ip deny',
             '-d', str(verbose_level),
             '-s',
             ]
     if config.babel_state:
         args += '-S', config.babel_state
     # TODO : add list of interfaces to use with babel
-    return Popen(args)
+    return subprocess.Popen(args)
 
 def getConfig():
     global config
@@ -32,24 +33,25 @@ def getConfig():
     _ = parser.add_argument
     _('--dh', required=True,
             help='Path to dh file')
-    _('--babel-state', 
+    _('--babel-state',
             help='Path to babeld state-file')
-    _('--verbose', '-v', default='0', 
+    _('--verbose', '-v', default='0',
             help='Defines the verbose level')
     # Temporary args
     _('--ip', required=True, help='IPv6 of the server')
     # Openvpn options
     _('openvpn_args', nargs=argparse.REMAINDER,
             help="Common OpenVPN options (e.g. certificates)")
-    config = parser.parse_args()
-
+    openvpn.config = config = parser.parse_args()
+    if config.openvpn_args[0] == "--":
+        del config.openvpn_args[0]
 
 def main():
     getConfig()
     if config.ip != 'none':
-        serverProcess = openvpn.server(config, config.ip)
+        serverProcess = openvpn.server(config.ip, "--dev", "server")
     else:
-        client1Process = openvpn.client(config, '10.1.4.2')
+        client1Process = openvpn.client('10.1.4.2')
 
 if __name__ == "__main__":
     main()

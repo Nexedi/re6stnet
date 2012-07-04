@@ -1,43 +1,36 @@
 import subprocess
 
-def openvpn(config, *args ):
+def openvpn(*args, **kw):
     args = ['openvpn',
-        '--dev', 'tap',
-        '--ca', config.ca,
-        '--cert', config.cert,
-        '--key', config.key,
+        '--dev-type', 'tap',
         '--persist-tun',
         '--persist-key',
         '--script-security', '2',
         '--user', 'nobody',
         '--group', 'nogroup',
-        '--verb', config.verbose
+        '--verb', config.verbose,
         ] + list(args) + config.openvpn_args
-    #stdin = kw.pop('stdin', None)
-    #stdout = kw.pop('stdout', None)
-    #stderr = kw.pop('stderr', None)
-    #for i in kw.iteritems():
-    #    args.append('--%s=%s' % i)
-    return subprocess.Popen(args
-            #stdin=stdin, stdout=stdout, stderr=stderr,
-            )
+    print repr(args)
+    return subprocess.Popen(args, **kw)
 
 # TODO : set iface up when creating a server/client
 # ! check working directory before launching up script ?
 
-def server(config, ip):
-    return openvpn(config,
+def server(ip, *args):
+    return openvpn(
         '--tls-server',
         '--keepalive', '10', '60',
         '--mode', 'server',
-        '--duplicate-cn',
+        '--duplicate-cn', # XXX : to be removed
         '--up', 'up-server ' + ip,
-        '--dh', config.dh)
+        '--dh', config.dh,
+        *args)
 
-def client(config, serverIp):
-    return openvpn(config,
+def client(serverIp, *args):
+    return openvpn(
         '--nobind',
         '--tls-client',
         '--remote', serverIp,
-        '--up', 'up-client')
+        '--up', 'up-client',
+        *args)
 
