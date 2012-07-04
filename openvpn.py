@@ -29,8 +29,8 @@ def server(config, ip):
 
 def client(config, serverIp):
     return openvpn(config,
-            '--nobind',
-            '--tls-client',
-            '--remote', serverIp,
-            '--up', 'up-client')
+        '--nobind',
+        '--tls-client',
+        '--remote', serverIp,
+        '--up', 'up-client')
 
