@@ -1,46 +1,10 @@
 #!/usr/bin/env python
 import argparse, errno, os, subprocess, sys, time
 import upnpigd
+import openvpn
 
 VIFIB_NET = "2001:db8:42::/48"
 
-# TODO : - should we use slapos certificates or
-#          use new ones we create for openvpn ?
-
-def openvpn(*args, **kw):
-    args = ['openvpn',
-        '--dev', 'tap',
-        '--ca', config.ca,
-        '--cert', config.cert,
-        '--key', config.key,
-        '--persist-tun',
-        '--persist-key',
-        '--user' 'nobody',
-        '--group', 'nogroup',
-        ] + list(args)
-    #stdin = kw.pop('stdin', None)
-    #stdout = kw.pop('stdout', None)
-    #stderr = kw.pop('stderr', None)
-    for i in kw.iteritems():
-        args.append('--%s=%s' % i)
-    return subprocess.Popen(args,
-         #stdin=stdin, stdout=stdout, stderr=stderr,
-         )
-
-# TODO : set iface up when creating a server/client
-# ! check working directory before launching up script ?
-
-def server(*args, **kw):
-    return openvpn(
-         '--tls-server',
-         '--client-to-client',
-         #'--keepalive', '10', '60',
-         mode='server',
-         dh=dh_path,
-         *args, **kw)
-
-def client(ip, *args, **kw):
-    return openvpn('--nobind', remote=ip, *args, **kw)
 
 # TODO : How do we get our vifib ip ?
 
@@ -63,23 +27,26 @@ def babel(network_ip, network_mask, verbose_level):
     # TODO : add list of interfaces to use with babel
     return Popen(args)
 
-def main():
+def getConfig():
     global config
-    parser = argparse.ArgumentParser(
-            description="Resilient virtual private network application")
+    parser = argparse.ArgumentParser(description='Resilient virtual private network application')
     _ = parser.add_argument
-    _('--dh', required=True,
-            help="Path to dh file")
-    _('--babel-state',
-            help="Path to babeld state-file")
-    #_('--verbose', '-v', action='count',
-    #        help="Defines the verbose level")
-    _('openvpn_args', nargs=argparse.REMAINDER,
-            help="Common OpenVPN options (e.g. certificates)")
+    _('--dh', required=True, help='Path to dh file')
+    _('--babel-state', help='Path to babeld state-file')
+    _('--verbose', '-v', default='0', help='Defines the verbose level')
+    _('--ca', required=True, help='Path to the certificate authority')
+    _('--key', required=True, help='Path to the rsa_key')
+    _('--cert', required=True, help='Pah to the certificate')
+    # Temporary args
+    _('--ip', required=True, help='IPv6 of the server')
     config = parser.parse_args()
-    # TODO : set the certificates and ker paths, in global variables
-    # how to setup openvpn connections :
-    server = server(dev='server', verb=3)
+
+
+def main():
+    getConfig()
+    serverProcess = openvpn.server(config, config.ip)
+    client1Process = openvpn.client(config, '10.1.4.2')
+    
 
 if __name__ == "__main__":
     main()
