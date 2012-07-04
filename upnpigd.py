@@ -22,7 +22,7 @@ def ForwardViaUPnP(localPort):
 
 def GetLocalIp():
 	s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-	s.connect(('8.8.8.8', 0))
+	s.connect(('10.8.8.8', 0))
 	return s.getsockname()[0]
 
 

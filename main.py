@@ -2,6 +2,7 @@
 import argparse, errno, os, subprocess, sys, time
 import upnpigd
 import openvpn
+import random
 
 VIFIB_NET = "2001:db8:42::/48"
 
@@ -31,6 +32,13 @@ def getConfig():
     global config
     parser = argparse.ArgumentParser(description='Resilient virtual private network application')
     _ = parser.add_argument
+    _('--max-peer', help='the number of peers that can connect to the server', default='10')
+        # TODO : use it
+    _('--client-count', help='the number servers the peers try to connect to', default = '2')
+    _('--refresh-time', help='the time (seconds) to wait before changing the connections', default = '20')
+        # TODO : use it
+    _('--refresh-count', help='The number of connections to drop when refreshing the connections', default='1')
+        # TODO : use it
     _('--dh', required=True,
             help='Path to dh file')
     _('--babel-state',
@@ -46,13 +54,64 @@ def getConfig():
     if config.openvpn_args[0] == "--":
         del config.openvpn_args[0]
 
+def startNewConnection():
+    try:
+        peer = random.choice(avalaiblePeers.keys())
+        if config.verbose > 2:
+            print 'Establishing a connection with ' + peer
+        del avalaiblePeers[peer]
+        connections[peer] = openvpn.client(config, peer)
+    except Exception:
+        pass
+
+# TODO :
+def killConnection(peer):
+    if config.verbose > 2:
+        print 'Killing the connection with ' + peer
+    subprocess.Popen.kill(connections[peer])
+    del connections[peer]
+    avalaiblePeers[peer] = 1194 # TODO : give the real port
+
+def refreshConnections():
+    try:
+        for i in range(0, int(config.refresh_count)):
+            peer = random.choice(connections.keys())
+            killConnection(peer)
+    except Exception:
+        pass
+
+    for i in range(len(connections),  int(config.client_count)):
+        startNewConnection()
+
 def main():
+    # init variables
+    global connections
+    global avalaiblePeers # the list of peers we can connect to
+    avalaiblePeers = { '10.1.4.2' : 1194, '10.1.4.3' : 1194, '10.1.3.2' : 1194 }
+    connections = {} # to remember current connections
     getConfig()
-    if config.ip != 'none':
-        serverProcess = openvpn.server(config.ip, "--dev", "server")
-    else:
-        client1Process = openvpn.client('10.1.4.2')
+    (externalIp, externalPort) = upnpigd.GetExternalInfo(1194)
+    try:
+        del avalaiblePeers[externalIp]
+    except Exception:
+        pass
+
+    # establish connections
+    serverProcess = openvpn.server(config, config.ip)
+    for i in range(0, int(config.client_count)):
+        startNewConnection()
+
+    # main loop
+    try:
+        while True:
+            time.sleep(float(config.refresh_time))
+            refreshConnections()
+    except KeyboardInterrupt:
+        pass
 
 if __name__ == "__main__":
     main()
+
+# TODO : pass the remote port as an argument to openvpn
+# TODO : remove incomming connections from avalaible peers
 
