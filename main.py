@@ -44,8 +44,10 @@ def getConfig():
 
 def main():
     getConfig()
-    serverProcess = openvpn.server(config, config.ip)
-    client1Process = openvpn.client(config, '10.1.4.2')
+    if config.ip != 'none':
+        serverProcess = openvpn.server(config, config.ip)
+    else:
+        client1Process = openvpn.client(config, '10.1.4.2')
     
 
 if __name__ == "__main__":
