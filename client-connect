@@ -1,0 +1,3 @@
+#!/usr/bin/python -S
+import os, sys
+os.write(int(sys.argv[1]), 'hello !\n')

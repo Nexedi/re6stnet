@@ -18,13 +18,14 @@ def openvpn(*args, **kw):
 # TODO : set iface up when creating a server/client
 # ! check working directory before launching up script ?
 
-def server(ip, *args, **kw):
+def server(ip, pipe_fd, *args, **kw):
     return openvpn(
         '--tls-server',
         '--keepalive', '10', '60',
         '--mode', 'server',
         '--duplicate-cn', # XXX : to be removed
         '--up', 'up-server ' + ip,
+        '--client-connect', 'client-connect ' + str(pipe_fd),
         '--dh', config.dh,
         *args, **kw)
 

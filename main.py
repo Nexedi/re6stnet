@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import argparse, errno, os, sqlite3, subprocess, sys, time
+import argparse, errno, os, select, sqlite3, subprocess, sys, time
 import traceback
 import upnpigd
 import openvpn
@@ -7,7 +7,7 @@ import random
 
 VIFIB_NET = "2001:db8:42::/48"
 connection_dict = {} # to remember current connections
-free_interface_set = set(('client1', 'client2', 'client3', 'client4', 'client5', 
+free_interface_set = set(('client1', 'client2', 'client3', 'client4', 'client5',
                           'client6', 'client7', 'client8', 'client9', 'client10'))
 
 def log_message(message, verbose_level):
@@ -80,7 +80,7 @@ def startNewConnection(n):
             iface = free_interface_set.pop()
             connection_dict[id] = ( openvpn.client( ip, '--dev', iface, '--proto', proto, '--rport', str(port),
                 stdout=os.open(config.client_log + 'vifibnet.client.' + str(id) + '.log', os.O_RDONLY|os.O_CREAT) ) , iface)
-            log_message('Updating peers database', 3)
+            log_message('Updating peers database', 5)
             peer_db.execute("UPDATE peers SET used = 1 WHERE id = ?", (id,))
     except KeyError:
         log_message("Can't establish connection with %s : no available interface" % ip, 2)
@@ -94,7 +94,7 @@ def killConnection(id):
         p, iface = connection_dict.pop(id)
         p.kill()
         free_interface_set.add(iface)
-        log_message('Updating peers database', 3)
+        log_message('Updating peers database', 5)
         peer_db.execute("UPDATE peers SET used = 0 WHERE id = ?", (id,))
     except KeyError:
         log_message("Can't kill connection to " + peer + ": no existing connection", 1)
@@ -134,17 +134,23 @@ def main():
     peer_db.execute("CREATE INDEX IF NOT EXISTS _peers_used ON peers(used)")
     peer_db.execute("UPDATE peers SET used = 0")
 
+    # Create and open read_only pipe to get connect/disconnect events from openvpn
+    log_message('Creating pipe for openvpn events', 3)
+    r_pipe, write_pipe = os.pipe()
+    read_pipe = os.fdopen(r_pipe)
+
     # Establish connections
     log_message('Starting openvpn server', 3)
-    serverProcess = openvpn.server(config.ip,
+    serverProcess = openvpn.server(config.ip, write_pipe,
             '--dev', 'vifibnet', stdout=os.open(config.server_log, os.O_RDONLY|os.O_CREAT))
     startNewConnection(config.client_count)
 
     # main loop
     try:
         while True:
-            # TODO : use select to get openvpn events from pipes
-            time.sleep(float(config.refresh_time))
+            ready, tmp1, tmp2 = select.select([read_pipe], [], [], float(config.refresh_time))
+            if ready:
+                log_message(read_pipe.readline(), 0)
             refreshConnections()
     except KeyboardInterrupt:
         return 0
