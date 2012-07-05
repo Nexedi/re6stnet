@@ -7,8 +7,8 @@ import random
 
 VIFIB_NET = "2001:db8:42::/48"
 connection_dict = {} # to remember current connections
-avalaible_peer_list = [('10.1.4.2', 1194), ('10.1.4.3', 1194), ('10.1.3.2', 1194)]
-free_interface_set = set(('client1', 'client2'))
+#avalaible_peer_list = [('10.1.4.2', 1194), ('10.1.4.3', 1194), ('10.1.3.2', 1194)]
+free_interface_set = set(('client1', 'client2', 'client3', 'client4', 'client5', 'client6', 'client7', 'client8', 'client9', 'client10'))
 
 # TODO : How do we get our vifib ip ?
 
@@ -39,12 +39,12 @@ def getConfig():
     _ = parser.add_argument
     _('--client-count', default=2, type=int,
             help='the number servers the peers try to connect to')
-    # TODO : use max-peer, refresh-time, refresh-count
-    _('--max-peer', default=10, type=int
+    # TODO : use maxpeer
+    _('--max-peer', default=10, type=int,
             help='the number of peers that can connect to the server')
-    _('--refresh-time', default=20, type=int
+    _('--refresh-time', default=20, type=int,
             help='the time (seconds) to wait before changing the connections')
-    _('--refresh-count', default=1, type=int
+    _('--refresh-count', default=1, type=int,
             help='The number of connections to drop when refreshing the connections')
     _('--db', default='/var/lib/vifibnet/peers.db',
             help='Path to peers database')
@@ -64,18 +64,17 @@ def getConfig():
     if config.openvpn_args[0] == "--":
         del config.openvpn_args[0]
 
-# TODO : start n connections in one try ( only 1 database acces )
 # TODO : use port and proto in openvpn client
-def startNewConnection():
+# TODO : use config.client_count
+def startNewConnection(n):
     try:
         for id, ip, port, proto in peer_db.execute(
-            "SELECT id, ip, port, proto FROM peers WHERE used = 0"):
+            "SELECT id, ip, port, proto FROM peers WHERE used = 0 ORDER BY RANDOM() LIMIT ?", (n,)):
             if config.verbose >= 2:
                 print 'Establishing a connection with %s' % ip
             iface = free_interface_set.pop()
             connection_dict[id] = ( openvpn.client(ip, '--dev', iface) , iface)
             peer_db.execute("UPDATE peers SET used = 1 WHERE id = ?", (id,))
-            break
     except KeyError:
         if config.verbose >= 2:
             print "Can't establish connection with %s : no available interface" % ip
@@ -110,8 +109,7 @@ def refreshConnections():
     except Exception:
         pass
     # Establish new connections
-    for i in range(len(connection_dict),  int(config.client_count)):
-        startNewConnection()
+    startNewConnection(config.client_count - len(connection_dict))
 
 def main():
     # Get arguments
@@ -132,8 +130,7 @@ def main():
 
     # Establish connections
     serverProcess = openvpn.server(config.ip, '--dev', 'vifibnet')
-    for i in range(config.client_count):
-        startNewConnection()
+    startNewConnection(config.client_count)
 
     # main loop
     try:
@@ -142,11 +139,10 @@ def main():
             time.sleep(float(config.refresh_time))
             refreshConnections()
     except KeyboardInterrupt:
-        return 1
+        return 0
 
 if __name__ == "__main__":
     main()
 
-# TODO : pass the remote port as an argument to openvpn
 # TODO : remove incomming connections from avalaible peers
 
