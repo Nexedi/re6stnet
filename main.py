@@ -7,7 +7,6 @@ import random
 
 VIFIB_NET = "2001:db8:42::/48"
 connection_dict = {} # to remember current connections
-#avalaible_peer_list = [('10.1.4.2', 1194), ('10.1.4.3', 1194), ('10.1.3.2', 1194)]
 free_interface_set = set(('client1', 'client2', 'client3', 'client4', 'client5', 'client6', 'client7', 'client8', 'client9', 'client10'))
 
 # TODO : How do we get our vifib ip ?
@@ -29,7 +28,6 @@ def babel(network_ip, network_mask, verbose_level):
             ]
     if config.babel_state:
         args += '-S', config.babel_state
-    # TODO : add list of interfaces to use with babel
     return subprocess.Popen(args + list(free_interface_set))
 
 def getConfig():
@@ -64,8 +62,6 @@ def getConfig():
     if config.openvpn_args[0] == "--":
         del config.openvpn_args[0]
 
-# TODO : use port and proto in openvpn client
-# TODO : use config.client_count
 def startNewConnection(n):
     try:
         for id, ip, port, proto in peer_db.execute(
@@ -73,7 +69,8 @@ def startNewConnection(n):
             if config.verbose >= 2:
                 print 'Establishing a connection with %s' % ip
             iface = free_interface_set.pop()
-            connection_dict[id] = ( openvpn.client(ip, '--dev', iface) , iface)
+            connection_dict[id] = 
+                    ( openvpn.client(ip, '--dev', iface, '--proto', proto, '--rport', str(port)) , iface)
             peer_db.execute("UPDATE peers SET used = 1 WHERE id = ?", (id,))
     except KeyError:
         if config.verbose >= 2:
