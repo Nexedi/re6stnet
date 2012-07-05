@@ -1,4 +1,5 @@
 import subprocess
+import os
 
 def openvpn(*args, **kw):
     args = ['openvpn',
@@ -17,7 +18,7 @@ def openvpn(*args, **kw):
 # TODO : set iface up when creating a server/client
 # ! check working directory before launching up script ?
 
-def server(ip, *args):
+def server(ip, *args, **kw):
     return openvpn(
         '--tls-server',
         '--keepalive', '10', '60',
@@ -25,13 +26,13 @@ def server(ip, *args):
         '--duplicate-cn', # XXX : to be removed
         '--up', 'up-server ' + ip,
         '--dh', config.dh,
-        *args)
+        *args, **kw)
 
-def client(serverIp, *args):
+def client(serverIp, *args, **kw):
     return openvpn(
         '--nobind',
         '--tls-client',
         '--remote', serverIp,
         '--up', 'up-client',
-        *args)
+        *args, **kw)
 

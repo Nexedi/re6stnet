@@ -7,7 +7,12 @@ import random
 
 VIFIB_NET = "2001:db8:42::/48"
 connection_dict = {} # to remember current connections
-free_interface_set = set(('client1', 'client2', 'client3', 'client4', 'client5', 'client6', 'client7', 'client8', 'client9', 'client10'))
+free_interface_set = set(('client1', 'client2', 'client3', 'client4', 'client5', 
+                          'client6', 'client7', 'client8', 'client9', 'client10'))
+
+def log_message(message, verbose_level):
+    if config.verbose >= verbose_level:
+        print time.strftime("%d-%m-%Y %H:%M:%S : " + message)
 
 # TODO : How do we get our vifib ip ?
 
@@ -28,6 +33,7 @@ def babel(network_ip, network_mask, verbose_level):
             ]
     if config.babel_state:
         args += '-S', config.babel_state
+    log_message("Starting babel daemon",2)
     return subprocess.Popen(args + list(free_interface_set))
 
 def getConfig():
@@ -35,6 +41,10 @@ def getConfig():
     parser = argparse.ArgumentParser(
             description='Resilient virtual private network application')
     _ = parser.add_argument
+    _('--server-log', default='/var/log/vifibnet.server.log',
+            help='Path to openvpn server log file')
+    _('--client-log', default='/var/log/',
+            help='Path to openvpn client log directory')
     _('--client-count', default=2, type=int,
             help='the number servers the peers try to connect to')
     # TODO : use maxpeer
@@ -66,34 +76,31 @@ def startNewConnection(n):
     try:
         for id, ip, port, proto in peer_db.execute(
             "SELECT id, ip, port, proto FROM peers WHERE used = 0 ORDER BY RANDOM() LIMIT ?", (n,)):
-            if config.verbose >= 2:
-                print 'Establishing a connection with %s' % ip
+            log_message('Establishing a connection with id %s (%s:%s)' % (id,ip,port), 2)
             iface = free_interface_set.pop()
-            connection_dict[id] = 
-                    ( openvpn.client(ip, '--dev', iface, '--proto', proto, '--rport', str(port)) , iface)
+            connection_dict[id] = ( openvpn.client( ip, '--dev', iface, '--proto', proto, '--rport', str(port),
+                stdout=os.open(config.client_log + 'vifibnet.client.' + str(id) + '.log', os.O_RDONLY|os.O_CREAT) ) , iface)
+            log_message('Updating peers database', 3)
             peer_db.execute("UPDATE peers SET used = 1 WHERE id = ?", (id,))
     except KeyError:
-        if config.verbose >= 2:
-            print "Can't establish connection with %s : no available interface" % ip
+        log_message("Can't establish connection with %s : no available interface" % ip, 2)
         pass
     except Exception:
         traceback.print_exc()
 
 def killConnection(id):
     try:
-        if config.verbose >= 2:
-            print 'Killing the connection with ' + peer
+        log_message('Killing the connection with id ' + str(id), 2)
         p, iface = connection_dict.pop(id)
         p.kill()
         free_interface_set.add(iface)
+        log_message('Updating peers database', 3)
         peer_db.execute("UPDATE peers SET used = 0 WHERE id = ?", (id,))
     except KeyError:
-        if config.verbose >= 1:
-            print "Can't kill connection to " + peer + ": no existing connection"
+        log_message("Can't kill connection to " + peer + ": no existing connection", 1)
         pass
     except Exception:
-        if config.verbose >= 1:
-            print "Can't kill connection to " + peer + ": uncaught error"
+        log_message("Can't kill connection to " + peer + ": uncaught error", 1)
         pass
 
 
@@ -115,7 +122,9 @@ def main():
 
     # Setup database
     global peer_db # stop using global variables for everything ?
+    log_message('Connectiong to peers database', 4)
     peer_db = sqlite3.connect(config.db, isolation_level=None)
+    log_message('Initializing peers database', 4)
     peer_db.execute("""CREATE TABLE IF NOT EXISTS peers
              ( id INTEGER PRIMARY KEY AUTOINCREMENT,
              ip TEXT NOT NULL,
@@ -126,7 +135,9 @@ def main():
     peer_db.execute("UPDATE peers SET used = 0")
 
     # Establish connections
-    serverProcess = openvpn.server(config.ip, '--dev', 'vifibnet')
+    log_message('Starting openvpn server', 3)
+    serverProcess = openvpn.server(config.ip,
+            '--dev', 'vifibnet', stdout=os.open(config.server_log, os.O_RDONLY|os.O_CREAT))
     startNewConnection(config.client_count)
 
     # main loop
