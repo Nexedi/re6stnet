@@ -8,12 +8,12 @@ def openvpn(*args, **kw):
         '--persist-key',
         '--script-security', '2',
         '--user', 'nobody',
-        '--ping', '0.5', 
+        '--ping', '1', 
             # I don't kown how Babel works, but if it test the
             # connection often, the ping directive might not be needed
             # if it test the connection very often, we could also decrease
             # ping-exit to 1 sec 
-        '--ping-exit', '2', 
+        '--ping-exit', '3', 
         '--group', 'nogroup',
         '--verb', str(config.verbose),
         ] + list(args) + config.openvpn_args

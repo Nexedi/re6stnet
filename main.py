@@ -16,6 +16,35 @@ def log_message(message, verbose_level):
 
 # TODO : How do we get our vifib ip ?
 
+class PeersDB:
+    def __init__(self, dbPath):
+        log_message('Connectiong to peers database', 4)
+        self.db = sqlite3.connect(dbPath, isolation_level=None)
+        log_message('Initializing peers database', 4)
+        self.db.execute("""CREATE TABLE IF NOT EXISTS peers
+                        ( id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        ip TEXT NOT NULL,
+                        port INTEGER NOT NULL,
+                        proto TEXT NOT NULL,
+                        used INTEGER NOT NULL)""")
+        self.db.execute("CREATE INDEX IF NOT EXISTS _peers_used ON peers(used)")
+        self.db.execute("CREATE INDEX IF NOT EXISTS _peers_ip ON peers(ip)")
+        self.db.execute("UPDATE peers SET used = 0")
+    
+    def getUnusedPeers(self, nPeers):
+        return self.db.execute("SELECT id, ip, port, proto FROM peers WHERE used = 0 "
+                "ORDER BY RANDOM() LIMIT ?", (nPeers,))
+
+    def usePeer(self, id):
+        log_message('Updating peers database : using peer ' + str(id), 5)
+        self.db.execute("UPDATE peers SET used = 1 WHERE id = ?", (id,))
+    
+    def unusePeer(self, id):
+        log_message('Updating peers database : unusing peer ' + str(id), 5)
+        self.db.execute("UPDATE peers SET used = 0 WHERE id = ?", (id,))
+
+
+
 def babel(network_ip, network_mask, verbose_level):
     args = ['babeld',
             '-C', 'redistribute local ip %s/%s' % (network_ip, network_mask),
@@ -74,14 +103,12 @@ def getConfig():
 
 def startNewConnection(n):
     try:
-        for id, ip, port, proto in peer_db.execute(
-            "SELECT id, ip, port, proto FROM peers WHERE used = 0 ORDER BY RANDOM() LIMIT ?", (n,)):
+        for id, ip, port, proto in peers_db.getUnusedPeers(n):
             log_message('Establishing a connection with id %s (%s:%s)' % (id,ip,port), 2)
             iface = free_interface_set.pop()
             connection_dict[id] = ( openvpn.client( ip, '--dev', iface, '--proto', proto, '--rport', str(port),
                 stdout=os.open(config.client_log + 'vifibnet.client.' + str(id) + '.log', os.O_WRONLY|os.O_CREAT|os.O_TRUNC) ) , iface)
-            log_message('Updating peers database', 5)
-            peer_db.execute("UPDATE peers SET used = 1 WHERE id = ?", (id,))
+            peers_db.usePeer(id)
     except KeyError:
         log_message("Can't establish connection with %s : no available interface" % ip, 2)
         pass
@@ -94,8 +121,7 @@ def killConnection(id):
         p, iface = connection_dict.pop(id)
         p.kill()
         free_interface_set.add(iface)
-        log_message('Updating peers database', 5)
-        peer_db.execute("UPDATE peers SET used = 0 WHERE id = ?", (id,))
+        peers_db.unusedPeer(id)
     except KeyError:
         log_message("Can't kill connection to " + peer + ": no existing connection", 1)
         pass
@@ -104,13 +130,14 @@ def killConnection(id):
         pass
 
 def checkConnections():
-    for id in connection_dict:
+    toDel = set([])
+    for id in connection_dict.keys():
         p, iface = connection_dict[id]
         if p.poll() != None:
-            log_message('Connection with ' + str(id) + ' has failed', 3)
+            log_message('Connection with ' + str(id) + ' has failed with return code ' + str(p.returncode) , 3)
             free_interface_set.add(iface)
-            log_message('Updating peers database', 5)
-            peer_db.execute("UPDATE peers SET used = 0 WHERE id = ?", (id,))
+            peers_db.unusePeer(id)
+            del connection_dict[id]
 
 def refreshConnections():
     checkConnections()
@@ -128,10 +155,11 @@ def handle_message(msg):
     words = msg.split()
     if words[0] == 'CLIENT_CONNECTED':
         log_message('Incomming connection from ' + words[1], 3)
+        # TODO :  check if we are not already connected to it
     elif words[0] == 'CLIENT_DISCONNECTED':
         log_message(words[1] + ' has disconnected', 3)
     else:
-        log_message('Unknow message recieved : ' + msg, 1)
+        log_message('Unknow message recieved from the openvpn pipe : ' + msg, 1)
 
 def main():
     # Get arguments
@@ -139,18 +167,8 @@ def main():
     (externalIp, externalPort) = upnpigd.GetExternalInfo(1194)
 
     # Setup database
-    global peer_db # stop using global variables for everything ?
-    log_message('Connectiong to peers database', 4)
-    peer_db = sqlite3.connect(config.db, isolation_level=None)
-    log_message('Initializing peers database', 4)
-    peer_db.execute("""CREATE TABLE IF NOT EXISTS peers
-             ( id INTEGER PRIMARY KEY AUTOINCREMENT,
-             ip TEXT NOT NULL,
-             port INTEGER NOT NULL,
-             proto TEXT NOT NULL,
-             used INTEGER NOT NULL)""")
-    peer_db.execute("CREATE INDEX IF NOT EXISTS _peers_used ON peers(used)")
-    peer_db.execute("UPDATE peers SET used = 0")
+    global peers_db # stop using global variables for everything ?
+    peers_db = PeersDB(config.db)
 
     # Create and open read_only pipe to get connect/disconnect events from openvpn
     log_message('Creating pipe for openvpn events', 3)
@@ -160,14 +178,16 @@ def main():
     # Establish connections
     log_message('Starting openvpn server', 3)
     serverProcess = openvpn.server(config.ip, write_pipe,
-            '--dev', 'vifibnet', stdout=os.open(config.server_log, os.O_WRONLY|os.O_CREAT|os.O_TRUNC))
+            '--dev', 'vifibnet', 
+            stdout=os.open(config.server_log, os.O_WRONLY|os.O_CREAT|os.O_TRUNC))
     startNewConnection(config.client_count)
     next_refresh = time.time() + config.refresh_time
     
     # main loop
     try:
         while True:
-            ready, tmp1, tmp2 = select.select([read_pipe], [], [], max(0, next_refresh - time.time()))
+            ready, tmp1, tmp2 = select.select([read_pipe], [], [], 
+                    max(0, next_refresh - time.time()))
             if ready:
                 handle_message(read_pipe.readline())
             if time.time() >= next_refresh:
