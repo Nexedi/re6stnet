@@ -79,7 +79,7 @@ def startNewConnection(n):
             log_message('Establishing a connection with id %s (%s:%s)' % (id,ip,port), 2)
             iface = free_interface_set.pop()
             connection_dict[id] = ( openvpn.client( ip, '--dev', iface, '--proto', proto, '--rport', str(port),
-                stdout=os.open(config.client_log + 'vifibnet.client.' + str(id) + '.log', os.O_RDONLY|os.O_CREAT) ) , iface)
+                stdout=os.open(config.client_log + 'vifibnet.client.' + str(id) + '.log', os.O_WRONLY|os.O_CREAT|os.O_TRUNC) ) , iface)
             log_message('Updating peers database', 5)
             peer_db.execute("UPDATE peers SET used = 1 WHERE id = ?", (id,))
     except KeyError:
@@ -115,6 +115,15 @@ def refreshConnections():
     # Establish new connections
     startNewConnection(config.client_count - len(connection_dict))
 
+def handle_message(msg):
+    words = msg.split()
+    if words[0] == 'CLIENT_CONNECTED':
+        log_message('Incomming connection from ' + words[1], 3)
+    elif words[0] == 'CLIENT_DISCONNECTED':
+        log_message(words[1] + ' has disconnected', 3)
+    else:
+        log_message('Unknow message recieved : ' + msg, 1)
+
 def main():
     # Get arguments
     getConfig()
@@ -142,16 +151,19 @@ def main():
     # Establish connections
     log_message('Starting openvpn server', 3)
     serverProcess = openvpn.server(config.ip, write_pipe,
-            '--dev', 'vifibnet', stdout=os.open(config.server_log, os.O_RDONLY|os.O_CREAT))
+            '--dev', 'vifibnet', stdout=os.open(config.server_log, os.O_WRONLY|os.O_CREAT|os.O_TRUNC))
     startNewConnection(config.client_count)
-
+    next_refresh = time.time() + config.refresh_time
+    
     # main loop
     try:
         while True:
-            ready, tmp1, tmp2 = select.select([read_pipe], [], [], float(config.refresh_time))
+            ready, tmp1, tmp2 = select.select([read_pipe], [], [], max(0, next_refresh - time.time()))
             if ready:
-                log_message(read_pipe.readline(), 0)
-            refreshConnections()
+                handle_message(read_pipe.readline())
+            if time.time() >= next_refresh:
+                refreshConnections()
+                next_refresh = time.time() + config.refresh_time
     except KeyboardInterrupt:
         return 0
 

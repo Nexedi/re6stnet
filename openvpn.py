@@ -9,7 +9,7 @@ def openvpn(*args, **kw):
         '--script-security', '2',
         '--user', 'nobody',
         '--group', 'nogroup',
-        #'--verb', str(config.verbose),
+        '--verb', str(config.verbose),
         ] + list(args) + config.openvpn_args
     if config.verbose >= 5:
         print repr(args)
@@ -26,6 +26,7 @@ def server(ip, pipe_fd, *args, **kw):
         '--duplicate-cn', # XXX : to be removed
         '--up', 'up-server ' + ip,
         '--client-connect', 'client-connect ' + str(pipe_fd),
+        '--client-disconnect', 'client-disconnect ' + str(pipe_fd),
         '--dh', config.dh,
         *args, **kw)
 
