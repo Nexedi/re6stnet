@@ -44,7 +44,7 @@ class PeersDB:
 
 
 
-def babel(network_ip, network_mask, verbose_level):
+def babel(network_ip, network_mask):
     args = ['babeld',
             '-C', 'redistribute local ip %s/%s' % (network_ip, network_mask),
             '-C', 'redistribute local deny',
@@ -56,7 +56,7 @@ def babel(network_ip, network_mask, verbose_level):
             #'-C', 'in ip ::/0 le %s' % network_mask,
             # Don't route other addresses
             '-C', 'in ip deny',
-            '-d', str(verbose_level),
+            '-d', str(config.verbose),
             '-s',
             ]
     if config.babel_state:
@@ -71,7 +71,7 @@ def getConfig():
     _ = parser.add_argument
     _('--server-log', default='/var/log/vifibnet.server.log',
             help='Path to openvpn server log file')
-    _('--client-log', default='/var/log/',
+    _('--client-log', default='/var/log',
             help='Path to openvpn client log directory')
     _('--client-count', default=2, type=int,
             help='the number servers the peers try to connect to')
@@ -106,7 +106,8 @@ def startNewConnection(n):
             log_message('Establishing a connection with id %s (%s:%s)' % (id,ip,port), 2)
             iface = free_interface_set.pop()
             connection_dict[id] = ( openvpn.client( ip, '--dev', iface, '--proto', proto, '--rport', str(port),
-                stdout=os.open(config.client_log + 'vifibnet.client.' + str(id) + '.log', os.O_WRONLY|os.O_CREAT|os.O_TRUNC) ) , iface)
+                stdout=os.open('%s/vifibnet.client.%s.log' % (config.client_log, id), os.O_WRONLY|os.O_CREAT|os.O_TRUNC) ),
+                iface)
             peers_db.usePeer(id)
     except KeyError:
         log_message("Can't establish connection with %s : no available interface" % ip, 2)
@@ -120,7 +121,7 @@ def killConnection(id):
         p, iface = connection_dict.pop(id)
         p.kill()
         free_interface_set.add(iface)
-        peers_db.unusedPeer(id)
+        peers_db.unusePeer(id)
     except KeyError:
         log_message("Can't kill connection to " + peer + ": no existing connection", 1)
         pass
@@ -129,11 +130,10 @@ def killConnection(id):
         pass
 
 def checkConnections():
-    toDel = set([])
     for id in connection_dict.keys():
         p, iface = connection_dict[id]
         if p.poll() != None:
-            log_message('Connection with ' + str(id) + ' has failed with return code ' + str(p.returncode) , 3)
+            log_message('Connection with %s has failed with return code %s' % (id, p.returncode), 3)
             free_interface_set.add(iface)
             peers_db.unusePeer(id)
             del connection_dict[id]
@@ -177,11 +177,13 @@ def main():
     # Establish connections
     log_message('Starting openvpn server', 3)
     serverProcess = openvpn.server(config.ip, write_pipe,
-            '--dev', 'vifibnet', 
+            '--dev', 'vifibnet',
             stdout=os.open(config.server_log, os.O_WRONLY|os.O_CREAT|os.O_TRUNC))
     startNewConnection(config.client_count)
+
+    # Timed refresh initializing
     next_refresh = time.time() + config.refresh_time
-    
+
     # main loop
     try:
         while True:
