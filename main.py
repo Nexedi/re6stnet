@@ -6,7 +6,7 @@ import openvpn
 import random
 
 VIFIB_NET = "2001:db8:42::/48"
-connection_dict = {} # to remember current connections
+connection_dict = {} # to remember current connections we made
 free_interface_set = set(('client1', 'client2', 'client3', 'client4', 'client5',
                           'client6', 'client7', 'client8', 'client9', 'client10'))
 
@@ -16,6 +16,7 @@ def log_message(message, verbose_level):
 
 # TODO : How do we get our vifib ip ?
 # TODO : flag in some way the peers that are connected to us so we don't connect to them
+# Or maybe we just don't care, 
 class PeersDB:
     def __init__(self, dbPath):
         log_message('Connectiong to peers database', 4)
@@ -72,7 +73,7 @@ def getConfig():
     _('--client-count', default=2, type=int,
             help='Number of client connections')
     # TODO : use maxpeer
-    _('--max-peer', default=10, type=int,
+    _('--max-clients', default=10, type=int,
             help='the number of peers that can connect to the server')
     _('--refresh-time', default=60, type=int,
             help='the time (seconds) to wait before changing the connections')
