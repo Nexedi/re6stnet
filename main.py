@@ -103,11 +103,20 @@ def killConnection(id):
         log_message("Can't kill connection to " + peer + ": uncaught error", 1)
         pass
 
+def checkConnections():
+    for id in connection_dict:
+        p, iface = connection_dict[id]
+        if p.poll() != None:
+            log_message('Connection with ' + str(id) + ' has failed', 3)
+            free_interface_set.add(iface)
+            log_message('Updating peers database', 5)
+            peer_db.execute("UPDATE peers SET used = 0 WHERE id = ?", (id,))
 
 def refreshConnections():
+    checkConnections()
     # Kill some random connections
     try:
-        for i in range(0, int(config.refresh_count)):
+        for i in range(0, max(0, len(connection_dict) - config.client_count + config.refresh_count)):
             id = random.choice(connection_dict.keys())
             killConnection(id)
     except Exception:
