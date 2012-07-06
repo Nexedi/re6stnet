@@ -15,7 +15,7 @@ def log_message(message, verbose_level):
         print time.strftime("%d-%m-%Y %H:%M:%S : " + message)
 
 # TODO : How do we get our vifib ip ?
-
+# TODO : flag in some way the peers that are connected to us so we don't connect to them
 class PeersDB:
     def __init__(self, dbPath):
         log_message('Connectiong to peers database', 4)
@@ -28,7 +28,6 @@ class PeersDB:
                         proto TEXT NOT NULL,
                         used INTEGER NOT NULL)""")
         self.db.execute("CREATE INDEX IF NOT EXISTS _peers_used ON peers(used)")
-        self.db.execute("CREATE INDEX IF NOT EXISTS _peers_ip ON peers(ip)")
         self.db.execute("UPDATE peers SET used = 0")
     
     def getUnusedPeers(self, nPeers):
