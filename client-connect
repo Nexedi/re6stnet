@@ -1,3 +1,4 @@
 #!/usr/bin/python -S
 import os, sys
+import pdb; pdb.set_trace()
 os.write(int(sys.argv[1]), 'CLIENT_CONNECTED ' + os.environ['trusted_ip'] + '\n')

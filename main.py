@@ -29,7 +29,7 @@ class PeersDB:
                         used INTEGER NOT NULL)""")
         self.db.execute("CREATE INDEX IF NOT EXISTS _peers_used ON peers(used)")
         self.db.execute("UPDATE peers SET used = 0")
-    
+
     def getUnusedPeers(self, nPeers):
         return self.db.execute("SELECT id, ip, port, proto FROM peers WHERE used = 0 "
                 "ORDER BY RANDOM() LIMIT ?", (nPeers,))
@@ -37,22 +37,21 @@ class PeersDB:
     def usePeer(self, id):
         log_message('Updating peers database : using peer ' + str(id), 5)
         self.db.execute("UPDATE peers SET used = 1 WHERE id = ?", (id,))
-    
+
     def unusePeer(self, id):
         log_message('Updating peers database : unusing peer ' + str(id), 5)
         self.db.execute("UPDATE peers SET used = 0 WHERE id = ?", (id,))
 
 
-
-def babel(network_ip, network_mask):
+def startBabel():
     args = ['babeld',
-            '-C', 'redistribute local ip %s/%s' % (network_ip, network_mask),
+            '-C', 'redistribute local ip %s' % (config.ip),
             '-C', 'redistribute local deny',
             # Route VIFIB ip adresses
             '-C', 'in ip %s' % VIFIB_NET,
             # Route only addresse in the 'local' network,
             # or other entire networks
-            '-C', 'in ip %s/%s' % (network_ip,network_mask),
+            #'-C', 'in ip %s' % (config.ip),
             #'-C', 'in ip ::/0 le %s' % network_mask,
             # Don't route other addresses
             '-C', 'in ip deny',
@@ -168,6 +167,10 @@ def main():
     # Setup database
     global peers_db # stop using global variables for everything ?
     peers_db = PeersDB(config.db)
+
+    # Launch babel on all interfaces
+    log_message('Starting babel', 3)
+    babel = startBabel()
 
     # Create and open read_only pipe to get connect/disconnect events from openvpn
     log_message('Creating pipe for openvpn events', 3)
