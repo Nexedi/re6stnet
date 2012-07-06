@@ -7,7 +7,6 @@ import random
 
 VIFIB_NET = "2001:db8:42::/48"
 connection_dict = {} # to remember current connections we made
-client_set = set([]) # to remember current connections other made
 free_interface_set = set(('client1', 'client2', 'client3', 'client4', 'client5',
                           'client6', 'client7', 'client8', 'client9', 'client10'))
 
@@ -155,11 +154,9 @@ def handle_message(msg):
     words = msg.split()
     if words[0] == 'CLIENT_CONNECTED':
         log_message('Incomming connection from ' + words[1], 3)
-        client_set.push(words[1])
         # TODO :  check if we are not already connected to it
     elif words[0] == 'CLIENT_DISCONNECTED':
         log_message(words[1] + ' has disconnected', 3)
-        client_set.pop(words[1])
     else:
         log_message('Unknow message recieved from the openvpn pipe : ' + msg, 1)
 
