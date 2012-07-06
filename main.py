@@ -6,7 +6,8 @@ import openvpn
 import random
 
 VIFIB_NET = "2001:db8:42::/48"
-connection_dict = {} # to remember current connections
+connection_dict = {} # to remember current connections we made
+client_set = set([]) # to remember current connections other made
 free_interface_set = set(('client1', 'client2', 'client3', 'client4', 'client5',
                           'client6', 'client7', 'client8', 'client9', 'client10'))
 
@@ -16,6 +17,7 @@ def log_message(message, verbose_level):
 
 # TODO : How do we get our vifib ip ?
 # TODO : flag in some way the peers that are connected to us so we don't connect to them
+# Or maybe we just don't care, 
 class PeersDB:
     def __init__(self, dbPath):
         log_message('Connectiong to peers database', 4)
@@ -75,8 +77,7 @@ def getConfig():
             help='Path to openvpn client log directory')
     _('--client-count', default=2, type=int,
             help='the number servers the peers try to connect to')
-    # TODO : use maxpeer
-    _('--max-peer', default=10, type=int,
+    _('--max-clients', default=10, type=int,
             help='the number of peers that can connect to the server')
     _('--refresh-time', default=20, type=int,
             help='the time (seconds) to wait before changing the connections')
@@ -154,9 +155,11 @@ def handle_message(msg):
     words = msg.split()
     if words[0] == 'CLIENT_CONNECTED':
         log_message('Incomming connection from ' + words[1], 3)
+        client_set.push(words[1])
         # TODO :  check if we are not already connected to it
     elif words[0] == 'CLIENT_DISCONNECTED':
         log_message(words[1] + ' has disconnected', 3)
+        client_set.pop(words[1])
     else:
         log_message('Unknow message recieved from the openvpn pipe : ' + msg, 1)
 
