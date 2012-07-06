@@ -43,7 +43,7 @@ class PeersDB:
         self.db.execute("UPDATE peers SET used = 0 WHERE id = ?", (id,))
 
 
-def startBabel():
+def startBabel(**kw):
     args = ['babeld',
             '-C', 'redistribute local ip %s' % (config.ip),
             '-C', 'redistribute local deny',
@@ -54,30 +54,27 @@ def startBabel():
             #'-C', 'in ip %s' % (config.ip),
             #'-C', 'in ip ::/0 le %s' % network_mask,
             # Don't route other addresses
-            '-C', 'in ip deny',
+            '-C', 'in deny',
             '-d', str(config.verbose),
             '-s',
             ]
     if config.babel_state:
         args += '-S', config.babel_state
-    log_message("Starting babel daemon",2)
-    return subprocess.Popen(args + list(free_interface_set))
+    return subprocess.Popen(args + ['vifibnet'] + list(free_interface_set), **kw)
 
 def getConfig():
     global config
     parser = argparse.ArgumentParser(
             description='Resilient virtual private network application')
     _ = parser.add_argument
-    _('--server-log', default='/var/log/vifibnet.server.log',
-            help='Path to openvpn server log file')
-    _('--client-log', default='/var/log',
-            help='Path to openvpn client log directory')
+    _('--log-directory', default='/var/log',
+            help='Path to vifibnet logs directory')
     _('--client-count', default=2, type=int,
-            help='the number servers the peers try to connect to')
+            help='Number of client connections')
     # TODO : use maxpeer
     _('--max-peer', default=10, type=int,
             help='the number of peers that can connect to the server')
-    _('--refresh-time', default=20, type=int,
+    _('--refresh-time', default=60, type=int,
             help='the time (seconds) to wait before changing the connections')
     _('--refresh-count', default=1, type=int,
             help='The number of connections to drop when refreshing the connections')
@@ -105,7 +102,7 @@ def startNewConnection(n):
             log_message('Establishing a connection with id %s (%s:%s)' % (id,ip,port), 2)
             iface = free_interface_set.pop()
             connection_dict[id] = ( openvpn.client( ip, '--dev', iface, '--proto', proto, '--rport', str(port),
-                stdout=os.open('%s/vifibnet.client.%s.log' % (config.client_log, id), os.O_WRONLY|os.O_CREAT|os.O_TRUNC) ),
+                stdout=os.open('%s/vifibnet.client.%s.log' % (config.log_directory, id), os.O_WRONLY|os.O_CREAT|os.O_TRUNC) ),
                 iface)
             peers_db.usePeer(id)
     except KeyError:
@@ -150,12 +147,12 @@ def refreshConnections():
     startNewConnection(config.client_count - len(connection_dict))
 
 def handle_message(msg):
-    words = msg.split()
-    if words[0] == 'CLIENT_CONNECTED':
-        log_message('Incomming connection from ' + words[1], 3)
+    script_type, common_name = msg.split()
+    if script_type == 'client-connect':
+        log_message('Incomming connection from %s' % (common_name,), 3)
         # TODO :  check if we are not already connected to it
-    elif words[0] == 'CLIENT_DISCONNECTED':
-        log_message(words[1] + ' has disconnected', 3)
+    elif script_type == 'client-disconnect':
+        log_message('%s has disconnected' % (common_name,), 3)
     else:
         log_message('Unknow message recieved from the openvpn pipe : ' + msg, 1)
 
@@ -170,7 +167,8 @@ def main():
 
     # Launch babel on all interfaces
     log_message('Starting babel', 3)
-    babel = startBabel()
+    babel = startBabel(stdout=os.open('%s/babeld.log' % (config.log_directory,), os.O_WRONLY|os.O_CREAT|os.O_TRUNC),
+                        stderr=subprocess.STDOUT)
 
     # Create and open read_only pipe to get connect/disconnect events from openvpn
     log_message('Creating pipe for openvpn events', 3)
@@ -179,9 +177,8 @@ def main():
 
     # Establish connections
     log_message('Starting openvpn server', 3)
-    serverProcess = openvpn.server(config.ip, write_pipe,
-            '--dev', 'vifibnet',
-            stdout=os.open(config.server_log, os.O_WRONLY|os.O_CREAT|os.O_TRUNC))
+    serverProcess = openvpn.server(config.ip, write_pipe, '--dev', 'vifibnet',
+            stdout=os.open('%s/vifibnet.server.log' % (config.log_directory,), os.O_WRONLY|os.O_CREAT|os.O_TRUNC))
     startNewConnection(config.client_count)
 
     # Timed refresh initializing

@@ -1,4 +1,0 @@
-#!/usr/bin/python -S
-import os, sys
-os.write(int(sys.argv[1]), 'CLIENT_DISCONNECTED ' + os.environ['trusted_ip'] + '\n')
-
