@@ -4,7 +4,6 @@ import traceback
 import upnpigd
 import openvpn
 import random
-import propagation
 import log
 
 VIFIB_NET = "2001:db8:42::/48"
@@ -88,8 +87,6 @@ def getConfig():
     # Temporary args - to be removed
     _('--ip', required=True,
             help='IPv6 of the server')
-    _('--entry-ip', default=None, help='entrypoint for the ring')
-    _('--entry-port', default=None, help='entrypoint for the ring')
     # Openvpn options
     _('openvpn_args', nargs=argparse.REMAINDER,
             help="Common OpenVPN options (e.g. certificates)")
@@ -186,9 +183,6 @@ def main():
     # Timed refresh initializing
     next_refresh = time.time() + config.refresh_time
 
-    # initializing the ring to propagate the peers
-    ring = propagation.Ring(None)
-
     # main loop
     try:
         while True:
@@ -206,4 +200,4 @@ if __name__ == "__main__":
     main()
 
 # TODO : remove incomming connections from avalaible peers
-
+# maybe not needed : it doesn't append often

@@ -29,7 +29,7 @@ class Ring:
         if entryPoint == None:
             self.successor = self.me
         else:
-            self.send('FIND_SUCCESSOR ' + str(self.me.id) + ' ' + self.me.toString(), entrypoint)
+            self.send('FIND_SUCCESSOR ' + str(self.me.id) + ' ' + self.me.toString(), entryPoint)
         log.log('Init the ring with me = ' + self.me.toString(), 3)
 
     # TODO :
@@ -41,7 +41,7 @@ class Ring:
     def send(self, message, target):
         # TODO : switch to log
         log.log('Sending : ' + message + ' to ' + target.toString(), 5)
-        self.sock.sendTo(message, (target.ip, target.port))
+        self.sock.sendto(message, (target.ip, target.port))
 
     def findSuccessor(self, id, sender):
         if self.id < id and id <= self.successor:
