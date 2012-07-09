@@ -4,6 +4,7 @@ import traceback
 import upnpigd
 import openvpn
 import random
+import propagation
 
 VIFIB_NET = "2001:db8:42::/48"
 connection_dict = {} # to remember current connections we made
@@ -87,9 +88,11 @@ def getConfig():
             help='Path to babeld state-file')
     _('--verbose', '-v', default=0, type=int,
             help='Defines the verbose level')
-    # Temporary args
+    # Temporary args - to be removed
     _('--ip', required=True,
             help='IPv6 of the server')
+    _('--entry-ip', default=None, help='entrypoint for the ring')
+    _('--entry-port', default=None, help='entrypoint for the ring')
     # Openvpn options
     _('openvpn_args', nargs=argparse.REMAINDER,
             help="Common OpenVPN options (e.g. certificates)")
@@ -168,7 +171,7 @@ def main():
 
     # Launch babel on all interfaces
     log_message('Starting babel', 3)
-    babel = startBabel(stdout=os.open('%s/babeld.log' % (config.log_directory,), os.O_WRONLY|os.O_CREAT|os.O_TRUNC),
+    babel = startBabel(stdout=os.open('%s/babeld.log' % (config.log_directory,), os.O_WRONLY | os.O_CREAT | os.O_TRUNC),
                         stderr=subprocess.STDOUT)
 
     # Create and open read_only pipe to get connect/disconnect events from openvpn
@@ -179,7 +182,7 @@ def main():
     # Establish connections
     log_message('Starting openvpn server', 3)
     serverProcess = openvpn.server(config.ip, write_pipe, '--dev', 'vifibnet',
-            stdout=os.open('%s/vifibnet.server.log' % (config.log_directory,), os.O_WRONLY|os.O_CREAT|os.O_TRUNC))
+            stdout=os.open('%s/vifibnet.server.log' % (config.log_directory,), os.O_WRONLY | os.O_CREAT | os.O_TRUNC))
     startNewConnection(config.client_count)
 
     # Timed refresh initializing

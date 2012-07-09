@@ -33,7 +33,7 @@ def server(ip, pipe_fd, *args, **kw):
         '--client-connect', 'client-connect ' + str(pipe_fd),
         '--client-disconnect', 'client-connect ' + str(pipe_fd),
         '--dh', config.dh,
-        '--max-clients', config.max_clients,
+        '--max-clients', str(config.max_clients),
         *args, **kw)
 
 def client(serverIp, *args, **kw):
