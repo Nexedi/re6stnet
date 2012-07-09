@@ -1,5 +1,6 @@
 import socket
 import uuid
+import log
 
 # create an upd socket
 # listen on it for incoming messages and forward them
@@ -20,7 +21,7 @@ class Ring:
     
     def __init__(self, entryPoint):
         # initialize the connection
-        self.sock = socket.socket( socket.AF_INET666666, socket.SOCK_DGRAM )
+        self.sock = socket.socket( socket.AF_INET6, socket.SOCK_DGRAM )
         self.sock.bind(('', 0))
         self.me = RingMember(uuid.uuid1().int ,'',  self.sock.getsockname()[1]) # TODO : get the address
         # to enter the ring
@@ -29,16 +30,17 @@ class Ring:
             self.successor = self.me
         else:
             self.send('FIND_SUCCESSOR ' + str(self.me.id) + ' ' + self.me.toString(), entrypoint)
+        log.log('Init the ring with me = ' + self.me.toString(), 3)
 
     # TODO :
     def handleMessages(self):
         # TODO : switch to log
-        print 'Handling messages ...'
+        log.log('Handling messages ...', 3)
         pass
 
     def send(self, message, target):
         # TODO : switch to log
-        print 'Sending : ' + message + ' to ' + target.toString()
+        log.log('Sending : ' + message + ' to ' + target.toString(), 5)
         self.sock.sendTo(message, (target.ip, target.port))
 
     def findSuccessor(self, id, sender):
