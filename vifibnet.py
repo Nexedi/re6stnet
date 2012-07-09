@@ -199,5 +199,3 @@ def main():
 if __name__ == "__main__":
     main()
 
-# TODO : remove incomming connections from avalaible peers
-# maybe not needed : it doesn't append often
