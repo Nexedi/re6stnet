@@ -36,7 +36,9 @@ class PeersDB:
             self.populateDB(100)
 
     def populateDB(self, n):
-        self.db.executemany("INSERT INTO peers (ip, port, proto) VALUES ?", self.proxy.getPeerList(n))
+        (ip, port) = upnpigd.GetExternalInfo(1194)
+        proto = 'udp'
+        self.db.executemany("INSERT INTO peers (ip, port, proto) VALUES ?", self.proxy.getPeerList(n, port, proto))
 
     def getUnusedPeers(self, nPeers):
         return self.db.execute("SELECT id, ip, port, proto FROM peers WHERE used = 0 "
@@ -191,6 +193,7 @@ def main():
     # Get arguments
     getConfig()
     log.verbose = config.verbose
+    # TODO: get proto to use ?
     (externalIp, externalPort) = upnpigd.GetExternalInfo(1194)
 
     # Setup database

@@ -1,10 +1,15 @@
 #!/usr/bin/env python
 import argparse, math, random, smtplib, sqlite3, string, time
 from email.mime.text import MIMEText
-from SimpleXMLRPCServer import SimpleXMLRPCServer
+from functools import wraps
+from SimpleXMLRPCServer import SimpleXMLRPCServer, SimpleXMLRPCRequestHandler
 from OpenSSL import crypto
-import netaddr
 import traceback
+
+class RequestHandler(SimpleXMLRPCRequestHandler):
+
+    def _dispatch(self, method, params):
+        return self.server._dispatch(method, (self,) + params)
 
 class main(object):
 
@@ -60,11 +65,11 @@ class main(object):
         self.network = bin(self.ca.get_serial_number())[3:]
 
         # Starting server
-        server = SimpleXMLRPCServer(("localhost", 8000), allow_none=True)
+        server = SimpleXMLRPCServer(("localhost", 8000), requestHandler=RequestHandler, allow_none=True)
         server.register_instance(self)
         server.serve_forever()
 
-    def requestToken(self, email):
+    def requestToken(self, handler, email):
         while True:
             # Generating token
             token = ''.join(random.sample(string.ascii_lowercase, 8))
@@ -96,7 +101,7 @@ class main(object):
             return prefix
         raise RuntimeError # TODO: raise better exception
 
-    def requestCertificate(self, token, cert_req):
+    def requestCertificate(self, handler, token, cert_req):
       try:
         req = crypto.load_certificate_request(crypto.FILETYPE_PEM, cert_req)
         with self.db:
@@ -131,11 +136,19 @@ class main(object):
         traceback.print_exc()
         raise
 
-    def getCa(self):
+    def getCa(self, handler):
         return crypto.dump_certificate(crypto.FILETYPE_PEM, self.ca)
 
-    def getPeerList(self, n):
+    def declare(self, handler, address):
+        # guess prefix from handler.client_address
+        ip1, ip2 = struct.unpack('>QQ', socket.inet_pton(socket.AF_INET6, handler.client_address)))
+        prefix = bin(ip1)[2:] + bin(ip2)]2:]
+        ip, port, proto = address
+        self.db.execute("INSERT INTO peers VALUES (?,?,?,?)", (prefix, ip, port, proto))
+
+    def getPeerList(self, handler, n, address):
         assert 0 < n < 1000
+        self.declare(handler, address)
         return self.db.execute("SELECT ip, port, proto FROM peers ORDER BY random() LIMIT ?", (n,)).fetchall()
 
 

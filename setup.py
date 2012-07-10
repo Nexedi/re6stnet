@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 from OpenSSL import crypto
-import argparse, os, xmlrpclib
+import argparse, os, subprocess, xmlrpclib
 
 def main():
     parser = argparse.ArgumentParser(
@@ -45,6 +45,9 @@ def main():
     # Get certificates
     ca = s.getCa()
     cert = s.requestCertificate(token,req)
+
+    # Generating dh file
+    subprocess.call(['openssl', 'dhparam', '-out', os.path.join(config.dir, 'dh2048.pem'), '2048'])
 
     # Store cert and key
     with open(os.path.join(config.dir, 'cert.key'), 'w') as f:
