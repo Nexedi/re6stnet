@@ -18,7 +18,7 @@ public:
     ~Graph() { delete[] adjacency; };
 
     void GetDistancesFrom(int node, int* distance);
-    //void KillMachines(float portion, vector<int>* graph)
+    void KillMachines(float proportion);
    
     vector<int>* adjacency;
     int size;

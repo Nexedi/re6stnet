@@ -1,4 +1,5 @@
 // To compile with -std=c++0x
+// The GET_BC option might not be working
 //#define GET_BC // Uncomment this line to get the betweeness centrality
 #include "main.h"
 
@@ -14,18 +15,22 @@ Graph::Graph(int size, int k, int maxPeers, mt19937 rng) :
 {
     adjacency = new vector<int>[size];
     for(int i=0; i<size; i++)
+    {
+        set<int> alreadyConnected;
+        alreadyConnected.insert(i);
+
         for(int j=0; j<k; j++)
         {
             int otherNode;
-            // TODO : forbid to connect twice to the same node
-            // it can only improve the result
-            while((otherNode = distrib(rng)) == i 
+
+            while(alreadyConnected.count(otherNode = distrib(rng)) == 1 
                 || otherNode > i && adjacency[otherNode].size() > maxPeers-10
                 || adjacency[otherNode].size() > maxPeers) 
             { }
             adjacency[i].push_back(otherNode);
             adjacency[otherNode].push_back(i);
         }
+    }
 }
 
 void Graph::GetDistancesFrom(int node, int* distance)
@@ -49,6 +54,12 @@ void Graph::GetDistancesFrom(int node, int* distance)
                 remainingNodes.push(neighbor);
             }
     }
+}
+
+// kill the last proportion*size machines of the graph
+void Graph::KillMachines(float proportion)
+{
+    // TODO
 }
 
 int main()
@@ -79,6 +90,7 @@ int main()
         for(int i=0; i<graph.size; i++)
         {
             int distance[graph.size];
+            // if(i%10==0) cout << "Computing distances from node " << i << endl;
             graph.GetDistancesFrom(i, distance);
 
             // retrieve the distance
