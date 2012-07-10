@@ -27,6 +27,11 @@ class main(object):
 
         # Database initializing
         self.db = sqlite3.connect(self.config.db, isolation_level=None)
+        self.db.execute("""CREATE TABLE IF NOT EXISTS peers (
+                        prefix text primary key not null,
+                        ip text not null,
+                        port integer not null,
+                        proto text not null)""")
         self.db.execute("""CREATE TABLE IF NOT EXISTS tokens (
                         token text primary key not null,
                         email text not null,
@@ -105,13 +110,6 @@ class main(object):
             # Get a new prefix
             prefix = self._getPrefix(prefix_len)
 
-            # Get complete ipv6 address from prefix
-            #ip = hex(int(prefix.ljust(80, '0'),2))[2::] # XXX: do not hardcode
-            #ip6 = self.vifib
-            #for i in xrange(0, len(ip), 4):
-            #    ip6 += ip[i:i+4] + ':'
-            #ip6 = ip6.rstrip(':')
-
             # Create certificate
             cert = crypto.X509()
             #cert.set_serial_number(serial)
@@ -132,6 +130,14 @@ class main(object):
       except:
         traceback.print_exc()
         raise
+
+    def getCa(self):
+        return crypto.dump_certificate(crypto.FILETYPE_PEM, self.ca)
+
+    def getPeerList(self, n):
+        assert 0 < n < 1000
+        return self.db.execute("SELECT ip, port, proto FROM peers ORDER BY random() LIMIT ?", (n,)).fetchall()
+
 
 if __name__ == "__main__":
     main()

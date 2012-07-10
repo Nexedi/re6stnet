@@ -34,7 +34,7 @@ def main():
     req = crypto.X509Req()
     subj = req.get_subject()
     if config.req:
-        while len(config.req) > 0:
+        while len(config.req) > 1:
             key = config.req.pop(0)
             value = config.req.pop(0)
             setattr(subj, key, value)
@@ -47,9 +47,9 @@ def main():
     cert = s.requestCertificate(token,req)
 
     # Store cert and key
-    with open(os.path.join(config.dir, 'ca.crt'), 'w') as f:
-        f.write(key)
     with open(os.path.join(config.dir, 'cert.key'), 'w') as f:
+        f.write(key)
+    with open(os.path.join(config.dir, 'cert.crt'), 'w') as f:
         f.write(cert)
     with open(os.path.join(config.dir, 'ca.pem'), 'w') as f:
         f.write(ca)
