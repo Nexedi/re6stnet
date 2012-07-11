@@ -1,6 +1,5 @@
 // To compile : g++ -std=c++0x results.cpp graph.cpp main.cpp -lpthread
 #include "main.h"
-#include <fstream>
 #include <future>
 #include <sstream>
 
@@ -33,12 +32,12 @@ int main(int argc, char** argv)
 {
     mt19937 rng(time(NULL));
 
-    fstream output(outName, fstream::out);
-    output << "n,k,maxPeer,avgDistance,disconnected,disconnectionProba,maxDistance,maxArityDistrib" << endl;
-
+    FILE* output = fopen(outName, "wt");
+    int fno = fileno(output);
+    fprintf(output, "n,k,maxPeer,avgDistance,disconnected,disconnectionProba,maxDistance,maxArityDistrib\n");
 
     vector<future<string>> outputStrings;
-    for(int n=200; n<=200; n*=2)
+    for(int n=200; n<=20000; n*=2)
         for(int k=10; k<=10; k+=5)
             for(float a=0.05; a<1; a+=0.05)
         {
@@ -48,8 +47,8 @@ int main(int argc, char** argv)
                     ostringstream out;
                     out << n << "," << k << "," << 3*k << "," << results.avgDistance << ","
                         << results.disconnected << "," << results.disconnectionProba << ","
-                        << results.maxDistanceReached << "," << results.arityDistrib[3*k];
-
+                        << results.maxDistanceReached << "," << results.arityDistrib[3*k]
+                        << endl;
                     return out.str();
                 }));
         }
@@ -59,13 +58,16 @@ int main(int argc, char** argv)
     int nTask = outputStrings.size();
     for(int i=0; i<nTask; i++)
     {
-        output << outputStrings[i].get() << endl;
+        fprintf(output, outputStrings[i].get().c_str());
+        fflush(output);
+        fsync(fno);
         cout << "\r" << i+1 << "/" << nTask;
         cout.flush();
     }
 
+
     cout << endl;
-    output.close();
+    fclose(output);
     return 0;
 }
 
