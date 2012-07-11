@@ -1,13 +1,21 @@
 #!/usr/bin/env python
-import argparse, random, smtplib, sqlite3
+import argparse, math, random, smtplib, sqlite3, string, time
 from email.mime.text import MIMEText
-from SimpleXMLRPCServer import SimpleXMLRPCServer
+from functools import wraps
+from SimpleXMLRPCServer import SimpleXMLRPCServer, SimpleXMLRPCRequestHandler
 from OpenSSL import crypto
-import netaddr
+import traceback
+
+class RequestHandler(SimpleXMLRPCRequestHandler):
+
+    def _dispatch(self, method, params):
+        return self.server._dispatch(method, (self,) + params)
 
 class main(object):
 
     def __init__(self):
+        self.cert_duration = 365 * 86400
+
         # Command line parsing
         parser = argparse.ArgumentParser(
                 description='Peer discovery http server for vifibnet')
@@ -18,46 +26,62 @@ class main(object):
                 help='Path to ca.crt file')
         _('--key', required=True,
                 help='Path to certificate key')
-        _('--network', required=True,
-                help='Vifib subnet')
-        config = parser.parser_arg()
+        _('--mailhost', required=True,
+                help='SMTP server mail host')
+        self.config = parser.parse_args()
 
         # Database initializing
-        self.db = sqlite3.connect(config.db, isolation_level=None)
+        self.db = sqlite3.connect(self.config.db, isolation_level=None)
+        self.db.execute("""CREATE TABLE IF NOT EXISTS peers (
+                        prefix text primary key not null,
+                        ip text not null,
+                        port integer not null,
+                        proto text not null)""")
         self.db.execute("""CREATE TABLE IF NOT EXISTS tokens (
                         token text primary key not null,
                         email text not null,
-                        prefix_len integer not null default 16,
+                        prefix_len integer not null,
                         date integer not null)""")
-        self.db.execute("""CREATE TABLE IF NOT EXISTS certificates (
-                        prefix text primary key not null,
-                        email text not null,
-                        cert text not null)""")
+        try:
+            self.db.execute("""CREATE TABLE vifib (
+                               prefix text primary key not null,
+                               email text,
+                               cert text)""")
+        except sqlite3.OperationalError, e:
+            if e.args[0] == 'table vifib already exists':
+                pass
+            else:
+                raise RuntimeError
+        else:
+            self.db.execute("INSERT INTO vifib VALUES ('',null,null)")
+
 
         # Loading certificates
-        with open(config.ca) as f:
+        with open(self.config.ca) as f:
             self.ca = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
-        with open(config.key) as f:
+        with open(self.config.key) as f:
             self.key = crypto.load_privatekey(crypto.FILETYPE_PEM, f.read())
+        # Get vifib network prefix
+        self.network = bin(self.ca.get_serial_number())[3:]
 
         # Starting server
-        server = SimpleXMLRPCServer(("localhost", 8000))
+        server = SimpleXMLRPCServer(("localhost", 8000), requestHandler=RequestHandler, allow_none=True)
         server.register_instance(self)
         server.serve_forever()
 
-    def requestToken(self, email):
+    def requestToken(self, handler, email):
         while True:
             # Generating token
             token = ''.join(random.sample(string.ascii_lowercase, 8))
             # Updating database
             try:
-                self.db.execute("INSERT INTO tokens (?,?,null,?)", (token, email, int(time.time())))
+                self.db.execute("INSERT INTO tokens VALUES (?,?,?,?)", (token, email, 16, int(time.time())))
                 break
             except sqlite3.IntegrityError, e:
                 pass
 
         # Creating and sending email
-        s = smtplib.SMTP('localhost')
+        s = smtplib.SMTP(self.config.mailhost)
         me = 'postmaster@vifibnet.com'
         msg = MIMEText('Hello world !\nYour token : %s' % (token,))
         msg['Subject'] = '[Vifibnet] Token Request'
@@ -66,45 +90,67 @@ class main(object):
         s.sendmail(me, email, msg.as_string())
         s.quit()
 
-    def requestCertificate(self, token, cert_req):
-        n = len(cert_req_list)
+    def _getPrefix(self, prefix_len):
+        assert 0 < prefix_len <= 128 - len(self.network)
+        for prefix, in self.db.execute("""SELECT prefix FROM vifib WHERE length(prefix) <= ? AND cert is null
+                                         ORDER BY length(prefix) DESC""", (prefix_len,)):
+            while len(prefix) < prefix_len:
+                self.db.execute("UPDATE vifib SET prefix = ? WHERE prefix = ?", (prefix + '1', prefix))
+                prefix += '0'
+                self.db.execute("INSERT INTO vifib VALUES (?,null,null)", (prefix,))
+            return prefix
+        raise RuntimeError # TODO: raise better exception
+
+    def requestCertificate(self, handler, token, cert_req):
+      try:
         req = crypto.load_certificate_request(crypto.FILETYPE_PEM, cert_req)
-        try:
-            # TODO : check syntax
-            token, email, prefix_len, _ = self.db.execute("SELECT * FROM tokens WHERE token = ?", (token,)).fetchone()
+        with self.db:
+            try:
+                token, email, prefix_len, _ = self.db.execute("SELECT * FROM tokens WHERE token = ?", (token,)).next()
+            except StopIteration:
+                # TODO: return nice error message
+                raise
             self.db.execute("DELETE FROM tokens WHERE token = ?", (token,))
 
-            # Create a new prefix
-            # TODO : FIX !
-            # i impair => ok
-            # récursif sinon
-            for i, prefix in enumerate(self.db.execute("""SELECT DISTINCT substr(prefix,1,?) FROM certificates 
-                                        WHERE length(prefix) >= ? ORDER BY prefix""", (prefix_len, prefix_len))):
-                if i != int(prefix, 2):
-                    pass
-                    break
-            else:
-                 prefix = i
+            # Get a new prefix
+            prefix = self._getPrefix(prefix_len)
 
-            # create certificate
+            # Create certificate
             cert = crypto.X509()
             #cert.set_serial_number(serial)
-            #cert.gmtime_adj_notBefore(notBefore)
-            #cert.gmtime_adj_notAfter(notAfter)
+            cert.gmtime_adj_notBefore(0)
+            cert.gmtime_adj_notAfter(self.cert_duration)
             cert.set_issuer(self.ca.get_subject())
-            cert.set_subject(req.get_subject())
+            subject = req.get_subject()
+            subject.serialNumber = "%u/%u" % (int(prefix, 2), prefix_len)
+            cert.set_subject(subject)
             cert.set_pubkey(req.get_pubkey())
             cert.sign(self.key, 'sha1')
             cert = crypto.dump_certificate(crypto.FILETYPE_PEM, cert)
 
             # Insert certificate into db
-            self.db.execute("INSERT INTO certificates (?,?)", (, email, cert) )
+            self.db.execute("UPDATE vifib SET email = ?, cert = ? WHERE prefix = ?", (email, cert, prefix) )
 
-            # Returning certificate
-            return cert
-        except: Exception:
-            # TODO : what to do ?
-            pass
+        return cert
+      except:
+        traceback.print_exc()
+        raise
+
+    def getCa(self, handler):
+        return crypto.dump_certificate(crypto.FILETYPE_PEM, self.ca)
+
+    def declare(self, handler, address):
+        # guess prefix from handler.client_address
+        ip1, ip2 = struct.unpack('>QQ', socket.inet_pton(socket.AF_INET6, handler.client_address)))
+        prefix = bin(ip1)[2:] + bin(ip2)]2:]
+        ip, port, proto = address
+        self.db.execute("INSERT INTO peers VALUES (?,?,?,?)", (prefix, ip, port, proto))
+
+    def getPeerList(self, handler, n, address):
+        assert 0 < n < 1000
+        self.declare(handler, address)
+        return self.db.execute("SELECT ip, port, proto FROM peers ORDER BY random() LIMIT ?", (n,)).fetchall()
+
 
 if __name__ == "__main__":
     main()
