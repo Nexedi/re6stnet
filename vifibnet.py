@@ -14,7 +14,8 @@ free_interface_set = set(('client1', 'client2', 'client3', 'client4', 'client5',
                           'client6', 'client7', 'client8', 'client9', 'client10'))
 
 # TODO : flag in some way the peers that are connected to us so we don't connect to them
-# Or maybe we just don't care,
+# Or maybe we just don't care
+
 class PeersDB:
     def __init__(self, dbPath):
         self.proxy = xmlrpclib.ServerProxy('http://%s:%u' % (config.server, config.server_port))
@@ -56,6 +57,7 @@ class PeersDB:
         log.log('Updating peers database : unusing peer ' + str(id), 5)
         self.db.execute("UPDATE peers SET used = 0 WHERE id = ?", (id,))
 
+# TODO: do everything using 'binary' strings
 def ipFromPrefix(prefix, prefix_len):
     tmp = hex(int(prefix))[2:]
     tmp = tmp.rjust(int((math.ceil(float(prefix_len) / 4))), '0')
@@ -127,20 +129,19 @@ def getConfig():
         subject = cert.get_subject()
         prefix, prefix_len = subject.serialNumber.split('/')
         ip = ipFromPrefix(prefix, int(prefix_len))
-        print ip
-        log.log('Intranet ip : %s' % (ip,), 4)
+        log.log('Intranet ip : %s' % (ip,), 3)
     if config.openvpn_args[0] == "--":
         del config.openvpn_args[0]
     config.openvpn_args.append('--cert')
     config.openvpn_args.append(config.cert)
     log.log("Configuration completed", 1)
 
-def startNewConnection(n):
+def startNewConnection(n, write_pipe):
     try:
         for id, ip, port, proto in peers_db.getUnusedPeers(n):
             log.log('Establishing a connection with id %s (%s:%s)' % (id,ip,port), 2)
             iface = free_interface_set.pop()
-            connection_dict[id] = ( openvpn.client( ip, '--dev', iface, '--proto', proto, '--rport', str(port),
+            connection_dict[id] = ( openvpn.client( ip, write_pipe, '--dev', iface, '--proto', proto, '--rport', str(port),
                 stdout=os.open(os.path.join(config.log, 'vifibnet.client.%s.log' % (id,)), 
                                os.O_WRONLY|os.O_CREAT|os.O_TRUNC) ),
                 iface)
@@ -187,12 +188,15 @@ def refreshConnections():
     startNewConnection(config.client_count - len(connection_dict))
 
 def handle_message(msg):
-    script_type, common_name = msg.split()
+    script_type, arg = msg.split()
     if script_type == 'client-connect':
-        log.log('Incomming connection from %s' % (common_name,), 3)
+        log.log('Incomming connection from %s' % (arg,), 3)
         # TODO :  check if we are not already connected to it
     elif script_type == 'client-disconnect':
-        log.log('%s has disconnected' % (common_name,), 3)
+        log.log('%s has disconnected' % (arg,), 3)
+    elif script_type == 'ipchange':
+        # TODO: save the external ip received
+        log.log('External Ip : ' + arg, 3)
     else:
         log.log('Unknow message recieved from the openvpn pipe : ' + msg, 1)
 
@@ -220,7 +224,7 @@ def main():
     log.log('Starting openvpn server', 3)
     serverProcess = openvpn.server(config.ip, write_pipe, '--dev', 'vifibnet',
             stdout=os.open(os.path.join(config.log, 'vifibnet.server.log'), os.O_WRONLY | os.O_CREAT | os.O_TRUNC))
-    startNewConnection(config.client_count)
+    startNewConnection(config.client_count, write_pipe)
 
     # Timed refresh initializing
     next_refresh = time.time() + config.refresh_time
