@@ -1,9 +1,9 @@
-// To compile with -std=c++0x
+// To compile : g++ -std=c++0x results.cpp graph.cpp main.cpp -lpthread
 #include "main.h"
 #include <fstream>
+#include <future>
+#include <sstream>
 
-int n = 1000; // the number of peer
-int k = 10; // each peer try to make k connections with the others
 const char* outName = "out.csv";
 
 
@@ -13,9 +13,6 @@ Results Simulate(mt19937 rng,  int n, int k, int maxPeer, int maxDistanceFrom, i
 
     for(int r=0; r<runs; r++)
     {
-        cout << "\r                                          \rn = " << n << ", k = " << k << ", run = " << r;
-        cout.flush();
-
         Graph graph(n, k, maxPeer, rng);
         results.UpdateArity(graph);
 
@@ -27,7 +24,6 @@ Results Simulate(mt19937 rng,  int n, int k, int maxPeer, int maxDistanceFrom, i
             results.UpdateDistance(distance, graph.size);
         }
     }
-    cout << "\r                                              \r";
 
     results.Finalise();
     return results;
@@ -40,15 +36,34 @@ int main(int argc, char** argv)
     fstream output(outName, fstream::out);
     output << "n,k,maxPeer,avgDistance,disconnected,maxDistance,maxArityDistrib" << endl;
 
+
+    vector<future<string>> outputStrings;
     for(int n=200; n<=20000; n*=2)
         for(int k=5; k<=50; k+=5)
         {
-            Results results = Simulate(rng, n, k, 3*k, 10000, 50);
-            output << n << "," << k << "," << 3*k << "," << results.avgDistance << "," 
-                << results.disconnected << ","  << results.maxDistance << ","
-                << results.arityDistrib[3*k] << endl;
+            outputStrings.push_back(async(launch::async, [rng, n, k]() 
+                {
+                    Results results = Simulate(rng, n, k, 3*k, 10000, 50);
+                    ostringstream out;
+                    out << n << "," << k << "," << 3*k << "," << results.avgDistance << ","
+                        << results.disconnected << ","  << results.maxDistance << ","
+                        << results.arityDistrib[3*k];
+
+                    return out.str();
+                }));
         }
 
+    cout << "Launching finished" << endl;
+
+    int nTask = outputStrings.size();
+    for(int i=0; i<nTask; i++)
+    {
+        output << outputStrings[i].get() << endl;
+        cout << "\r" << i << "/" << nTask;
+        cout.flush();
+    }
+
+    cout << endl;
     output.close();
     return 0;
 }
