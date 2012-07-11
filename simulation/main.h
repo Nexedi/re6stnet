@@ -4,11 +4,6 @@
 #include <queue>
 #include <set>
 
-#define max(a,b) a>b?a:b
-#define min(a,b) a<b?a:b
-#define clamp(a,b,c) max(a,min(b, c))
-#define array(name, size) name[size]; for(int i=0; i<size; i++) name[i]=0;
-
 using namespace std;
 
 class Graph
@@ -26,3 +21,28 @@ private:
     uniform_int_distribution<int> distrib;
 };
 
+class Results
+{
+public:
+    Results(int maxArity, int maxDistance);
+    ~Results();
+
+    void UpdateArity(const Graph& graph);
+    void UpdateDistance(int* distance, int nSamples);
+    void Finalise();
+
+    double* arityDistrib;
+    double* distanceDistrib;
+    double disconnectionProba;
+    double arityTooBig;
+    double distanceTooBig;
+    int64_t disconnected;
+    int64_t nAritySample;
+    int64_t nDistanceSample;
+    int maxArity;
+    int maxDistance;
+
+private:
+    void AddAritySample(int arity);
+    void AddDistanceSample(int distance);
+};
