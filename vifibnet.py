@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import argparse, errno, os, select, sqlite3, subprocess, sys, time, xmlrpclib
+import argparse, errno, math, os, select, sqlite3, subprocess, sys, time, xmlrpclib
 from OpenSSL import crypto
 import traceback
 import upnpigd
@@ -56,8 +56,9 @@ class PeersDB:
         log.log('Updating peers database : unusing peer ' + str(id), 5)
         self.db.execute("UPDATE peers SET used = 0 WHERE id = ?", (id,))
 
-def ipFromPrefix(prefix):
-    tmp = hex(int(prefix, 2))[2:]
+def ipFromPrefix(prefix, prefix_len):
+    tmp = hex(int(prefix))[2:]
+    tmp = tmp.rjust(int((math.ceil(float(prefix_len) / 4))), '0')
     ip = VIFIB_NET
     for i in xrange(0, len(tmp), 4):
         ip += tmp[i:i+4] + ':'
@@ -113,6 +114,7 @@ def getConfig():
     _('--cert', required=True,
             help='Path to the certificate file')
     # Temporary args - to be removed
+    # Can be removed, should ip be a global variable ?
     _('--ip', required=True,
             help='IPv6 of the server')
     # Openvpn options
@@ -123,8 +125,8 @@ def getConfig():
     with open(config.cert, 'r') as f:
         cert = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
         subject = cert.get_subject()
-        prefix, _ = subject.serialNumber.split('/')
-        ip = ipFromPrefix(prefix)
+        prefix, prefix_len = subject.serialNumber.split('/')
+        ip = ipFromPrefix(prefix, int(prefix_len))
         print ip
         log.log('Intranet ip : %s' % (ip,), 4)
     if config.openvpn_args[0] == "--":
@@ -198,7 +200,7 @@ def main():
     # Get arguments
     getConfig()
     log.verbose = config.verbose
-    # TODO: get proto to use ?
+    # TODO: how do we decide which protocol we use ?
     (externalIp, externalPort) = upnpigd.GetExternalInfo(1194)
 
     # Setup database
