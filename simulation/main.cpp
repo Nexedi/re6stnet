@@ -6,14 +6,14 @@
 
 const char* outName = "out.csv";
 
-
-Results Simulate(mt19937 rng,  int n, int k, int maxPeer, int maxDistanceFrom, int runs)
+Results Simulate(mt19937 rng,  int n, int k, int maxPeer, int maxDistanceFrom, float alivePercent, int runs)
 {
     Results results(maxPeer, 20);
 
     for(int r=0; r<runs; r++)
     {
         Graph graph(n, k, maxPeer, rng);
+        graph.KillMachines(alivePercent);
         results.UpdateArity(graph);
 
         // Compute the shortest path
@@ -34,20 +34,21 @@ int main(int argc, char** argv)
     mt19937 rng(time(NULL));
 
     fstream output(outName, fstream::out);
-    output << "n,k,maxPeer,avgDistance,disconnected,maxDistance,maxArityDistrib" << endl;
+    output << "n,k,maxPeer,avgDistance,disconnected,disconnectionProba,maxDistance,maxArityDistrib" << endl;
 
 
     vector<future<string>> outputStrings;
-    for(int n=200; n<=20000; n*=2)
-        for(int k=5; k<=50; k+=5)
+    for(int n=200; n<=200; n*=2)
+        for(int k=10; k<=10; k+=5)
+            for(float a=0.05; a<1; a+=0.05)
         {
-            outputStrings.push_back(async(launch::async, [rng, n, k]() 
+            outputStrings.push_back(async(launch::async, [rng, n, k, a]() 
                 {
-                    Results results = Simulate(rng, n, k, 3*k, 10000, 50);
+                    Results results = Simulate(rng, n, k, 3*k, 10000, a, 100);
                     ostringstream out;
                     out << n << "," << k << "," << 3*k << "," << results.avgDistance << ","
-                        << results.disconnected << ","  << results.maxDistance << ","
-                        << results.arityDistrib[3*k];
+                        << results.disconnected << "," << results.disconnectionProba << ","
+                        << results.maxDistanceReached << "," << results.arityDistrib[3*k];
 
                     return out.str();
                 }));
@@ -59,7 +60,7 @@ int main(int argc, char** argv)
     for(int i=0; i<nTask; i++)
     {
         output << outputStrings[i].get() << endl;
-        cout << "\r" << i << "/" << nTask;
+        cout << "\r" << i+1 << "/" << nTask;
         cout.flush();
     }
 

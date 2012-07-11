@@ -50,5 +50,16 @@ void Graph::GetDistancesFrom(int node, int* distance)
 // kill the last proportion*size machines of the graph
 void Graph::KillMachines(float proportion)
 {
-    // TODO
+    size = proportion*size;
+    for(int i=0; i<size; i++)
+    {
+        auto it=adjacency[i].begin();
+        while(it!=adjacency[i].end())
+        {
+            if(*it >= size)
+                it = adjacency[i].erase(it);
+            else
+                it++;
+        }
+    }
 }
