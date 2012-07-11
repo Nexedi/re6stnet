@@ -16,6 +16,8 @@ Results::Results(int maxArity, int maxDistance) :
     arityTooBig = 0;
     distanceTooBig = 0;
     disconnected = 0;
+    avgDistance = 0;
+    maxDistanceReached = -1;
 }
 
 Results::~Results()
@@ -49,11 +51,16 @@ void Results::AddDistanceSample(int distance)
 {
     if(distance == -1)
         disconnected++;
-    else if(distance <= maxDistance)
-        distanceDistrib[distance]++;
-    else
-        distanceTooBig++;
+    else 
+    {
+        avgDistance += distance;
+        if(distance <= maxDistance)
+            distanceDistrib[distance]++;
+        else
+            distanceTooBig++;
+    }
     nDistanceSample++;
+    maxDistanceReached = max(maxDistanceReached, distance);
 }
 
 void Results::Finalise()
@@ -65,4 +72,5 @@ void Results::Finalise()
     disconnectionProba = ((double)disconnected)/nDistanceSample;
     distanceTooBig/= nDistanceSample;
     arityTooBig /= nAritySample;
+    avgDistance /= nDistanceSample - disconnected;
 }

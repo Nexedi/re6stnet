@@ -33,16 +33,20 @@ public:
 
     double* arityDistrib;
     double* distanceDistrib;
+    double avgDistance;
+    int maxDistanceReached;
+
     double disconnectionProba;
     double arityTooBig;
     double distanceTooBig;
     int64_t disconnected;
-    int64_t nAritySample;
-    int64_t nDistanceSample;
+    
     int maxArity;
     int maxDistance;
 
 private:
     void AddAritySample(int arity);
     void AddDistanceSample(int distance);
+    int64_t nAritySample;
+    int64_t nDistanceSample;
 };

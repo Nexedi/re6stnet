@@ -1,53 +1,55 @@
 // To compile with -std=c++0x
 #include "main.h"
+#include <fstream>
 
 int n = 1000; // the number of peer
 int k = 10; // each peer try to make k connections with the others
-int maxPeer = 25; // no more that 25 connections per peer
-int runs = 10;  // use this to run the simulation multiple times to get more accurate values
+const char* outName = "out.csv";
 
-int main()
+
+Results Simulate(mt19937 rng,  int n, int k, int maxPeer, int maxDistanceFrom, int runs)
 {
-    mt19937 rng(time(NULL));
     Results results(maxPeer, 20);
 
     for(int r=0; r<runs; r++)
     {
-        cout << "\r       \rRun " << r;
+        cout << "\r                                          \rn = " << n << ", k = " << k << ", run = " << r;
         cout.flush();
 
         Graph graph(n, k, maxPeer, rng);
         results.UpdateArity(graph);
 
         // Compute the shortest path
-        for(int i=0; i<graph.size; i++)
+        for(int i=0; i<min(graph.size, maxDistanceFrom); i++)
         {
             int distance[graph.size];
             graph.GetDistancesFrom(i, distance);
             results.UpdateDistance(distance, graph.size);
         }
     }
-    cout << "\r            \r";
+    cout << "\r                                              \r";
 
     results.Finalise();
+    return results;
+}
 
-    // Display the parameters we have mesured
-    cout << "Arity :" << endl;
-    for(int i=0; i<=results.maxArity; i++)
-        if(results.arityDistrib[i] != 0)
-            cout << i << " : " << results.arityDistrib[i] << endl;
-    
-    cout << "Distance :" << endl;
-    double nLinks = n*(n-1)*runs;
-    for(int i=0; i<= results.maxDistance; i++)
-        if(results.distanceDistrib[i] != 0)
-            cout << i << " : " << results.distanceDistrib[i] << endl;
-    
-    cout << "Probability that a node is not reachable : " 
-         << results.disconnectionProba
-         << " (" << results.disconnected << " total)" << endl;
+int main(int argc, char** argv)
+{
+    mt19937 rng(time(NULL));
 
-    cout << endl;
+    fstream output(outName, fstream::out);
+    output << "n,k,maxPeer,avgDistance,disconnected,maxDistance,maxArityDistrib" << endl;
+
+    for(int n=200; n<=20000; n*=2)
+        for(int k=5; k<=50; k+=5)
+        {
+            Results results = Simulate(rng, n, k, 3*k, 10000, 50);
+            output << n << "," << k << "," << 3*k << "," << results.avgDistance << "," 
+                << results.disconnected << ","  << results.maxDistance << ","
+                << results.arityDistrib[3*k] << endl;
+        }
+
+    output.close();
     return 0;
 }
 
