@@ -48,9 +48,7 @@ class main(object):
                                email text,
                                cert text)""")
         except sqlite3.OperationalError, e:
-            if e.args[0] == 'table vifib already exists':
-                pass
-            else:
+            if e.args[0] != 'table vifib already exists':
                 raise RuntimeError
         else:
             self.db.execute("INSERT INTO vifib VALUES ('',null,null)")
@@ -146,18 +144,25 @@ class main(object):
         client_address = "2001:db8:42::"
         ip1, ip2 = struct.unpack('>QQ', socket.inet_pton(socket.AF_INET6, client_address))
         ip = bin(ip1)[2:].rjust(64, '0') + bin(ip2)[2:].rjust(64, '0')
-        assert(ip.startswith(self.network))
-        prefix = ip[len(self.network):]
-        prefix, = self.db.execute("SELECT prefix FROM vifib WHERE prefix <= ? ORDER BY prefix DESC", (prefix,)).next()
-        ip, port, proto = address
-        self.db.execute("INSERT OR REPLACE INTO peers VALUES (?,?,?,?)", (prefix, ip, port, proto))
+        if ip.startswith(self.network):
+            prefix = ip[len(self.network):]
+            prefix, = self.db.execute("SELECT prefix FROM vifib WHERE prefix <= ? ORDER BY prefix DESC", (prefix,)).next()
+            ip, port, proto = address
+            self.db.execute("INSERT OR REPLACE INTO peers VALUES (?,?,?,?)", (prefix, ip, port, proto))
+            return True
+        else:
+            print "Unauthorized connection from %s which does not start with %s" % (ip, self.network)
+            return False
 
     def getPeerList(self, handler, n, address):
         assert 0 < n < 1000
         print "declaring new node"
-        self.declare(handler, address)
+        if not self.declare(handler, address):
+            # TODO: do something intelligent
+            raise RuntimeError
         print "sending peers"
         return self.db.execute("SELECT ip, port, proto FROM peers ORDER BY random() LIMIT ?", (n,)).fetchall()
+
 
 
 if __name__ == "__main__":

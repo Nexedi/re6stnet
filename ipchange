@@ -1,0 +1,4 @@
+#!/usr/bin/python -S
+import os, sys
+
+os.write(int(sys.argv[1]), '%(script_type)s %(external_ip)s\n' % os.environ)
