@@ -7,8 +7,7 @@ import openvpn
 import random
 import log
 
-VIFIB_NET = "2001:db8:42:"
-VIFIB_LEN = 48
+VIFIB_NET = ''
 connection_dict = {} # to remember current connections we made
 free_interface_set = set(('client1', 'client2', 'client3', 'client4', 'client5',
                           'client6', 'client7', 'client8', 'client9', 'client10'))
@@ -57,21 +56,24 @@ class PeersDB:
         log.log('Updating peers database : unusing peer ' + str(id), 5)
         self.db.execute("UPDATE peers SET used = 0 WHERE id = ?", (id,))
 
-# TODO: do everything using 'binary' strings
+def ipFromBin(prefix):
+    prefix = hex(int(prefix, 2))[2:]
+    ip = ''
+    for i in xrange(0, len(prefix) - 1, 4):
+        ip += prefix[i:i+4] + ':'
+    return ip.rstrip(':')
+
 def ipFromPrefix(prefix, prefix_len):
-    tmp = hex(int(prefix))[2:]
-    tmp = tmp.rjust(int((math.ceil(float(prefix_len) / 4))), '0')
-    ip = VIFIB_NET
-    for i in xrange(0, len(tmp), 4):
-        ip += tmp[i:i+4] + ':'
-    return ip + ':'
+    prefix = bin(int(prefix))[2:].rjust(prefix_len, '0')
+    ip_t = (config.vifibnet + prefix).ljust(128, '0')
+    return ipFromBin(ip_t)
 
 def startBabel(**kw):
     args = ['babeld',
             '-C', 'redistribute local ip %s' % (config.ip),
             '-C', 'redistribute local deny',
             # Route VIFIB ip adresses
-            '-C', 'in ip %s:/%u' % (VIFIB_NET, VIFIB_LEN),
+            '-C', 'in ip %s::/%u' % (ipFromBin(config.vifibnet), len(config.vifibnet)),
             # Route only addresse in the 'local' network,
             # or other entire networks
             #'-C', 'in ip %s' % (config.ip),
@@ -113,10 +115,12 @@ def getConfig():
             help='Path to babeld state-file')
     _('--verbose', '-v', default=0, type=int,
             help='Defines the verbose level')
+    _('--ca', required=True,
+            help='Path to the certificate authority file')
     _('--cert', required=True,
             help='Path to the certificate file')
     # Temporary args - to be removed
-    # Can be removed, should ip be a global variable ?
+    # ~ Can be removed, should ip be a global variable ?
     _('--ip', required=True,
             help='IPv6 of the server')
     # Openvpn options
@@ -124,16 +128,25 @@ def getConfig():
             help="Common OpenVPN options (e.g. certificates)")
     openvpn.config = config = parser.parse_args()
     log.verbose = config.verbose
+    # Get network prefix from ca.crt
+    with open(config.ca, 'r') as f:
+        ca = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
+        config.vifibnet = bin(ca.get_serial_number())[3:]
+    # Get ip from cert.crt
     with open(config.cert, 'r') as f:
         cert = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
         subject = cert.get_subject()
         prefix, prefix_len = subject.serialNumber.split('/')
-        ip = ipFromPrefix(prefix, int(prefix_len))
-        log.log('Intranet ip : %s' % (ip,), 3)
+        config.ip = ipFromPrefix(prefix, int(prefix_len))
+        log.log('Intranet ip : %s' % (config.ip,), 3)
+    # Treat openvpn arguments
     if config.openvpn_args[0] == "--":
         del config.openvpn_args[0]
+    config.openvpn_args.append('--ca')
+    config.openvpn_args.append(config.ca)
     config.openvpn_args.append('--cert')
     config.openvpn_args.append(config.cert)
+
     log.log("Configuration completed", 1)
 
 def startNewConnection(n, write_pipe):
