@@ -36,11 +36,12 @@ def server(ip, pipe_fd, *args, **kw):
         '--max-clients', str(config.max_clients),
         *args, **kw)
 
-def client(serverIp, *args, **kw):
+def client(serverIp, pipe_fd, *args, **kw):
     return openvpn(
         '--nobind',
-        '--tls-client',
+        '--client',
         '--remote', serverIp,
         '--up', 'up-client',
+        '--ipchange', 'ipchange ' + str(pipe_fd),
         *args, **kw)
 

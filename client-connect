@@ -37,4 +37,5 @@ import os, sys
  'untrusted_port': '59345',
  'verb': '3'}
 
+open(sys.argv[2], 'w').write('push "setenv external_ip %s"\n' % os.environ[trusted_ip])
 os.write(int(sys.argv[1]), '%(script_type)s %(common_name)s\n' % os.environ)

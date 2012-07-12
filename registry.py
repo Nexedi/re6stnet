@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import argparse, math, random, smtplib, sqlite3, string, time
+import argparse, math, random, smtplib, sqlite3, string, struct, socket, time
 from email.mime.text import MIMEText
 from functools import wraps
 from SimpleXMLRPCServer import SimpleXMLRPCServer, SimpleXMLRPCRequestHandler
@@ -20,6 +20,10 @@ class main(object):
         parser = argparse.ArgumentParser(
                 description='Peer discovery http server for vifibnet')
         _ = parser.add_argument
+        _('--prefix', required=True,
+                help='Prefix of the network deployed ( example : 2001:db8:42')
+        _('--prefix-len', required=True, type=int,
+                help='Prefix length')
         _('--db', required=True,
                 help='Path to database file')
         _('--ca', required=True,
@@ -140,15 +144,23 @@ class main(object):
         return crypto.dump_certificate(crypto.FILETYPE_PEM, self.ca)
 
     def declare(self, handler, address):
-        # guess prefix from handler.client_address
-        ip1, ip2 = struct.unpack('>QQ', socket.inet_pton(socket.AF_INET6, handler.client_address)))
-        prefix = bin(ip1)[2:] + bin(ip2)]2:]
+        client_address, _ = handler.client_address
+        # For Testing purposes only
+        client_address = "2001:db8:42::"
+        assert(client_address.startswith(self.config.prefix))
+        ip1, ip2 = struct.unpack('>QQ', socket.inet_pton(socket.AF_INET6, client_address))
+        ip1 = bin(ip1)[2:].rjust(64, '0')
+        ip2 = bin(ip2)[2:].rjust(64, '0')
+        prefix = (ip1 + ip2)[self.config.prefix_len:]
+        prefix, = self.db.execute("SELECT prefix FROM vifib WHERE prefix <= ? ORDER BY prefix DESC", (prefix,)).next()
         ip, port, proto = address
-        self.db.execute("INSERT INTO peers VALUES (?,?,?,?)", (prefix, ip, port, proto))
+        self.db.execute("INSERT OR REPLACE INTO peers VALUES (?,?,?,?)", (prefix, ip, port, proto))
 
     def getPeerList(self, handler, n, address):
         assert 0 < n < 1000
+        print "declaring new node"
         self.declare(handler, address)
+        print "sending peers"
         return self.db.execute("SELECT ip, port, proto FROM peers ORDER BY random() LIMIT ?", (n,)).fetchall()
 
 

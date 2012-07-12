@@ -1,18 +1,21 @@
 #!/usr/bin/env python
-import argparse, errno, os, select, sqlite3, subprocess, sys, time, xmlrpclib
+import argparse, errno, math, os, select, sqlite3, subprocess, sys, time, xmlrpclib
+from OpenSSL import crypto
 import traceback
 import upnpigd
 import openvpn
 import random
 import log
 
-VIFIB_NET = "2001:db8:42::/48"
+VIFIB_NET = "2001:db8:42:"
+VIFIB_LEN = 48
 connection_dict = {} # to remember current connections we made
 free_interface_set = set(('client1', 'client2', 'client3', 'client4', 'client5',
                           'client6', 'client7', 'client8', 'client9', 'client10'))
 
 # TODO : flag in some way the peers that are connected to us so we don't connect to them
-# Or maybe we just don't care,
+# Or maybe we just don't care
+
 class PeersDB:
     def __init__(self, dbPath):
         self.proxy = xmlrpclib.ServerProxy('http://%s:%u' % (config.server, config.server_port))
@@ -36,9 +39,11 @@ class PeersDB:
             self.populateDB(100)
 
     def populateDB(self, n):
+        log.log('Populating Peers DB', 2)
         (ip, port) = upnpigd.GetExternalInfo(1194)
         proto = 'udp'
-        self.db.executemany("INSERT INTO peers (ip, port, proto) VALUES ?", self.proxy.getPeerList(n, port, proto))
+        new_peer_list = self.proxy.getPeerList(n, (ip, port, proto))
+        self.db.executemany("INSERT INTO peers (ip, port, proto) VALUES (?,?,?)", new_peer_list)
 
     def getUnusedPeers(self, nPeers):
         return self.db.execute("SELECT id, ip, port, proto FROM peers WHERE used = 0 "
@@ -52,19 +57,21 @@ class PeersDB:
         log.log('Updating peers database : unusing peer ' + str(id), 5)
         self.db.execute("UPDATE peers SET used = 0 WHERE id = ?", (id,))
 
+# TODO: do everything using 'binary' strings
 def ipFromPrefix(prefix, prefix_len):
-    tmp = hew(int(prefix, 2))[2::]
+    tmp = hex(int(prefix))[2:]
+    tmp = tmp.rjust(int((math.ceil(float(prefix_len) / 4))), '0')
     ip = VIFIB_NET
-    for i in xrange(0, len(ip), 4):
+    for i in xrange(0, len(tmp), 4):
         ip += tmp[i:i+4] + ':'
-    ip += ':'
+    return ip + ':'
 
 def startBabel(**kw):
     args = ['babeld',
             '-C', 'redistribute local ip %s' % (config.ip),
             '-C', 'redistribute local deny',
             # Route VIFIB ip adresses
-            '-C', 'in ip %s' % VIFIB_NET,
+            '-C', 'in ip %s:/%u' % (VIFIB_NET, VIFIB_LEN),
             # Route only addresse in the 'local' network,
             # or other entire networks
             #'-C', 'in ip %s' % (config.ip),
@@ -85,9 +92,9 @@ def getConfig():
     _ = parser.add_argument
     _('--server', required=True,
             help='Address for peer discovery server')
-    _('--server-port', required=True,
+    _('--server-port', required=True, type=int,
             help='Peer discovery server port')
-    _('--log-directory', default='/var/log',
+    _('-l', '--log', default='/var/log',
             help='Path to vifibnet logs directory')
     _('--client-count', default=2, type=int,
             help='Number of client connections')
@@ -109,32 +116,33 @@ def getConfig():
     _('--cert', required=True,
             help='Path to the certificate file')
     # Temporary args - to be removed
+    # Can be removed, should ip be a global variable ?
     _('--ip', required=True,
             help='IPv6 of the server')
     # Openvpn options
     _('openvpn_args', nargs=argparse.REMAINDER,
             help="Common OpenVPN options (e.g. certificates)")
     openvpn.config = config = parser.parse_args()
+    log.verbose = config.verbose
     with open(config.cert, 'r') as f:
-        cert = crypto.load_certificate(crypto.FILETYPE_PEM, f)
+        cert = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
         subject = cert.get_subject()
-        prefix_txt, prefix_len_txt = subject.serialNumber.split('/')
-        prefix = int(prefix_txt)
-        prefix_len = int(prefix_len_txt)
-        ip = ipFromPrefix(prefix)
-        print ip
+        prefix, prefix_len = subject.serialNumber.split('/')
+        ip = ipFromPrefix(prefix, int(prefix_len))
+        log.log('Intranet ip : %s' % (ip,), 3)
     if config.openvpn_args[0] == "--":
         del config.openvpn_args[0]
     config.openvpn_args.append('--cert')
     config.openvpn_args.append(config.cert)
+    log.log("Configuration completed", 1)
 
-def startNewConnection(n):
+def startNewConnection(n, write_pipe):
     try:
         for id, ip, port, proto in peers_db.getUnusedPeers(n):
             log.log('Establishing a connection with id %s (%s:%s)' % (id,ip,port), 2)
             iface = free_interface_set.pop()
-            connection_dict[id] = ( openvpn.client( ip, '--dev', iface, '--proto', proto, '--rport', str(port),
-                stdout=os.open(os.path.join(config.log_directory, 'vifibnet.client.%s.log' % (id,)), 
+            connection_dict[id] = ( openvpn.client( ip, write_pipe, '--dev', iface, '--proto', proto, '--rport', str(port),
+                stdout=os.open(os.path.join(config.log, 'vifibnet.client.%s.log' % (id,)), 
                                os.O_WRONLY|os.O_CREAT|os.O_TRUNC) ),
                 iface)
             peers_db.usePeer(id)
@@ -180,12 +188,15 @@ def refreshConnections():
     startNewConnection(config.client_count - len(connection_dict))
 
 def handle_message(msg):
-    script_type, common_name = msg.split()
+    script_type, arg = msg.split()
     if script_type == 'client-connect':
-        log.log('Incomming connection from %s' % (common_name,), 3)
+        log.log('Incomming connection from %s' % (arg,), 3)
         # TODO :  check if we are not already connected to it
     elif script_type == 'client-disconnect':
-        log.log('%s has disconnected' % (common_name,), 3)
+        log.log('%s has disconnected' % (arg,), 3)
+    elif script_type == 'ipchange':
+        # TODO: save the external ip received
+        log.log('External Ip : ' + arg, 3)
     else:
         log.log('Unknow message recieved from the openvpn pipe : ' + msg, 1)
 
@@ -193,7 +204,7 @@ def main():
     # Get arguments
     getConfig()
     log.verbose = config.verbose
-    # TODO: get proto to use ?
+    # TODO: how do we decide which protocol we use ?
     (externalIp, externalPort) = upnpigd.GetExternalInfo(1194)
 
     # Setup database
@@ -202,8 +213,7 @@ def main():
 
     # Launch babel on all interfaces
     log.log('Starting babel', 3)
-    babel = startBabel(stdout=os.open('%s/babeld.log' % (config.log_directory,), os.O_WRONLY | os.O_CREAT | os.O_TRUNC),
-                        stderr=subprocess.STDOUT)
+    babel = startBabel(stdout=os.open(os.path.join(config.log, 'vifibnet.babeld.log'), os.O_WRONLY | os.O_CREAT | os.O_TRUNC), stderr=subprocess.STDOUT)
 
     # Create and open read_only pipe to get connect/disconnect events from openvpn
     log.log('Creating pipe for openvpn events', 3)
@@ -213,8 +223,8 @@ def main():
     # Establish connections
     log.log('Starting openvpn server', 3)
     serverProcess = openvpn.server(config.ip, write_pipe, '--dev', 'vifibnet',
-            stdout=os.open(os.path.join(config.log_directory, 'vifibnet.server.log'), os.O_WRONLY | os.O_CREAT | os.O_TRUNC))
-    startNewConnection(config.client_count)
+            stdout=os.open(os.path.join(config.log, 'vifibnet.server.log'), os.O_WRONLY | os.O_CREAT | os.O_TRUNC))
+    startNewConnection(config.client_count, write_pipe)
 
     # Timed refresh initializing
     next_refresh = time.time() + config.refresh_time
