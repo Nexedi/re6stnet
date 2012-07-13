@@ -7,7 +7,6 @@ import openvpn
 import random
 import log
 
-VIFIB_NET = ''
 connection_dict = {} # to remember current connections we made
 free_interface_set = set(('client1', 'client2', 'client3', 'client4', 'client5',
                           'client6', 'client7', 'client8', 'client9', 'client10'))
@@ -34,15 +33,14 @@ class PeersDB:
         except sqlite3.OperationalError, e:
             if e.args[0] != 'table peers already exists':
                 raise RuntimeError
-        else:
-            self.populateDB(100)
 
     def populateDB(self, n):
         log.log('Populating Peers DB', 2)
-        (ip, port) = upnpigd.GetExternalInfo(1194)
+        port = 1194
         proto = 'udp'
-        new_peer_list = self.proxy.getPeerList(n, (ip, port, proto))
-        self.db.executemany("INSERT INTO peers (ip, port, proto) VALUES (?,?,?)", new_peer_list)
+        new_peer_list = self.proxy.getPeerList(n, (config.external_ip, port, proto))
+        self.db.executemany("INSERT OR REPLACE INTO peers (ip, port, proto) VALUES (?,?,?)", new_peer_list)
+        self.db.execute("DELETE FROM peers WHERE ip = ?", (config.external_ip,))
 
     def getUnusedPeers(self, nPeers):
         return self.db.execute("SELECT id, ip, port, proto FROM peers WHERE used = 0 "
@@ -70,13 +68,13 @@ def ipFromPrefix(prefix, prefix_len):
 
 def startBabel(**kw):
     args = ['babeld',
-            '-C', 'redistribute local ip %s' % (config.ip),
+            '-C', 'redistribute local ip %s' % (config.internal_ip),
             '-C', 'redistribute local deny',
             # Route VIFIB ip adresses
             '-C', 'in ip %s::/%u' % (ipFromBin(config.vifibnet), len(config.vifibnet)),
             # Route only addresse in the 'local' network,
             # or other entire networks
-            #'-C', 'in ip %s' % (config.ip),
+            #'-C', 'in ip %s' % (config.internal_ip),
             #'-C', 'in ip ::/0 le %s' % network_mask,
             # Don't route other addresses
             '-C', 'in deny',
@@ -119,6 +117,8 @@ def getConfig():
             help='Path to the certificate authority file')
     _('--cert', required=True,
             help='Path to the certificate file')
+    _('--ip', required=True, dest='external_ip',
+            help='Ip address of the machine on the internet')
     # Openvpn options
     _('openvpn_args', nargs=argparse.REMAINDER,
             help="Common OpenVPN options (e.g. certificates)")
@@ -133,8 +133,8 @@ def getConfig():
         cert = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
         subject = cert.get_subject()
         prefix, prefix_len = subject.serialNumber.split('/')
-        config.ip = ipFromPrefix(prefix, int(prefix_len))
-        log.log('Intranet ip : %s' % (config.ip,), 3)
+        config.internal_ip = ipFromPrefix(prefix, int(prefix_len))
+        log.log('Intranet ip : %s' % (config.internal_ip,), 3)
     # Treat openvpn arguments
     if config.openvpn_args[0] == "--":
         del config.openvpn_args[0]
@@ -230,13 +230,14 @@ def main():
 
     # Establish connections
     log.log('Starting openvpn server', 3)
-    serverProcess = openvpn.server(config.ip, write_pipe, '--dev', 'vifibnet',
+    serverProcess = openvpn.server(config.internal_ip, write_pipe, '--dev', 'vifibnet',
             stdout=os.open(os.path.join(config.log, 'vifibnet.server.log'), os.O_WRONLY | os.O_CREAT | os.O_TRUNC))
     startNewConnection(config.client_count, write_pipe)
 
     # Timed refresh initializing
     next_refresh = time.time() + config.refresh_time
 
+    # TODO: use peers_db.populate(100) every once in a while ?
     # main loop
     try:
         while True:

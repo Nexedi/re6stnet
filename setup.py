@@ -18,7 +18,7 @@ def main():
     config = parser.parse_args()
     if config.req and len(config.req) % 2 == 1:
         print "Sorry, request argument was incorrect, there must be an even number of request arguments"
-        exit(1)
+        sys.exit(1)
 
     # Get token
     email = raw_input('Please enter your email address : ')

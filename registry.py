@@ -20,6 +20,8 @@ class main(object):
         parser = argparse.ArgumentParser(
                 description='Peer discovery http server for vifibnet')
         _ = parser.add_argument
+        _('host', help='Address of the host server')
+        _('port', type=int, help='Port of the host server')
         _('--db', required=True,
                 help='Path to database file')
         _('--ca', required=True,
@@ -64,7 +66,7 @@ class main(object):
         print "Network prefix : %s/%u" % (self.network, len(self.network))
 
         # Starting server
-        server = SimpleXMLRPCServer(("localhost", 8000), requestHandler=RequestHandler, allow_none=True)
+        server = SimpleXMLRPCServer((self.config.host, self.config.port), requestHandler=RequestHandler, allow_none=True)
         server.register_instance(self)
         server.serve_forever()
 
@@ -138,20 +140,24 @@ class main(object):
     def getCa(self, handler):
         return crypto.dump_certificate(crypto.FILETYPE_PEM, self.ca)
 
+    def getBootstrapPeer(self, handler):
+        # TODO: Insert a flag column for bootstrap ready servers in peers 
+        # ( servers which shouldn't go down or change ip and port as opposed to servers owned by particulars )
+        return self.db.execute("SELECT ip, port proto FROM peers ORDER BY random() LIMIT 1").next()
+
     def declare(self, handler, address):
+        ip, port, proto = address
         client_address, _ = handler.client_address
-        # For Testing purposes only
-        client_address = "2001:db8:42::"
-        ip1, ip2 = struct.unpack('>QQ', socket.inet_pton(socket.AF_INET6, client_address))
-        ip = bin(ip1)[2:].rjust(64, '0') + bin(ip2)[2:].rjust(64, '0')
-        if ip.startswith(self.network):
-            prefix = ip[len(self.network):]
-            prefix, = self.db.execute("SELECT prefix FROM vifib WHERE prefix <= ? ORDER BY prefix DESC", (prefix,)).next()
-            ip, port, proto = address
+        client_ip1, client_ip2 = struct.unpack('>QQ', socket.inet_pton(socket.AF_INET6, client_address))
+        client_ip = bin(client_ip1)[2:].rjust(64, '0') + bin(client_ip2)[2:].rjust(64, '0')
+        if client_ip.startswith(self.network):
+            prefix = client_ip[len(self.network):]
+            prefix, = self.db.execute("SELECT prefix FROM vifib WHERE prefix <= ? ORDER BY prefix DESC LIMIT 1", (prefix,)).next()
             self.db.execute("INSERT OR REPLACE INTO peers VALUES (?,?,?,?)", (prefix, ip, port, proto))
             return True
         else:
-            print "Unauthorized connection from %s which does not start with %s" % (ip, self.network)
+            # TODO: use log + DO NOT PRINT BINARY IP
+            print "Unauthorized connection from %s which does not start with %s" % (client_ip, self.network)
             return False
 
     def getPeerList(self, handler, n, address):
