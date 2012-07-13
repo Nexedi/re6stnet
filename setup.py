@@ -42,9 +42,10 @@ def main():
     req.sign(pkey, 'sha1')
     req = crypto.dump_certificate_request(crypto.FILETYPE_PEM, req)
 
-    # Get certificates
+    # Get certificates and bootstrap peers
     ca = s.getCa()
     cert = s.requestCertificate(token, req)
+    boot_ip, boot_port, boot_proto = s.getBootstrapPeer()
 
     # Generating dh file
     subprocess.call(['openssl', 'dhparam', '-out', os.path.join(config.dir, 'dh2048.pem'), '2048'])
@@ -56,6 +57,21 @@ def main():
         f.write(cert)
     with open(os.path.join(config.dir, 'ca.pem'), 'w') as f:
         f.write(ca)
+
+    # Create and initialize peers DB
+    self.db = sqlite3.connect(os.path.join(config.dir, 'peers.db'), isolation_level=None)
+    try:
+        self.db.execute("""CREATE TABLE peers (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        ip TEXT NOT NULL,
+                        port INTEGER NOT NULL,
+                        proto TEXT NOT NULL,
+                        used INTEGER NOT NULL default 0)""")
+        self.db.execute("CREATE INDEX _peers_used ON peers(used)")
+        self.db.execute("INSERT INTO peers (ip, port, proto) VALUES (?,?,?)", (boot_ip, boot_port, boot_proto))
+    except sqlite3.OperationalError, e:
+        if e.args[0] == 'table peers already exists':
+            print "Table peers already exists, leaving it as it is"
 
     print "Certificate setup complete."
 

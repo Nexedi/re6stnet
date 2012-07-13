@@ -16,26 +16,21 @@ free_interface_set = set(('client1', 'client2', 'client3', 'client4', 'client5',
 
 class PeersDB:
     def __init__(self, dbPath):
-        self.proxy = xmlrpclib.ServerProxy('http://%s:%u' % (config.server, config.server_port))
 
         log.log('Connectiong to peers database', 4)
         self.db = sqlite3.connect(dbPath, isolation_level=None)
-        log.log('Initializing peers database', 4)
+        log.log('Preparing peers database', 4)
         try:
-            self.db.execute("""CREATE TABLE peers (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            ip TEXT NOT NULL,
-                            port INTEGER NOT NULL,
-                            proto TEXT NOT NULL,
-                            used INTEGER NOT NULL default 0)""")
-            self.db.execute("CREATE INDEX _peers_used ON peers(used)")
             self.db.execute("UPDATE peers SET used = 0")
         except sqlite3.OperationalError, e:
-            if e.args[0] != 'table peers already exists':
+            if e.args[0] != 'no such table: peers':
                 raise RuntimeError
 
-    def populateDB(self, n):
+    def populate(self, n):
+        log.log('Connecting to remote server', 3)
+        self.proxy = xmlrpclib.ServerProxy('http://%s:%u' % (config.server, config.server_port))
         log.log('Populating Peers DB', 2)
+        # TODO: determine port and proto
         port = 1194
         proto = 'udp'
         new_peer_list = self.proxy.getPeerList(n, (config.external_ip, port, proto))
@@ -90,6 +85,7 @@ def getConfig():
     parser = argparse.ArgumentParser(
             description='Resilient virtual private network application')
     _ = parser.add_argument
+    # Server address MUST be a vifib address ( else requests will be denied )
     _('--server', required=True,
             help='Address for peer discovery server')
     _('--server-port', required=True, type=int,
@@ -213,13 +209,13 @@ def main():
     getConfig()
     log.verbose = config.verbose
     # TODO: how do we decide which protocol we use ?
-    (externalIp, externalPort) = upnpigd.GetExternalInfo(1194)
+    # (externalIp, externalPort) = upnpigd.GetExternalInfo(1194)
 
     # Setup database
     global peers_db # stop using global variables for everything ?
     peers_db = PeersDB(config.db)
 
-    # Launch babel on all interfaces
+    # Launch babel on all interfaces. WARNING : you have to be root to start babeld
     log.log('Starting babel', 3)
     babel = startBabel(stdout=os.open(os.path.join(config.log, 'vifibnet.babeld.log'), os.O_WRONLY | os.O_CREAT | os.O_TRUNC), stderr=subprocess.STDOUT)
 
@@ -241,7 +237,7 @@ def main():
     # main loop
     try:
         while True:
-            ready, tmp1, tmp2 = select.select([read_pipe], [], [], 
+            ready, tmp1, tmp2 = select.select([read_pipe], [], [],
                     max(0, next_refresh - time.time()))
             if ready:
                 handle_message(read_pipe.readline())
