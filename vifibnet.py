@@ -7,13 +7,12 @@ import openvpn
 import random
 import log
 
-VIFIB_NET = "2001:db8:42:"
-VIFIB_LEN = 48
+VIFIB_NET = ''
 connection_dict = {} # to remember current connections we made
 free_interface_set = set(('client1', 'client2', 'client3', 'client4', 'client5',
                           'client6', 'client7', 'client8', 'client9', 'client10'))
 
-# TODO : flag in some way the peers that are connected to us so we don't connect to them
+# TODO: flag in some way the peers that are connected to us so we don't connect to them
 # Or maybe we just don't care
 
 class PeersDB:
@@ -57,21 +56,24 @@ class PeersDB:
         log.log('Updating peers database : unusing peer ' + str(id), 5)
         self.db.execute("UPDATE peers SET used = 0 WHERE id = ?", (id,))
 
-# TODO: do everything using 'binary' strings
+def ipFromBin(prefix):
+    prefix = hex(int(prefix, 2))[2:]
+    ip = ''
+    for i in xrange(0, len(prefix) - 1, 4):
+        ip += prefix[i:i+4] + ':'
+    return ip.rstrip(':')
+
 def ipFromPrefix(prefix, prefix_len):
-    tmp = hex(int(prefix))[2:]
-    tmp = tmp.rjust(int((math.ceil(float(prefix_len) / 4))), '0')
-    ip = VIFIB_NET
-    for i in xrange(0, len(tmp), 4):
-        ip += tmp[i:i+4] + ':'
-    return ip + ':'
+    prefix = bin(int(prefix))[2:].rjust(prefix_len, '0')
+    ip_t = (config.vifibnet + prefix).ljust(128, '0')
+    return ipFromBin(ip_t)
 
 def startBabel(**kw):
     args = ['babeld',
             '-C', 'redistribute local ip %s' % (config.ip),
             '-C', 'redistribute local deny',
             # Route VIFIB ip adresses
-            '-C', 'in ip %s:/%u' % (VIFIB_NET, VIFIB_LEN),
+            '-C', 'in ip %s::/%u' % (ipFromBin(config.vifibnet), len(config.vifibnet)),
             # Route only addresse in the 'local' network,
             # or other entire networks
             #'-C', 'in ip %s' % (config.ip),
@@ -98,7 +100,7 @@ def getConfig():
             help='Path to vifibnet logs directory')
     _('--client-count', default=2, type=int,
             help='Number of client connections')
-    # TODO : use maxpeer
+    # TODO: use maxpeer
     _('--max-clients', default=10, type=int,
             help='the number of peers that can connect to the server')
     _('--refresh-time', default=60, type=int,
@@ -113,57 +115,63 @@ def getConfig():
             help='Path to babeld state-file')
     _('--verbose', '-v', default=0, type=int,
             help='Defines the verbose level')
+    _('--ca', required=True,
+            help='Path to the certificate authority file')
     _('--cert', required=True,
             help='Path to the certificate file')
-    # Temporary args - to be removed
-    # Can be removed, should ip be a global variable ?
-    _('--ip', required=True,
-            help='IPv6 of the server')
     # Openvpn options
     _('openvpn_args', nargs=argparse.REMAINDER,
             help="Common OpenVPN options (e.g. certificates)")
     openvpn.config = config = parser.parse_args()
     log.verbose = config.verbose
+    # Get network prefix from ca.crt
+    with open(config.ca, 'r') as f:
+        ca = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
+        config.vifibnet = bin(ca.get_serial_number())[3:]
+    # Get ip from cert.crt
     with open(config.cert, 'r') as f:
         cert = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
         subject = cert.get_subject()
         prefix, prefix_len = subject.serialNumber.split('/')
-        ip = ipFromPrefix(prefix, int(prefix_len))
-        log.log('Intranet ip : %s' % (ip,), 3)
+        config.ip = ipFromPrefix(prefix, int(prefix_len))
+        log.log('Intranet ip : %s' % (config.ip,), 3)
+    # Treat openvpn arguments
     if config.openvpn_args[0] == "--":
         del config.openvpn_args[0]
+    config.openvpn_args.append('--ca')
+    config.openvpn_args.append(config.ca)
     config.openvpn_args.append('--cert')
     config.openvpn_args.append(config.cert)
+
     log.log("Configuration completed", 1)
 
 def startNewConnection(n, write_pipe):
     try:
-        for id, ip, port, proto in peers_db.getUnusedPeers(n):
-            log.log('Establishing a connection with id %s (%s:%s)' % (id,ip,port), 2)
+        for peer_id, ip, port, proto in peers_db.getUnusedPeers(n):
+            log.log('Establishing a connection with id %s (%s:%s)' % (peer_id, ip, port), 2)
             iface = free_interface_set.pop()
-            connection_dict[id] = ( openvpn.client( ip, write_pipe, '--dev', iface, '--proto', proto, '--rport', str(port),
-                stdout=os.open(os.path.join(config.log, 'vifibnet.client.%s.log' % (id,)), 
+            connection_dict[peer_id] = ( openvpn.client( ip, write_pipe, '--dev', iface, '--proto', proto, '--rport', str(port),
+                stdout=os.open(os.path.join(config.log, 'vifibnet.client.%s.log' % (peer_id,)), 
                                os.O_WRONLY|os.O_CREAT|os.O_TRUNC) ),
                 iface)
-            peers_db.usePeer(id)
+            peers_db.usePeer(peer_id)
     except KeyError:
         log.log("Can't establish connection with %s : no available interface" % ip, 2)
-        pass
     except Exception:
         traceback.print_exc()
 
-def killConnection(id):
+def killConnection(peer_id):
     try:
-        log.log('Killing the connection with id ' + str(id), 2)
-        p, iface = connection_dict.pop(id)
+        log.log('Killing the connection with id ' + str(peer_id), 2)
+        p, iface = connection_dict.pop(peer_id)
         p.kill()
         free_interface_set.add(iface)
-        peers_db.unusePeer(id)
+        peers_db.unusePeer(peer_id)
     except KeyError:
-        log.log("Can't kill connection to " + peer + ": no existing connection", 1)
+        log.log("Can't kill connection to " + peer_id + ": no existing connection", 1)
         pass
     except Exception:
-        log.log("Can't kill connection to " + peer + ": uncaught error", 1)
+        log.log("Can't kill connection to " + peer_id + ": uncaught error", 1)
         pass
 
 def checkConnections():
@@ -175,23 +183,23 @@ def checkConnections():
             peers_db.unusePeer(id)
             del connection_dict[id]
 
-def refreshConnections():
+def refreshConnections(write_pipe):
     checkConnections()
     # Kill some random connections
     try:
         for i in range(0, max(0, len(connection_dict) - config.client_count + config.refresh_count)):
-            id = random.choice(connection_dict.keys())
-            killConnection(id)
+            peer_id = random.choice(connection_dict.keys())
+            killConnection(peer_id)
     except Exception:
         pass
     # Establish new connections
-    startNewConnection(config.client_count - len(connection_dict))
+    startNewConnection(config.client_count - len(connection_dict), write_pipe)
 
 def handle_message(msg):
     script_type, arg = msg.split()
     if script_type == 'client-connect':
         log.log('Incomming connection from %s' % (arg,), 3)
-        # TODO :  check if we are not already connected to it
+        # TODO: check if we are not already connected to it
     elif script_type == 'client-disconnect':
         log.log('%s has disconnected' % (arg,), 3)
     elif script_type == 'ipchange':
@@ -237,7 +245,7 @@ def main():
             if ready:
                 handle_message(read_pipe.readline())
             if time.time() >= next_refresh:
-                refreshConnections()
+                refreshConnections(write_pipe)
                 next_refresh = time.time() + config.refresh_time
     except KeyboardInterrupt:
         return 0

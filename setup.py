@@ -18,7 +18,7 @@ def main():
     config = parser.parse_args()
     if config.req and len(config.req) % 2 == 1:
         print "Sorry, request argument was incorrect, there must be an even number of request arguments"
-        os.exit(1)
+        exit(1)
 
     # Get token
     email = raw_input('Please enter your email address : ')
@@ -44,7 +44,7 @@ def main():
 
     # Get certificates
     ca = s.getCa()
-    cert = s.requestCertificate(token,req)
+    cert = s.requestCertificate(token, req)
 
     # Generating dh file
     subprocess.call(['openssl', 'dhparam', '-out', os.path.join(config.dir, 'dh2048.pem'), '2048'])
