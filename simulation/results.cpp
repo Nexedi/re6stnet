@@ -17,6 +17,7 @@ Results::Results(int maxArity, int maxDistance) :
     distanceTooBig = 0;
     disconnected = 0;
     avgDistance = 0;
+    minKConnexity = -1;
     maxDistanceReached = -1;
 }
 
