@@ -38,8 +38,10 @@ public:
     ~Graph() { delete[] adjacency; };
 
     void GetDistancesFrom(int node, int* distance);
-    void KillMachines(float proportion);
     int GetMinCut();
+    int CountUnreachableFrom(int node);
+
+    void KillMachines(float proportion);
     //void SplitAS(float proportionAS1, float proportionAS2);
 
     vector<int>* adjacency;
@@ -58,12 +60,14 @@ public:
     ~Results();
 
     void UpdateArity(const Graph& graph);
+    void AddAccessibilitySample(double accessibility);
     void UpdateDistance(int* distance, int nSamples);
     void Finalise();
 
     double* arityDistrib;
     double* distanceDistrib;
     double avgDistance;
+    double avgAccessibility;
     int maxDistanceReached;
     int minKConnexity;
 
@@ -81,4 +85,5 @@ private:
 
     int64_t nAritySample;
     int64_t nDistanceSample;
+    int64_t nAccessibilitySample;
 };

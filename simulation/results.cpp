@@ -11,8 +11,10 @@ Results::Results(int maxArity, int maxDistance) :
     for(int i=0; i<=maxDistance; i++)
         distanceDistrib[i] = 0;
 
+    nAccessibilitySample = 0;
     nAritySample = 0;
     nDistanceSample = 0;
+    avgAccessibility = 0;
     arityTooBig = 0;
     distanceTooBig = 0;
     disconnected = 0;
@@ -64,6 +66,12 @@ void Results::AddDistanceSample(int distance)
     maxDistanceReached = max(maxDistanceReached, distance);
 }
 
+void Results::AddAccessibilitySample(double accessibility)
+{
+    avgAccessibility += accessibility;
+    nAccessibilitySample++;
+}
+
 void Results::Finalise()
 {
     for(int i=0; i<=maxArity; i++)
@@ -74,4 +82,5 @@ void Results::Finalise()
     distanceTooBig/= nDistanceSample;
     arityTooBig /= nAritySample;
     avgDistance /= nDistanceSample - disconnected;
+    avgAccessibility /= nAccessibilitySample;
 }

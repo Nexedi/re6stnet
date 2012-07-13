@@ -1,6 +1,7 @@
 #include "main.h"
 #include <cmath>
 #include <map>
+#include <queue>
 
 Graph::Graph(int size, int k, int maxPeers, mt19937& rng) : 
     distrib(uniform_int_distribution<int>(0, size-1)),
@@ -49,6 +50,35 @@ void Graph::GetDistancesFrom(int node, int* distance)
     }
 }
 
+int Graph::CountUnreachableFrom(int node)
+{
+    bool accessibility[size];
+    for(int i=0; i<size; i++)
+        accessibility[i] = false;
+    accessibility[node] = true;
+    int unAccessible = size;
+
+    queue<int> toVisit;
+    toVisit.push(node);
+    while(!toVisit.empty())
+    {
+        int n = toVisit.front();
+        for(int i : adjacency[n])
+        {
+            if(!accessibility[i])
+            {
+                toVisit.push(i);
+                accessibility[i] = true;
+            }
+        }
+
+        unAccessible--;
+        toVisit.pop();
+    }
+    
+    return unAccessible;
+}
+
 // kill the last proportion*size machines of the graph
 void Graph::KillMachines(float proportion)
 {
@@ -68,7 +98,7 @@ void Graph::KillMachines(float proportion)
 
 int Graph::GetMinCut()
 {
-    int nIter = log(size)*log(size);
+    int nIter = log(size);
     int minCut = -1;
     for(int i=0; i<nIter; i++)
     {
