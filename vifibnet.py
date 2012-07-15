@@ -23,17 +23,18 @@ class PeersDB:
         try:
             self.db.execute("UPDATE peers SET used = 0")
         except sqlite3.OperationalError, e:
-            if e.args[0] != 'no such table: peers':
+            if e.args[0] == 'no such table: peers':
                 raise RuntimeError
 
     def populate(self, n):
+        # TODO: don't reconnect to server each time ?
         log.log('Connecting to remote server', 3)
         self.proxy = xmlrpclib.ServerProxy('http://%s:%u' % (config.server, config.server_port))
-        log.log('Populating Peers DB', 2)
+        log.log('Updating peers database : populating', 2)
         # TODO: determine port and proto
         port = 1194
         proto = 'udp'
-        new_peer_list = self.proxy.getPeerList(n, (config.external_ip, port, proto))
+        new_peer_list = self.proxy.getPeerList(n, (config.internal_ip, config.external_ip, port, proto))
         self.db.executemany("INSERT OR REPLACE INTO peers (ip, port, proto) VALUES (?,?,?)", new_peer_list)
         self.db.execute("DELETE FROM peers WHERE ip = ?", (config.external_ip,))
 
@@ -78,7 +79,10 @@ def startBabel(**kw):
             ]
     if config.babel_state:
         args += '-S', config.babel_state
-    return subprocess.Popen(args + ['vifibnet'] + list(free_interface_set), **kw)
+    args = args + ['vifibnet'] + list(free_interface_set)
+    if config.verbose >= 5:
+        print args
+    return subprocess.Popen(args, **kw)
 
 def getConfig():
     global config
@@ -229,6 +233,8 @@ def main():
     serverProcess = openvpn.server(config.internal_ip, write_pipe, '--dev', 'vifibnet',
             stdout=os.open(os.path.join(config.log, 'vifibnet.server.log'), os.O_WRONLY | os.O_CREAT | os.O_TRUNC))
     startNewConnection(config.client_count, write_pipe)
+
+    peers_db.populate(10)
 
     # Timed refresh initializing
     next_refresh = time.time() + config.refresh_time

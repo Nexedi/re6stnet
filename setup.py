@@ -48,7 +48,8 @@ def main():
     boot_ip, boot_port, boot_proto = s.getBootstrapPeer()
 
     # Generating dh file
-    subprocess.call(['openssl', 'dhparam', '-out', os.path.join(config.dir, 'dh2048.pem'), '2048'])
+    if not os.access(os.path.join(config.dir, 'dh2048.pem'), os.F_OK):
+       subprocess.call(['openssl', 'dhparam', '-out', os.path.join(config.dir, 'dh2048.pem'), '2048'])
 
     # Store cert and key
     with open(os.path.join(config.dir, 'cert.key'), 'w') as f:
@@ -66,8 +67,10 @@ def main():
                         ip TEXT NOT NULL,
                         port INTEGER NOT NULL,
                         proto TEXT NOT NULL,
-                        used INTEGER NOT NULL default 0)""")
+                        used INTEGER NOT NULL default 0,
+                        date INTEGER DEFAULT strftime('%s', 'now'))""")
         self.db.execute("CREATE INDEX _peers_used ON peers(used)")
+        self.db.execute("CREATE INDEX _peers_address ON peers(ip, port, proto)")
         self.db.execute("INSERT INTO peers (ip, port, proto) VALUES (?,?,?)", (boot_ip, boot_port, boot_proto))
     except sqlite3.OperationalError, e:
         if e.args[0] == 'table peers already exists':

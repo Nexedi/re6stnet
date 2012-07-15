@@ -1,15 +1,30 @@
 #!/usr/bin/env python
-import argparse, math, random, smtplib, sqlite3, string, struct, socket, time
+import argparse, math, random, select, smtplib, sqlite3, string, struct, socket, time
 from email.mime.text import MIMEText
 from functools import wraps
 from SimpleXMLRPCServer import SimpleXMLRPCServer, SimpleXMLRPCRequestHandler
 from OpenSSL import crypto
 import traceback
 
+IPV6_V6ONLY = 26
+SOL_IPV6 = 41
+
 class RequestHandler(SimpleXMLRPCRequestHandler):
 
     def _dispatch(self, method, params):
         return self.server._dispatch(method, (self,) + params)
+
+class SimpleXMLRPCServer4(SimpleXMLRPCServer):
+
+    allow_reuse_address = True
+
+class SimpleXMLRPCServer6(SimpleXMLRPCServer4):
+
+    address_family = socket.AF_INET6
+
+    def server_bind(self):
+        self.socket.setsockopt(SOL_IPV6, IPV6_V6ONLY, 1)
+        SimpleXMLRPCServer4.server_bind(self)
 
 class main(object):
 
@@ -20,7 +35,6 @@ class main(object):
         parser = argparse.ArgumentParser(
                 description='Peer discovery http server for vifibnet')
         _ = parser.add_argument
-        _('host', help='Address of the host server')
         _('port', type=int, help='Port of the host server')
         _('--db', required=True,
                 help='Path to database file')
@@ -38,7 +52,8 @@ class main(object):
                         prefix text primary key not null,
                         ip text not null,
                         port integer not null,
-                        proto text not null)""")
+                        proto text not null,
+                        date integer default (strftime('%s','now')))""")
         self.db.execute("""CREATE TABLE IF NOT EXISTS tokens (
                         token text primary key not null,
                         email text not null,
@@ -66,9 +81,19 @@ class main(object):
         print "Network prefix : %s/%u" % (self.network, len(self.network))
 
         # Starting server
-        server = SimpleXMLRPCServer((self.config.host, self.config.port), requestHandler=RequestHandler, allow_none=True)
-        server.register_instance(self)
-        server.serve_forever()
+        server4 = SimpleXMLRPCServer4(('0.0.0.0', self.config.port), requestHandler=RequestHandler, allow_none=True)
+        server4.register_instance(self)
+        server6 = SimpleXMLRPCServer6(('::', self.config.port), requestHandler=RequestHandler, allow_none=True)
+        server6.register_instance(self)
+        while True:
+            try:
+                r, w, e = select.select([server4, server6], [], [])
+            except (OSError, select.error) as e:
+                if e.args[0] != errno.EINTR:
+                    raise
+            else:
+                for r in r:
+                    r._handle_request_noblock()
 
     def requestToken(self, handler, email):
         while True:
@@ -142,12 +167,13 @@ class main(object):
 
     def getBootstrapPeer(self, handler):
         # TODO: Insert a flag column for bootstrap ready servers in peers 
-        # ( servers which shouldn't go down or change ip and port as opposed to servers owned by particulars )
+        # ( servers which shouldn't go down or change ip and port as opposed to servers owned by particulars )
+        # that way, we also ascertain that the server sent is not the new node....
         return self.db.execute("SELECT ip, port proto FROM peers ORDER BY random() LIMIT 1").next()
 
     def declare(self, handler, address):
-        ip, port, proto = address
-        client_address, _ = handler.client_address
+        client_address, ip, port, proto = address
+        #client_address, _ = handler.client_address
         client_ip1, client_ip2 = struct.unpack('>QQ', socket.inet_pton(socket.AF_INET6, client_address))
         client_ip = bin(client_ip1)[2:].rjust(64, '0') + bin(client_ip2)[2:].rjust(64, '0')
         if client_ip.startswith(self.network):
@@ -168,8 +194,6 @@ class main(object):
             raise RuntimeError
         print "sending peers"
         return self.db.execute("SELECT ip, port, proto FROM peers ORDER BY random() LIMIT ?", (n,)).fetchall()
-
-
 
 if __name__ == "__main__":
     main()
