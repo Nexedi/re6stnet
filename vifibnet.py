@@ -101,7 +101,7 @@ def getConfig():
     # TODO: use maxpeer
     _('--max-clients', default=10, type=int,
             help='the number of peers that can connect to the server')
-    _('--refresh-time', default=60, type=int,
+    _('--refresh-time', default=300, type=int,
             help='the time (seconds) to wait before changing the connections')
     _('--refresh-count', default=1, type=int,
             help='The number of connections to drop when refreshing the connections')
@@ -205,7 +205,7 @@ def handle_message(msg):
         # TODO: check if we are not already connected to it
     elif script_type == 'client-disconnect':
         log.log('%s has disconnected' % (arg,), 3)
-    elif script_type == 'ipchange':
+    elif script_type == 'route-up':
         # TODO: save the external ip received
         log.log('External Ip : ' + arg, 3)
     else:

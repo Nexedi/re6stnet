@@ -41,6 +41,6 @@ def client(serverIp, pipe_fd, *args, **kw):
         '--client',
         '--remote', serverIp,
         '--up', 'up-client',
-        '--ipchange', 'ipchange ' + str(pipe_fd),
+        '--route-up', 'route-up ' + str(pipe_fd),
         *args, **kw)
 

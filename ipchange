@@ -1,8 +1,0 @@
-#!/usr/bin/python -S
-import os, time, sys
-
-# Write into pipe external ip address received
-# Pb: executed before ( or at the same time ) as client-connect on server
-#  \===> external_ip not set when script is launched
-# os.write(int(sys.argv[1]), '%(script_type)s %(external_ip)s\n' % os.environ)
-
