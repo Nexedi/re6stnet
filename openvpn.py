@@ -29,7 +29,7 @@ def server(ip, pipe_fd, *args, **kw):
         '--tls-server',
         '--mode', 'server',
         '--duplicate-cn', # XXX : to be removed
-        '--up', 'up-server ' + ip,
+        '--up', 'up-server %s/%u' % (ip, len(config.vifibnet)),
         '--client-connect', 'client-connect ' + str(pipe_fd),
         '--client-disconnect', 'client-connect ' + str(pipe_fd),
         '--dh', config.dh,

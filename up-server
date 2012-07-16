@@ -1,4 +1,4 @@
 #!/bin/sh -e
 
-ifconfig $dev up
-ifconfig $dev inet6 add $1
+ip link set $dev up
+ip addr add $1 dev $dev

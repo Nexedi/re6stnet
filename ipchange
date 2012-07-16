@@ -1,4 +1,5 @@
 #!/usr/bin/python -S
 import os, sys
 
+# Write into pipe external ip address received
 os.write(int(sys.argv[1]), '%(script_type)s %(external_ip)s\n' % os.environ)

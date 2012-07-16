@@ -1,11 +1,15 @@
 #!/usr/bin/env python
 from OpenSSL import crypto
-import argparse, os, subprocess, xmlrpclib
+import argparse, os, subprocess, sqlite3, sys, xmlrpclib
 
 def main():
     parser = argparse.ArgumentParser(
             description='Setup script for vifib')
     _ = parser.add_argument
+    _('--ca-only', action='store_true',
+            help='To only get CA form server')
+    _('--db-only', action='store_true',
+            help='To only get CA and setup peer db with bootstrap peer')
     _('--server', required=True,
             help='Address of the server delivering certifiactes')
     _('--port', required=True, type=int,
@@ -20,9 +24,43 @@ def main():
         print "Sorry, request argument was incorrect, there must be an even number of request arguments"
         sys.exit(1)
 
+    # Establish connection with server
+    s = xmlrpclib.ServerProxy('http://%s:%u' % (config.server, config.port))
+
+    # Get CA
+    ca = s.getCa()
+    with open(os.path.join(config.dir, 'ca.pem'), 'w') as f:
+        f.write(ca)
+
+    if config.ca_only:
+        sys.exit(0)
+
+    # Create and initialize peers DB
+    boot_ip, boot_port, boot_proto = s.getBootstrapPeer()
+    db = sqlite3.connect(os.path.join(config.dir, 'peers.db'), isolation_level=None)
+    try:
+        db.execute("""CREATE TABLE peers (
+                   id INTEGER PRIMARY KEY AUTOINCREMENT,
+                   ip TEXT NOT NULL,
+                   port INTEGER NOT NULL,
+                   proto TEXT NOT NULL,
+                   used INTEGER NOT NULL default 0,
+                   date INTEGER DEFAULT (strftime('%s', 'now')))""")
+        db.execute("CREATE INDEX _peers_used ON peers(used)")
+        db.execute("CREATE UNIQUE INDEX _peers_address ON peers(ip, port, proto)")
+        db.execute("INSERT INTO peers (ip, port, proto) VALUES (?,?,?)", (boot_ip, boot_port, boot_proto))
+    except sqlite3.OperationalError, e:
+        if e.args[0] == 'table peers already exists':
+            print "Table peers already exists, leaving it as it is"
+        else:
+            print "sqlite3.OperationalError :" + e.args[0]
+            sys.exit(1)
+
+    if config.db_only:
+        sys.exit(0)
+
     # Get token
     email = raw_input('Please enter your email address : ')
-    s = xmlrpclib.ServerProxy('http://%s:%u' % (config.server, config.port))
     _ = s.requestToken(email)
     token = raw_input('Please enter your token : ')
 
@@ -42,39 +80,18 @@ def main():
     req.sign(pkey, 'sha1')
     req = crypto.dump_certificate_request(crypto.FILETYPE_PEM, req)
 
-    # Get certificates and bootstrap peers
-    ca = s.getCa()
+    # Get certificate
     cert = s.requestCertificate(token, req)
-    boot_ip, boot_port, boot_proto = s.getBootstrapPeer()
-
-    # Generating dh file
-    if not os.access(os.path.join(config.dir, 'dh2048.pem'), os.F_OK):
-       subprocess.call(['openssl', 'dhparam', '-out', os.path.join(config.dir, 'dh2048.pem'), '2048'])
 
     # Store cert and key
     with open(os.path.join(config.dir, 'cert.key'), 'w') as f:
         f.write(key)
     with open(os.path.join(config.dir, 'cert.crt'), 'w') as f:
         f.write(cert)
-    with open(os.path.join(config.dir, 'ca.pem'), 'w') as f:
-        f.write(ca)
 
-    # Create and initialize peers DB
-    self.db = sqlite3.connect(os.path.join(config.dir, 'peers.db'), isolation_level=None)
-    try:
-        self.db.execute("""CREATE TABLE peers (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        ip TEXT NOT NULL,
-                        port INTEGER NOT NULL,
-                        proto TEXT NOT NULL,
-                        used INTEGER NOT NULL default 0,
-                        date INTEGER DEFAULT strftime('%s', 'now'))""")
-        self.db.execute("CREATE INDEX _peers_used ON peers(used)")
-        self.db.execute("CREATE INDEX _peers_address ON peers(ip, port, proto)")
-        self.db.execute("INSERT INTO peers (ip, port, proto) VALUES (?,?,?)", (boot_ip, boot_port, boot_proto))
-    except sqlite3.OperationalError, e:
-        if e.args[0] == 'table peers already exists':
-            print "Table peers already exists, leaving it as it is"
+    # Generating dh file
+    if not os.access(os.path.join(config.dir, 'dh2048.pem'), os.F_OK):
+       subprocess.call(['openssl', 'dhparam', '-out', os.path.join(config.dir, 'dh2048.pem'), '2048'])
 
     print "Certificate setup complete."
 

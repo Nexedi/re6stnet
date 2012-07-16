@@ -169,7 +169,9 @@ class main(object):
         # TODO: Insert a flag column for bootstrap ready servers in peers 
         # ( servers which shouldn't go down or change ip and port as opposed to servers owned by particulars )
         # that way, we also ascertain that the server sent is not the new node....
-        return self.db.execute("SELECT ip, port proto FROM peers ORDER BY random() LIMIT 1").next()
+        ip, port, proto = self.db.execute("SELECT ip, port, proto FROM peers ORDER BY random() LIMIT 1").next()
+        print "Sending bootstrap peer ( %s, %s, %s)" % (ip, port, proto)
+        return ip, port, proto
 
     def declare(self, handler, address):
         client_address, ip, port, proto = address

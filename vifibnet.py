@@ -35,7 +35,7 @@ class PeersDB:
         port = 1194
         proto = 'udp'
         new_peer_list = self.proxy.getPeerList(n, (config.internal_ip, config.external_ip, port, proto))
-        self.db.executemany("INSERT OR REPLACE INTO peers (ip, port, proto) VALUES (?,?,?)", new_peer_list)
+        self.db.executemany("INSERT OR IGNORE INTO peers (ip, port, proto, used) VALUES (?,?,?,0)", new_peer_list)
         self.db.execute("DELETE FROM peers WHERE ip = ?", (config.external_ip,))
 
     def getUnusedPeers(self, nPeers):
