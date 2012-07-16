@@ -124,17 +124,20 @@ def getConfig():
             help="Common OpenVPN options (e.g. certificates)")
     openvpn.config = config = parser.parse_args()
     log.verbose = config.verbose
+
     # Get network prefix from ca.crt
     with open(config.ca, 'r') as f:
         ca = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
         config.vifibnet = bin(ca.get_serial_number())[3:]
+
     # Get ip from cert.crt
     with open(config.cert, 'r') as f:
         cert = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
         subject = cert.get_subject()
-        prefix, prefix_len = subject.serialNumber.split('/')
+        prefix, prefix_len = subject.CN.split('/')
         config.internal_ip = ipFromPrefix(prefix, int(prefix_len))
         log.log('Intranet ip : %s' % (config.internal_ip,), 3)
+
     # Treat openvpn arguments
     if config.openvpn_args[0] == "--":
         del config.openvpn_args[0]
@@ -234,8 +237,6 @@ def main():
             stdout=os.open(os.path.join(config.log, 'vifibnet.server.log'), os.O_WRONLY | os.O_CREAT | os.O_TRUNC))
     startNewConnection(config.client_count, write_pipe)
 
-    peers_db.populate(10)
-
     # Timed refresh initializing
     next_refresh = time.time() + config.refresh_time
 
@@ -248,6 +249,7 @@ def main():
             if ready:
                 handle_message(read_pipe.readline())
             if time.time() >= next_refresh:
+                peers_db.populate(10)
                 refreshConnections(write_pipe)
                 next_refresh = time.time() + config.refresh_time
     except KeyboardInterrupt:

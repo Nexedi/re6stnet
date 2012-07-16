@@ -10,6 +10,8 @@ def main():
             help='To only get CA form server')
     _('--db-only', action='store_true',
             help='To only get CA and setup peer db with bootstrap peer')
+    _('--no-boot', action='store_true',
+            help='Enable to skip getting bootstrap peer')
     _('--server', required=True,
             help='Address of the server delivering certifiactes')
     _('--port', required=True, type=int,
@@ -36,7 +38,6 @@ def main():
         sys.exit(0)
 
     # Create and initialize peers DB
-    boot_ip, boot_port, boot_proto = s.getBootstrapPeer()
     db = sqlite3.connect(os.path.join(config.dir, 'peers.db'), isolation_level=None)
     try:
         db.execute("""CREATE TABLE peers (
@@ -48,7 +49,9 @@ def main():
                    date INTEGER DEFAULT (strftime('%s', 'now')))""")
         db.execute("CREATE INDEX _peers_used ON peers(used)")
         db.execute("CREATE UNIQUE INDEX _peers_address ON peers(ip, port, proto)")
-        db.execute("INSERT INTO peers (ip, port, proto) VALUES (?,?,?)", (boot_ip, boot_port, boot_proto))
+        if not config.no_boot:
+            boot_ip, boot_port, boot_proto = s.getBootstrapPeer()
+            db.execute("INSERT INTO peers (ip, port, proto) VALUES (?,?,?)", (boot_ip, boot_port, boot_proto))
     except sqlite3.OperationalError, e:
         if e.args[0] == 'table peers already exists':
             print "Table peers already exists, leaving it as it is"

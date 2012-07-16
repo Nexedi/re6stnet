@@ -6,6 +6,9 @@ from SimpleXMLRPCServer import SimpleXMLRPCServer, SimpleXMLRPCRequestHandler
 from OpenSSL import crypto
 import traceback
 
+# To generate server ca and key with correct serial
+# openssl req -nodes -new -x509 -key ca.key -set_serial 0x120010db80042 -days 365 -out ca.crt
+
 IPV6_V6ONLY = 26
 SOL_IPV6 = 41
 
@@ -148,7 +151,7 @@ class main(object):
             cert.gmtime_adj_notAfter(self.cert_duration)
             cert.set_issuer(self.ca.get_subject())
             subject = req.get_subject()
-            subject.serialNumber = "%u/%u" % (int(prefix, 2), prefix_len)
+            subject.CN = "%u/%u" % (int(prefix, 2), prefix_len)
             cert.set_subject(subject)
             cert.set_pubkey(req.get_pubkey())
             cert.sign(self.key, 'sha1')
@@ -181,7 +184,7 @@ class main(object):
         if client_ip.startswith(self.network):
             prefix = client_ip[len(self.network):]
             prefix, = self.db.execute("SELECT prefix FROM vifib WHERE prefix <= ? ORDER BY prefix DESC LIMIT 1", (prefix,)).next()
-            self.db.execute("INSERT OR REPLACE INTO peers VALUES (?,?,?,?)", (prefix, ip, port, proto))
+            self.db.execute("INSERT OR REPLACE INTO peers (prefix, ip, port, proto) VALUES (?,?,?,?)", (prefix, ip, port, proto))
             return True
         else:
             # TODO: use log + DO NOT PRINT BINARY IP
