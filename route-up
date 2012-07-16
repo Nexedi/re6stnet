@@ -1,0 +1,6 @@
+#!/usr/bin/python -S
+import os, time, sys
+
+# Write into pipe external ip address received
+os.write(int(sys.argv[1]), '%(script_type)s %(OPENVPN_external_ip)s\n' % os.environ)
+
