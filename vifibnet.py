@@ -3,22 +3,48 @@ import argparse, errno, math, os, select, subprocess, sys, time, traceback
 from OpenSSL import crypto
 import db, plib, upnpigd, utils, tunnelmanager
 
-def handle_message(msg):
-    script_type, arg = msg.split()
-    if script_type == 'client-connect':
-        utils.log('Incomming connection from %s' % (arg,), 3)
-        # TODO: check if we are not already connected to it
-    elif script_type == 'client-disconnect':
-        utils.log('%s has disconnected' % (arg,), 3)
-    elif script_type == 'route-up':
-        # TODO: save the external ip received
-        utils.log('External Ip : ' + arg, 3)
-    else:
-        utils.log('Unknow message recieved from the openvpn pipe : ' + msg, 1)
+def getConfig():
+    parser = argparse.ArgumentParser(
+            description='Resilient virtual private network application')
+    _ = parser.add_argument
+    # Server address MUST be a vifib address ( else requests will be denied )
+    _('--server', required=True,
+            help='Address for peer discovery server')
+    _('--server-port', required=True, type=int,
+            help='Peer discovery server port')
+    _('-l', '--log', default='/var/log',
+            help='Path to vifibnet logs directory')
+    _('--client-count', default=2, type=int,
+            help='Number of client connections')
+    # TODO: use maxpeer
+    _('--max-clients', default=10, type=int,
+            help='the number of peers that can connect to the server')
+    _('--refresh-time', default=300, type=int,
+            help='the time (seconds) to wait before changing the connections')
+    _('--refresh-count', default=1, type=int,
+            help='The number of connections to drop when refreshing the connections')
+    _('--db', default='/var/lib/vifibnet/peers.db',
+            help='Path to peers database')
+    _('--dh', required=True,
+            help='Path to dh file')
+    _('--babel-state', default='/var/lib/vifibnet/babel_state',
+            help='Path to babeld state-file')
+    _('--verbose', '-v', default=0, type=int,
+            help='Defines the verbose level')
+    _('--ca', required=True,
+            help='Path to the certificate authority file')
+    _('--cert', required=True,
+            help='Path to the certificate file')
+    _('--ip', required=True, dest='external_ip',
+            help='Ip address of the machine on the internet')
+    # Openvpn options
+    _('openvpn_args', nargs=argparse.REMAINDER,
+            help="Common OpenVPN options (e.g. certificates)")
+    return parser.parse_args()
 
 def main():
     # Get arguments
-    utils.getConfig()
+    config = getConfig()
 
     # Launch babel on all interfaces. WARNING : you have to be root to start babeld
     babel = plib.babel(stdout=os.open(os.path.join(utils.config.log, 'vifibnet.babeld.log'), 
@@ -31,7 +57,7 @@ def main():
 
     # Setup the tunnel manager
     peers_db = db.PeersDB(utils.config.db)
-    tunnelManager = tunnelmanager.TunnelManager(write_pipe, peers_db)
+    tunnelManager = tunnelmanager.TunnelManager(write_pipe, peers_db, utils.config.client_count, utils.config.refresh_count)
 
    # Establish connections
     serverProcess = plib.server(utils.config.internal_ip, write_pipe, '--dev', 'vifibnet',
@@ -45,9 +71,9 @@ def main():
     try:
         while True:
             ready, tmp1, tmp2 = select.select([read_pipe], [], [],
-                    max(0, next_refresh - time.time()))
+                    max(0, next_refresh - timhttp://blogs.lesechos.fr/dominique-seux/de-mondialiser-les-telecoms-a11339.htmle.time()))
             if ready:
-                handle_message(read_pipe.readline())
+                tunnelManager.handle_message(read_pipe.readline())
             if time.time() >= next_refresh:
                 peers_db.populate(10)
                 tunnelManager.refresh()

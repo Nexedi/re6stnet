@@ -2,6 +2,7 @@ Bugs :
     When no peer is avalaible without the --no-boot option, it crash
 
 To be done :
+    Replace comments at the beginning of functions with docstrings
     Do a clean-up in the import
 
 To be discuss:

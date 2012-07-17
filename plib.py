@@ -1,7 +1,9 @@
 #!/usr/bin/env python
-import subprocess
+import os, subprocess
 import utils
-import os
+
+# TODO: "Objectify" this module ?
+# Needed : verbose, network ( previous vifibnet), max-clients, dh, internalIp
 
 def openvpn(*args, **kw):
     args = ['openvpn',
@@ -26,12 +28,12 @@ def openvpn(*args, **kw):
 # TODO : set iface up when creating a server/client
 # ! check working directory before launching up script ?
 
-def server(ip, pipe_fd, *args, **kw):
+def server(serverIp, pipe_fd, *args, **kw):
     utils.log('Starting server', 3)
     return openvpn(
         '--tls-server',
         '--mode', 'server',
-        '--up', 'ovpn-server %s/%u' % (ip, len(utils.config.vifibnet)),
+        '--up', 'ovpn-server %s/%u' % (serverIp, len(utils.config.vifibnet)),
         '--client-connect', 'ovpn-server ' + str(pipe_fd),
         '--client-disconnect', 'ovpn-server ' + str(pipe_fd),
         '--dh', utils.config.dh,
@@ -48,13 +50,13 @@ def client(serverIp, pipe_fd, *args, **kw):
         '--route-up', 'ovpn-client ' + str(pipe_fd),
         *args, **kw)
 
-def babel(**kw):
+def babel(internal_ip, network, interface_list, **kw):
     utils.log('Starting babel', 3)
     args = ['babeld',
-            '-C', 'redistribute local ip %s' % (utils.config.internal_ip),
+            '-C', 'redistribute local ip %s' % (internal_ip),
             '-C', 'redistribute local deny',
             # Route VIFIB ip adresses
-            '-C', 'in ip %s::/%u' % (utils.ipFromBin(utils.config.vifibnet), len(utils.config.vifibnet)),
+            '-C', 'in ip %s::/%u' % (utils.ipFromBin(network), len(network)),
             # Route only addresse in the 'local' network,
             # or other entire networks
             #'-C', 'in ip %s' % (config.internal_ip),
@@ -66,7 +68,7 @@ def babel(**kw):
             ]
     if utils.config.babel_state:
         args += '-S', utils.config.babel_state
-    args = args + ['vifibnet'] + list(tunnelmanager.free_interface_set)
+    args = args + interface_list
     utils.log(str(args), 5)
     return subprocess.Popen(args, **kw)
 
