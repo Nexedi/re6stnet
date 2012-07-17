@@ -1,34 +1,7 @@
 #!/usr/bin/env python
-import argparse, errno, math, os, select, subprocess, sys, time
+import argparse, errno, math, os, select, subprocess, sys, time, traceback
 from OpenSSL import crypto
-import traceback
-import upnpigd
-import openvpn
-import utils
-import db
-import tunnelmanager
-
-def startBabel(**kw):
-    args = ['babeld',
-            '-C', 'redistribute local ip %s' % (utils.config.internal_ip),
-            '-C', 'redistribute local deny',
-            # Route VIFIB ip adresses
-            '-C', 'in ip %s::/%u' % (utils.ipFromBin(utils.config.vifibnet), len(utils.config.vifibnet)),
-            # Route only addresse in the 'local' network,
-            # or other entire networks
-            #'-C', 'in ip %s' % (config.internal_ip),
-            #'-C', 'in ip ::/0 le %s' % network_mask,
-            # Don't route other addresses
-            '-C', 'in deny',
-            '-d', str(utils.config.verbose),
-            '-s',
-            ]
-    if utils.config.babel_state:
-        args += '-S', utils.config.babel_state
-    args = args + ['vifibnet'] + list(tunnelmanager.free_interface_set)
-    if utils.config.verbose >= 5:
-        print args
-    return subprocess.Popen(args, **kw)
+import db, openvpn, upnpigd, utils, tunnelmanager
 
 def handle_message(msg):
     script_type, arg = msg.split()
@@ -46,7 +19,7 @@ def handle_message(msg):
 def main():
     # Get arguments
     utils.getConfig()
-    
+
     # Setup database
     tunnelmanager.peers_db = db.PeersDB(utils.config.db)
 
