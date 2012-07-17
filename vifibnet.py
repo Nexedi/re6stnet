@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import argparse, errno, math, os, select, subprocess, sys, time, traceback
 from OpenSSL import crypto
-import db, openvpn, upnpigd, utils, tunnelmanager
+import db, plib, upnpigd, utils, tunnelmanager
 
 def handle_message(msg):
     script_type, arg = msg.split()
@@ -19,24 +19,22 @@ def handle_message(msg):
 def main():
     # Get arguments
     utils.getConfig()
-    
+
     # Launch babel on all interfaces. WARNING : you have to be root to start babeld
-    utils.log('Starting babel', 3)
-    babel = startBabel(stdout=os.open(os.path.join(utils.config.log, 'vifibnet.babeld.log'), 
+    babel = plib.babel(stdout=os.open(os.path.join(utils.config.log, 'vifibnet.babeld.log'), 
         os.O_WRONLY | os.O_CREAT | os.O_TRUNC), stderr=subprocess.STDOUT)
 
     # Create and open read_only pipe to get connect/disconnect events from openvpn
-    utils.log('Creating pipe for openvpn events', 3)
+    utils.log('Creating pipe for server events', 3)
     r_pipe, write_pipe = os.pipe()
     read_pipe = os.fdopen(r_pipe)
 
-    # setup the tunnel manager 
+    # Setup the tunnel manager
     peers_db = db.PeersDB(utils.config.db)
     tunnelManager = tunnelmanager.TunnelManager(write_pipe, peers_db)
 
    # Establish connections
-    utils.log('Starting openvpn server', 3)
-    serverProcess = openvpn.server(utils.config.internal_ip, write_pipe, '--dev', 'vifibnet',
+    serverProcess = plib.server(utils.config.internal_ip, write_pipe, '--dev', 'vifibnet',
             stdout=os.open(os.path.join(utils.config.log, 'vifibnet.server.log'), os.O_WRONLY | os.O_CREAT | os.O_TRUNC))
     tunnelManager.refresh()
 

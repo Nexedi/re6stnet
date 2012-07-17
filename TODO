@@ -8,22 +8,18 @@ To be done :
 To be discuss:
     Remove the --no-boot option since we know when no node is avalaible
 
-    When I created PeersDB, I thought only be used to access the DB and not do some logic. 
-        We should decide what it is suppose to do :
-            Just access the DB
-            Or manage the peers
-    
     The organisation of the code
-        vifibnet.py             Just contain the main loop and the init
+        vifibnet.py         Just contain the main loop and the init
         openpvn.py          To launch openvpn processes
         utils.py            Small functions to do some usefull job, also contains the config
         db.py               Function to access the DB (merge with utils ?)
         tunnelmanager.py    To choose wich connection delete/keep/...
         upnpigd.py          To open a port and find the external IP
-    
+
     How we choose which protocol we use :
         IMO, we should use UDP. I've read many times than TCP other TCP can be catastrophic in terme of performance 
         Every time a packet is lost, it is resend 2 times, one for each TCP tunnel
         And many GW allow UDP port forwarding (for bittorent, Xbox, ...) but not TCP port forwarding
 
-    Use peers_db.populate(100) every once in a while ?
+    Use peers_db.populate(100) every once in a while ? -> yes but be warry of the refresh time ( populate
+    the db once every 20s is bad.. )

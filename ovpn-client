@@ -1,6 +1,8 @@
 #!/usr/bin/python -S
-import os, time, sys
+import os, sys
+
+if os.environ['script_type'] == 'up':
+    os.execlp('ip', 'ip', 'link', 'set', os.environ['dev'], 'up')
 
 # Write into pipe external ip address received
 os.write(int(sys.argv[1]), '%(script_type)s %(OPENVPN_external_ip)s\n' % os.environ)
-

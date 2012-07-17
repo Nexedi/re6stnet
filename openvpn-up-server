@@ -1,4 +1,0 @@
-#!/bin/sh -e
-
-ip link set $dev up
-ip addr add $1 dev $dev
