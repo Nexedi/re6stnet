@@ -7,8 +7,6 @@ To be done :
 To be discuss:
     Remove the --no-boot option since we know when no node is avalaible
 
-    Find a better solution for config than utils.config = config, openv.config = config, ...
-    
     When I created PeersDB, I thought only be used to access the DB and not do some logic. 
         We should decide what it is suppose to do :
             Just access the DB
