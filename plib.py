@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import subprocess
 import utils
 import os
@@ -45,7 +46,7 @@ def client(serverIp, pipe_fd, *args, **kw):
         '--route-up', 'openvpn-route-up ' + str(pipe_fd),
         *args, **kw)
 
-def startBabel(**kw):
+def babel(**kw):
     args = ['babeld',
             '-C', 'redistribute local ip %s' % (utils.config.internal_ip),
             '-C', 'redistribute local deny',
