@@ -4,6 +4,7 @@ Bugs :
 To be done :
     Replace comments at the beginning of functions with docstrings
     Do a clean-up in the import
+    Remove the parameters to choose the number of clients
 
 To be discuss:
     Remove the --no-boot option since we know when no node is avalaible
