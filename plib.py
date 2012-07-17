@@ -48,7 +48,7 @@ def client(serverIp, pipe_fd, *args, **kw):
         '--route-up', 'ovpn-client ' + str(pipe_fd),
         *args, **kw)
 
-def babel(network, internal_ip, interface_list, **kw):
+def router(network, internal_ip, interface_list, **kw):
     utils.log('Starting babel', 3)
     args = ['babeld',
             '-C', 'redistribute local ip %s' % (internal_ip),

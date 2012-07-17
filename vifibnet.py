@@ -63,7 +63,7 @@ def main():
 
     # Launch babel on all interfaces. WARNING : you have to be root to start babeld
     interface_list = ['vifibnet'] + list(tunnel_manager.free_interface_set)
-    babel = plib.babel(network, internal_ip, interface_list,
+    router = plib.router(network, internal_ip, interface_list,
         stdout=os.open(os.path.join(config.log, 'vifibnet.babeld.log'),
         os.O_WRONLY | os.O_CREAT | os.O_TRUNC), stderr=subprocess.STDOUT)
 
