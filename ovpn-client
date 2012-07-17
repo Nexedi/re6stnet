@@ -1,7 +1,7 @@
 #!/usr/bin/python -S
 import os, sys
 
-if os.environ['script_type'] == 'route-up':
+if os.environ['script_type'] == 'up':
     os.execlp('ip', 'ip', 'link', 'set', os.environ['dev'], 'up')
 
 # Write into pipe external ip address received
