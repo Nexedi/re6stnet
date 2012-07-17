@@ -48,6 +48,11 @@ def main():
     network = utils.networkFromCa(config.ca)
     internal_ip = utils.ipFromCert(network, config.cert)
     openvpn_args = utils.ovpnArgs(config.openvpn_args, config.ca, config.cert)
+
+    # Get real port and proto ?
+    port = 1194
+    proto = 'udp'
+
     # Set global variables
     tunnel.log = config.log
     utils.verbose = plib.verbose = config.verbose
@@ -58,7 +63,7 @@ def main():
     read_pipe = os.fdopen(r_pipe)
 
     # Init db and tunnels
-    peer_db = db.PeerManager(config.db)
+    peer_db = db.PeerManager(config.db, config.server, config.server_port)
     tunnel_manager = tunnel.TunnelManager(write_pipe, peer_db, config.client_count, config.refresh_count, openvpn_args)
 
     # Launch babel on all interfaces. WARNING : you have to be root to start babeld
@@ -84,7 +89,7 @@ def main():
             if ready:
                 peer_db.handle_message(read_pipe.readline())
             if time.time() >= next_refresh:
-                peer_db.populate(100)
+                peer_db.populate(100, (internal_ip, config.external_ip, port, proto))
                 tunnel_manager.refresh()
                 next_refresh = time.time() + config.refresh_time
     except KeyboardInterrupt:

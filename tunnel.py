@@ -33,7 +33,7 @@ class TunnelManager:
     def _removeSomeTunnels(self):
         for i in range(0, max(0, len(self._connection_dict) - self._client_count + self._refresh_count)):
             peer_id = random.choice(self._connection_dict.keys())
-            kill(peer_id)
+            self._kill(peer_id)
 
     def _kill(self, peer_id):
         utils.log('Killing the connection with id ' + str(peer_id), 2)

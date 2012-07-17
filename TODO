@@ -1,5 +1,7 @@
 Bugs :
     When no peer is avalaible without the --no-boot option, it crash => see below
+    Once in a while, when exiting vifibnet ( not very properly, via Ctrl+C ), processes ( openvpn and babel )
+         still remain and disturb further attemps ( must be killed for vifibnet to work again )
 
 To be done :
     Replace comments at the beginning of functions with docstrings & give all fn docstrings

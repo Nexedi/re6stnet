@@ -10,7 +10,7 @@ def log(message, verbose_level):
 
 def binFromIp(ip):
     ip1, ip2 = struct.unpack('>QQ', socket.inet_pton(socket.AF_INET6, ip))
-    return bin(client_ip1)[2:].rjust(64, '0') + bin(client_ip2)[2:].rjust(64, '0')
+    return bin(ip1)[2:].rjust(64, '0') + bin(ip2)[2:].rjust(64, '0')
 
 def ipFromBin(prefix):
     prefix = hex(int(prefix, 2))[2:]

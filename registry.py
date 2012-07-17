@@ -179,7 +179,7 @@ class main(object):
     def declare(self, handler, address):
         client_address, ip, port, proto = address
         #client_address, _ = handler.client_address
-        client_ip = binFromIp(client_address)
+        client_ip = utils.binFromIp(client_address)
         if client_ip.startswith(self.network):
             prefix = client_ip[len(self.network):]
             prefix, = self.db.execute("SELECT prefix FROM vifib WHERE prefix <= ? ORDER BY prefix DESC LIMIT 1", (prefix,)).next()
