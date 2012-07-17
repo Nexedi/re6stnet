@@ -2,6 +2,7 @@ import os, random
 import openvpn
 import utils
 import db
+from config import *
 
 connection_dict = {} # to remember current connections we made
 free_interface_set = set(('client1', 'client2', 'client3', 'client4', 'client5',
