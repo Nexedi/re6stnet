@@ -27,6 +27,7 @@ def openvpn(*args, **kw):
 # ! check working directory before launching up script ?
 
 def server(ip, pipe_fd, *args, **kw):
+    utils.log('Starting server', 3)
     return openvpn(
         '--tls-server',
         '--mode', 'server',
@@ -38,6 +39,7 @@ def server(ip, pipe_fd, *args, **kw):
         *args, **kw)
 
 def client(serverIp, pipe_fd, *args, **kw):
+    utils.log('Starting client', 5)
     return openvpn(
         '--nobind',
         '--client',
@@ -47,6 +49,7 @@ def client(serverIp, pipe_fd, *args, **kw):
         *args, **kw)
 
 def babel(**kw):
+    utils.log('Starting babel', 3)
     args = ['babeld',
             '-C', 'redistribute local ip %s' % (utils.config.internal_ip),
             '-C', 'redistribute local deny',
@@ -64,7 +67,6 @@ def babel(**kw):
     if utils.config.babel_state:
         args += '-S', utils.config.babel_state
     args = args + ['vifibnet'] + list(tunnelmanager.free_interface_set)
-    if utils.config.verbose >= 5:
-        print args
+    utils.log(str(args), 5)
     return subprocess.Popen(args, **kw)
 

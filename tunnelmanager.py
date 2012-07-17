@@ -1,7 +1,5 @@
 import os, random, traceback
-import openvpn
-import utils
-import db
+import plib, utils, db
 
 free_interface_set = set(('client1', 'client2', 'client3', 'client4', 'client5',
                           'client6', 'client7', 'client8', 'client9', 'client10'))
@@ -44,10 +42,9 @@ class TunnelManager:
             for peer_id, ip, port, proto in self.peers_db.getUnusedPeers(utils.config.client_count - len(self.connection_dict), self.write_pipe):
                 utils.log('Establishing a connection with id %s (%s:%s)' % (peer_id, ip, port), 2)
                 iface = free_interface_set.pop()
-                self.connection_dict[peer_id] = ( openvpn.client( ip, write_pipe, '--dev', iface, '--proto', proto, '--rport', str(port),
-                    stdout=os.open(os.path.join(utils.config.log, 'vifibnet.client.%s.log' % (peer_id,)), 
-                                   os.O_WRONLY|os.O_CREAT|os.O_TRUNC) ),
-                                   iface)
+                self.connection_dict[peer_id] = ( plib.client( ip, write_pipe, '--dev', iface, '--proto', proto, '--rport', str(port),
+                    stdout=os.open(os.path.join(utils.config.log, 'vifibnet.client.%s.log' % (peer_id,)),
+                                   os.O_WRONLY|os.O_CREAT|os.O_TRUNC) ), iface)
                 self.peers_db.usePeer(peer_id)
         except KeyError:
             utils.log("Can't establish connection with %s : no available interface" % ip, 2)
