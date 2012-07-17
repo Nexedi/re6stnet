@@ -20,24 +20,23 @@ def openvpn(*args, **kw):
             # '--ping-exit', '3',
         '--group', 'nogroup',
         '--verb', str(utils.config.verbose),
-        ] + list(args) + utils.config.openvpn_args
-    if utils.config.verbose >= 5:
-        print repr(args)
+        ] + list(args)
+    utils.log(str(args), 5)
     return subprocess.Popen(args, **kw)
 
 # TODO : set iface up when creating a server/client
 # ! check working directory before launching up script ?
 
-def server(serverIp, pipe_fd, *args, **kw):
+def server(serverIp, network, max_clients, pipe_fd, *args, **kw):
     utils.log('Starting server', 3)
     return openvpn(
         '--tls-server',
         '--mode', 'server',
-        '--up', 'ovpn-server %s/%u' % (serverIp, len(utils.config.vifibnet)),
+        '--up', 'ovpn-server %s/%u' % (serverIp, len(network)),
         '--client-connect', 'ovpn-server ' + str(pipe_fd),
         '--client-disconnect', 'ovpn-server ' + str(pipe_fd),
         '--dh', utils.config.dh,
-        '--max-clients', str(utils.config.max_clients),
+        '--max-clients', str(max_clients),
         *args, **kw)
 
 def client(serverIp, pipe_fd, *args, **kw):
@@ -50,7 +49,7 @@ def client(serverIp, pipe_fd, *args, **kw):
         '--route-up', 'ovpn-client ' + str(pipe_fd),
         *args, **kw)
 
-def babel(internal_ip, network, interface_list, **kw):
+def babel(network, internal_ip, interface_list, **kw):
     utils.log('Starting babel', 3)
     args = ['babeld',
             '-C', 'redistribute local ip %s' % (internal_ip),

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
-from OpenSSL import crypto
 import argparse, os, subprocess, sqlite3, sys, xmlrpclib
+from OpenSSL import crypto
 
 def main():
     parser = argparse.ArgumentParser(

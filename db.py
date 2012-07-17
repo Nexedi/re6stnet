@@ -1,10 +1,9 @@
 import utils
-import sqlite3
-import xmlrpclib
+import sqlite3, xmlrpclib
 
-class PeersDB:
+class PeerManager:
+    
     def __init__(self, dbPath):
-
         utils.log('Connectiong to peers database', 4)
         self.db = sqlite3.connect(dbPath, isolation_level=None)
         utils.log('Preparing peers database', 4)
@@ -37,3 +36,14 @@ class PeersDB:
     def unusePeer(self, id):
         utils.log('Updating peers database : unusing peer ' + str(id), 5)
         self.db.execute("UPDATE peers SET used = 0 WHERE id = ?", (id,))
+        
+    def handle_message(msg):
+        script_type, arg = msg.split()
+        if script_type == 'client-connect':
+            utils.log('Incomming connection from %s' % (arg,), 3)
+        elif script_type == 'client-disconnect':
+            utils.log('%s has disconnected' % (arg,), 3)
+        elif script_type == 'route-up':
+            utils.log('External Ip : ' + arg, 3)
+        else:
+            utils.log('Unknow message recieved from the openvpn pipe : ' + msg, 1)

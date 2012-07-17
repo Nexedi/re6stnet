@@ -1,10 +1,9 @@
 #!/usr/bin/env python
-import argparse, math, random, select, smtplib, sqlite3, string, struct, socket, time
-from email.mime.text import MIMEText
-from functools import wraps
+import argparse, math, random, select, smtplib, sqlite3, string, socket, time, traceback
 from SimpleXMLRPCServer import SimpleXMLRPCServer, SimpleXMLRPCRequestHandler
+from email.mime.text import MIMEText
 from OpenSSL import crypto
-import traceback
+import utils
 
 # To generate server ca and key with correct serial
 # openssl req -nodes -new -x509 -key ca.key -set_serial 0x120010db80042 -days 365 -out ca.crt
@@ -73,7 +72,6 @@ class main(object):
         else:
             self.db.execute("INSERT INTO vifib VALUES ('',null,null)")
 
-
         # Loading certificates
         with open(self.config.ca) as f:
             self.ca = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
@@ -88,6 +86,8 @@ class main(object):
         server4.register_instance(self)
         server6 = SimpleXMLRPCServer6(('::', self.config.port), requestHandler=RequestHandler, allow_none=True)
         server6.register_instance(self)
+        
+        # Main loop
         while True:
             try:
                 r, w, e = select.select([server4, server6], [], [])
@@ -179,8 +179,7 @@ class main(object):
     def declare(self, handler, address):
         client_address, ip, port, proto = address
         #client_address, _ = handler.client_address
-        client_ip1, client_ip2 = struct.unpack('>QQ', socket.inet_pton(socket.AF_INET6, client_address))
-        client_ip = bin(client_ip1)[2:].rjust(64, '0') + bin(client_ip2)[2:].rjust(64, '0')
+        client_ip = binFromIp(client_address)
         if client_ip.startswith(self.network):
             prefix = client_ip[len(self.network):]
             prefix, = self.db.execute("SELECT prefix FROM vifib WHERE prefix <= ? ORDER BY prefix DESC LIMIT 1", (prefix,)).next()

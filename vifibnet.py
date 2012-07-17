@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import argparse, errno, math, os, select, subprocess, sys, time, traceback
 from OpenSSL import crypto
-import db, plib, upnpigd, utils, tunnelmanager
+import db, plib, upnpigd, utils, tunnel
 
 def getConfig():
     parser = argparse.ArgumentParser(
@@ -45,27 +45,31 @@ def getConfig():
 def main():
     # Get arguments
     config = getConfig()
-
+    network = utils.networkFromCa(config.ca)
+    internal_ip = utils.ipFromCert(network, config.cert)
+    
+    # Init db and tunnels
+    peer_db = db.PeerManager(utils.config.db)
+    tunnel_manager = tunnelmanager.TunnelManager(write_pipe, peer_db, config.client_count, config.refresh_count)
+    
     # Launch babel on all interfaces. WARNING : you have to be root to start babeld
-    babel = plib.babel(stdout=os.open(os.path.join(utils.config.log, 'vifibnet.babeld.log'), 
+    babel = plib.babel(network, internal_ip, ['vifibnet'] + tunnel_manager.free_interface_set,
+        stdout=os.open(os.path.join(utils.config.log, 'vifibnet.babeld.log'), 
         os.O_WRONLY | os.O_CREAT | os.O_TRUNC), stderr=subprocess.STDOUT)
 
-    # Create and open read_only pipe to get connect/disconnect events from openvpn
+    # Create and open read_only pipe to get server events
     utils.log('Creating pipe for server events', 3)
     r_pipe, write_pipe = os.pipe()
     read_pipe = os.fdopen(r_pipe)
 
-    # Setup the tunnel manager
-    peers_db = db.PeersDB(utils.config.db)
-    tunnelManager = tunnelmanager.TunnelManager(write_pipe, peers_db, utils.config.client_count, utils.config.refresh_count)
-
    # Establish connections
-    serverProcess = plib.server(utils.config.internal_ip, write_pipe, '--dev', 'vifibnet',
+    server_process = plib.server(internal_ip, network, config.max_clients, write_pipe, 
+            '--dev', 'vifibnet', *utils.ovpnArgs(config.openvpn_args, config.ca, config.cert),
             stdout=os.open(os.path.join(utils.config.log, 'vifibnet.server.log'), os.O_WRONLY | os.O_CREAT | os.O_TRUNC))
-    tunnelManager.refresh()
+    tunnel_manager.refresh()
 
     # Timed refresh initializing
-    next_refresh = time.time() + utils.config.refresh_time
+    next_refresh = time.time() + config.refresh_time
 
     # main loop
     try:
@@ -73,11 +77,11 @@ def main():
             ready, tmp1, tmp2 = select.select([read_pipe], [], [],
                     max(0, next_refresh - timhttp://blogs.lesechos.fr/dominique-seux/de-mondialiser-les-telecoms-a11339.htmle.time()))
             if ready:
-                tunnelManager.handle_message(read_pipe.readline())
+                peer_db.handle_message(read_pipe.readline())
             if time.time() >= next_refresh:
-                peers_db.populate(100)
-                tunnelManager.refresh()
-                next_refresh = time.time() + utils.config.refresh_time
+                peer_db.populate(100)
+                tunnel_manager.refresh()
+                next_refresh = time.time() + config.refresh_time
     except KeyboardInterrupt:
         return 0
 
