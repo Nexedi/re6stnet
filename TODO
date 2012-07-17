@@ -3,6 +3,7 @@ Bugs :
 
 To be done :
     Do a clean-up in the import
+    Remove the parameters to choose the number of clients
 
 To be discuss:
     Remove the --no-boot option since we know when no node is avalaible

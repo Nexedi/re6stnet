@@ -51,7 +51,7 @@ def main():
             if ready:
                 handle_message(read_pipe.readline())
             if time.time() >= next_refresh:
-                peers_db.populate(10)
+                peers_db.populate(100)
                 tunnelManager.refresh()
                 next_refresh = time.time() + utils.config.refresh_time
     except KeyboardInterrupt:
