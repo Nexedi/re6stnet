@@ -19,10 +19,7 @@ def handle_message(msg):
 def main():
     # Get arguments
     utils.getConfig()
-
-    # Setup database
-    tunnelmanager.peers_db = db.PeersDB(utils.config.db)
-
+    
     # Launch babel on all interfaces. WARNING : you have to be root to start babeld
     utils.log('Starting babel', 3)
     babel = startBabel(stdout=os.open(os.path.join(utils.config.log, 'vifibnet.babeld.log'), 
@@ -33,11 +30,15 @@ def main():
     r_pipe, write_pipe = os.pipe()
     read_pipe = os.fdopen(r_pipe)
 
-    # Establish connections
+    # setup the tunnel manager 
+    peers_db = db.PeersDB(utils.config.db)
+    tunnelManager = tunnelmanager.TunnelManager(write_pipe, peers_db)
+
+   # Establish connections
     utils.log('Starting openvpn server', 3)
     serverProcess = openvpn.server(utils.config.internal_ip, write_pipe, '--dev', 'vifibnet',
             stdout=os.open(os.path.join(utils.config.log, 'vifibnet.server.log'), os.O_WRONLY | os.O_CREAT | os.O_TRUNC))
-    tunnelmanager.startNewConnections(utils.config.client_count, write_pipe)
+    tunnelManager.refresh()
 
     # Timed refresh initializing
     next_refresh = time.time() + utils.config.refresh_time
@@ -50,8 +51,8 @@ def main():
             if ready:
                 handle_message(read_pipe.readline())
             if time.time() >= next_refresh:
-                tunnelmanager.peers_db.populate(10)
-                tunnelmanager.refreshConnections(write_pipe)
+                peers_db.populate(10)
+                tunnelManager.refresh()
                 next_refresh = time.time() + utils.config.refresh_time
     except KeyboardInterrupt:
         return 0
