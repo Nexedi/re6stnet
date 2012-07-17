@@ -1,15 +1,17 @@
+#!/usr/bin/env python
 import argparse, time, struct, socket
 from OpenSSL import crypto
 
+verbose = 0
 
 def log(message, verbose_level):
-    if config.verbose >= verbose_level:
+    if verbose >= verbose_level:
         print time.strftime("%d-%m-%Y %H:%M:%S : " + message)
 
 def binFromIp(ip):
     ip1, ip2 = struct.unpack('>QQ', socket.inet_pton(socket.AF_INET6, ip))
     return bin(client_ip1)[2:].rjust(64, '0') + bin(client_ip2)[2:].rjust(64, '0')
-        
+
 def ipFromBin(prefix):
     prefix = hex(int(prefix, 2))[2:]
     ip = ''
@@ -27,7 +29,7 @@ def networkFromCa(ca_path):
     with open(ca_path, 'r') as f:
         ca = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
         return bin(ca.get_serial_number())[3:]
-        
+
 def ipFromCert(network, cert_path):
     # Get ip from cert.crt
     with open(cert_path, 'r') as f:
@@ -35,25 +37,14 @@ def ipFromCert(network, cert_path):
         subject = cert.get_subject()
         prefix, prefix_len = subject.CN.split('/')
         return ipFromPrefix(network, prefix, int(prefix_len))
-        
-def ovpnArgs(optional_args, ca_path, cert_path)
+
+def ovpnArgs(optional_args, ca_path, cert_path):
     # Treat openvpn arguments
     if optional_args[0] == "--":
         del optional_args[0]
     optional_args.append('--ca')
-    optional_args.append(config.ca)
+    optional_args.append(ca_path)
     optional_args.append('--cert')
-    optional_args.append(config.cert)
+    optional_args.append(cert_path)
     return optional_args
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+

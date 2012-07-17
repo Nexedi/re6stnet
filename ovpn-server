@@ -1,4 +1,5 @@
 #!/usr/bin/python -S
+import os, sys
 
 # example of os.environ
 {'X509_0_C': 'FR',

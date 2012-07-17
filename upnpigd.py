@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import miniupnpc
 import socket
 

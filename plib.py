@@ -2,8 +2,7 @@
 import os, subprocess
 import utils
 
-# TODO: "Objectify" this module ?
-# Needed : verbose, network ( previous vifibnet), max-clients, dh, internalIp
+verbose = None
 
 def openvpn(*args, **kw):
     args = ['openvpn',
@@ -19,7 +18,7 @@ def openvpn(*args, **kw):
             # '--ping', '1',
             # '--ping-exit', '3',
         '--group', 'nogroup',
-        '--verb', str(utils.config.verbose),
+        '--verb', str(verbose),
         ] + list(args)
     utils.log(str(args), 5)
     return subprocess.Popen(args, **kw)
@@ -27,7 +26,7 @@ def openvpn(*args, **kw):
 # TODO : set iface up when creating a server/client
 # ! check working directory before launching up script ?
 
-def server(serverIp, network, max_clients, pipe_fd, *args, **kw):
+def server(serverIp, network, max_clients, dh_path, pipe_fd, *args, **kw):
     utils.log('Starting server', 3)
     return openvpn(
         '--tls-server',
@@ -35,7 +34,7 @@ def server(serverIp, network, max_clients, pipe_fd, *args, **kw):
         '--up', 'ovpn-server %s/%u' % (serverIp, len(network)),
         '--client-connect', 'ovpn-server ' + str(pipe_fd),
         '--client-disconnect', 'ovpn-server ' + str(pipe_fd),
-        '--dh', utils.config.dh,
+        '--dh', dh_path,
         '--max-clients', str(max_clients),
         *args, **kw)
 
@@ -62,11 +61,11 @@ def babel(network, internal_ip, interface_list, **kw):
             #'-C', 'in ip ::/0 le %s' % network_mask,
             # Don't route other addresses
             '-C', 'in deny',
-            '-d', str(utils.config.verbose),
+            '-d', str(verbose),
             '-s',
             ]
-    if utils.config.babel_state:
-        args += '-S', utils.config.babel_state
+    #if utils.config.babel_state:
+    #    args += '-S', utils.config.babel_state
     args = args + interface_list
     utils.log(str(args), 5)
     return subprocess.Popen(args, **kw)

@@ -47,25 +47,30 @@ def main():
     config = getConfig()
     network = utils.networkFromCa(config.ca)
     internal_ip = utils.ipFromCert(network, config.cert)
-    
-    # Init db and tunnels
-    peer_db = db.PeerManager(utils.config.db)
-    tunnel_manager = tunnelmanager.TunnelManager(write_pipe, peer_db, config.client_count, config.refresh_count)
-    
-    # Launch babel on all interfaces. WARNING : you have to be root to start babeld
-    babel = plib.babel(network, internal_ip, ['vifibnet'] + tunnel_manager.free_interface_set,
-        stdout=os.open(os.path.join(utils.config.log, 'vifibnet.babeld.log'), 
-        os.O_WRONLY | os.O_CREAT | os.O_TRUNC), stderr=subprocess.STDOUT)
+    openvpn_args = utils.ovpnArgs(config.openvpn_args, config.ca, config.cert)
+    # Set global variables
+    tunnel.log = config.log
+    utils.verbose = plib.verbose = config.verbose
 
     # Create and open read_only pipe to get server events
     utils.log('Creating pipe for server events', 3)
     r_pipe, write_pipe = os.pipe()
     read_pipe = os.fdopen(r_pipe)
 
+    # Init db and tunnels
+    peer_db = db.PeerManager(config.db)
+    tunnel_manager = tunnel.TunnelManager(write_pipe, peer_db, config.client_count, config.refresh_count, openvpn_args)
+
+    # Launch babel on all interfaces. WARNING : you have to be root to start babeld
+    interface_list = ['vifibnet'] + list(tunnel_manager.free_interface_set)
+    babel = plib.babel(network, internal_ip, interface_list,
+        stdout=os.open(os.path.join(config.log, 'vifibnet.babeld.log'),
+        os.O_WRONLY | os.O_CREAT | os.O_TRUNC), stderr=subprocess.STDOUT)
+
    # Establish connections
-    server_process = plib.server(internal_ip, network, config.max_clients, write_pipe, 
-            '--dev', 'vifibnet', *utils.ovpnArgs(config.openvpn_args, config.ca, config.cert),
-            stdout=os.open(os.path.join(utils.config.log, 'vifibnet.server.log'), os.O_WRONLY | os.O_CREAT | os.O_TRUNC))
+    server_process = plib.server(internal_ip, network, config.max_clients, config.dh, write_pipe, 
+            '--dev', 'vifibnet', *openvpn_args,
+            stdout=os.open(os.path.join(config.log, 'vifibnet.server.log'), os.O_WRONLY | os.O_CREAT | os.O_TRUNC))
     tunnel_manager.refresh()
 
     # Timed refresh initializing
@@ -75,7 +80,7 @@ def main():
     try:
         while True:
             ready, tmp1, tmp2 = select.select([read_pipe], [], [],
-                    max(0, next_refresh - timhttp://blogs.lesechos.fr/dominique-seux/de-mondialiser-les-telecoms-a11339.htmle.time()))
+                    max(0, next_refresh - time.time()))
             if ready:
                 peer_db.handle_message(read_pipe.readline())
             if time.time() >= next_refresh:

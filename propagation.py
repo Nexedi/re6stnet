@@ -1,5 +1,5 @@
-import socket
-import uuid
+#!/usr/bin/env python
+import socket, uuid
 import log
 
 # create an upd socket
