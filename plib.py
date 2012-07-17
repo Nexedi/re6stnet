@@ -31,9 +31,9 @@ def server(ip, pipe_fd, *args, **kw):
     return openvpn(
         '--tls-server',
         '--mode', 'server',
-        '--up', 'openvpn-up-server %s/%u' % (ip, len(utils.config.vifibnet)),
-        '--client-connect', 'openvpn-server-events ' + str(pipe_fd),
-        '--client-disconnect', 'openvpn-server-events ' + str(pipe_fd),
+        '--up', 'ovpn-server %s/%u' % (ip, len(utils.config.vifibnet)),
+        '--client-connect', 'ovpn-server ' + str(pipe_fd),
+        '--client-disconnect', 'ovpn-server ' + str(pipe_fd),
         '--dh', utils.config.dh,
         '--max-clients', str(utils.config.max_clients),
         *args, **kw)
@@ -44,8 +44,8 @@ def client(serverIp, pipe_fd, *args, **kw):
         '--nobind',
         '--client',
         '--remote', serverIp,
-        '--up', 'openvpn-up-client',
-        '--route-up', 'openvpn-route-up ' + str(pipe_fd),
+        '--up', 'ovpn-client',
+        '--route-up', 'ovpn-client ' + str(pipe_fd),
         *args, **kw)
 
 def babel(**kw):
