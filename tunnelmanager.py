@@ -2,7 +2,6 @@ import os, random
 import openvpn
 import utils
 import db
-from config import *
 
 connection_dict = {} # to remember current connections we made
 free_interface_set = set(('client1', 'client2', 'client3', 'client4', 'client5',
@@ -14,7 +13,7 @@ def startNewConnections(n, write_pipe):
             utils.log('Establishing a connection with id %s (%s:%s)' % (peer_id, ip, port), 2)
             iface = free_interface_set.pop()
             connection_dict[peer_id] = ( openvpn.client( ip, write_pipe, '--dev', iface, '--proto', proto, '--rport', str(port),
-                stdout=os.open(os.path.join(config.log, 'vifibnet.client.%s.log' % (peer_id,)), 
+                stdout=os.open(os.path.join(utils.config.log, 'vifibnet.client.%s.log' % (peer_id,)), 
                                os.O_WRONLY|os.O_CREAT|os.O_TRUNC) ),
                 iface)
             peers_db.usePeer(peer_id)
@@ -50,11 +49,11 @@ def refreshConnections(write_pipe):
     checkConnections()
     # Kill some random connections
     try:
-        for i in range(0, max(0, len(connection_dict) - config.client_count + config.refresh_count)):
+        for i in range(0, max(0, len(connection_dict) - utils.config.client_count + utils.config.refresh_count)):
             peer_id = random.choice(connection_dict.keys())
             killConnection(peer_id)
     except Exception:
         pass
     # Establish new connections
-    startNewConnections(config.client_count - len(connection_dict), write_pipe)
+    startNewConnections(utils.config.client_count - len(connection_dict), write_pipe)
 

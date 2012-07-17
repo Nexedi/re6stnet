@@ -10,23 +10,23 @@ import tunnelmanager
 
 def startBabel(**kw):
     args = ['babeld',
-            '-C', 'redistribute local ip %s' % (config.internal_ip),
+            '-C', 'redistribute local ip %s' % (utils.config.internal_ip),
             '-C', 'redistribute local deny',
             # Route VIFIB ip adresses
-            '-C', 'in ip %s::/%u' % (utils.ipFromBin(config.vifibnet), len(config.vifibnet)),
+            '-C', 'in ip %s::/%u' % (utils.ipFromBin(utils.config.vifibnet), len(utils.config.vifibnet)),
             # Route only addresse in the 'local' network,
             # or other entire networks
             #'-C', 'in ip %s' % (config.internal_ip),
             #'-C', 'in ip ::/0 le %s' % network_mask,
             # Don't route other addresses
             '-C', 'in deny',
-            '-d', str(config.verbose),
+            '-d', str(utils.config.verbose),
             '-s',
             ]
-    if config.babel_state:
-        args += '-S', config.babel_state
+    if utils.config.babel_state:
+        args += '-S', utils.config.babel_state
     args = args + ['vifibnet'] + list(tunnelmanager.free_interface_set)
-    if config.verbose >= 5:
+    if utils.config.verbose >= 5:
         print args
     return subprocess.Popen(args, **kw)
 
@@ -46,17 +46,14 @@ def handle_message(msg):
 def main():
     # Get arguments
     utils.getConfig()
-    global config
-    from utils import config
-    openvpn.config = config 
-    tunnelmanager.config = config
-    db.config = config
+    
     # Setup database
-    tunnelmanager.peers_db = db.PeersDB(config.db)
+    tunnelmanager.peers_db = db.PeersDB(utils.config.db)
 
     # Launch babel on all interfaces. WARNING : you have to be root to start babeld
     utils.log('Starting babel', 3)
-    babel = startBabel(stdout=os.open(os.path.join(config.log, 'vifibnet.babeld.log'), os.O_WRONLY | os.O_CREAT | os.O_TRUNC), stderr=subprocess.STDOUT)
+    babel = startBabel(stdout=os.open(os.path.join(utils.config.log, 'vifibnet.babeld.log'), 
+        os.O_WRONLY | os.O_CREAT | os.O_TRUNC), stderr=subprocess.STDOUT)
 
     # Create and open read_only pipe to get connect/disconnect events from openvpn
     utils.log('Creating pipe for openvpn events', 3)
@@ -65,14 +62,13 @@ def main():
 
     # Establish connections
     utils.log('Starting openvpn server', 3)
-    serverProcess = openvpn.server(config.internal_ip, write_pipe, '--dev', 'vifibnet',
-            stdout=os.open(os.path.join(config.log, 'vifibnet.server.log'), os.O_WRONLY | os.O_CREAT | os.O_TRUNC))
-    tunnelmanager.startNewConnections(config.client_count, write_pipe)
+    serverProcess = openvpn.server(utils.config.internal_ip, write_pipe, '--dev', 'vifibnet',
+            stdout=os.open(os.path.join(utils.config.log, 'vifibnet.server.log'), os.O_WRONLY | os.O_CREAT | os.O_TRUNC))
+    tunnelmanager.startNewConnections(utils.config.client_count, write_pipe)
 
     # Timed refresh initializing
-    next_refresh = time.time() + config.refresh_time
+    next_refresh = time.time() + utils.config.refresh_time
 
-    # TODO: use peers_db.populate(100) every once in a while ?
     # main loop
     try:
         while True:
@@ -83,7 +79,7 @@ def main():
             if time.time() >= next_refresh:
                 tunnelmanager.peers_db.populate(10)
                 tunnelmanager.refreshConnections(write_pipe)
-                next_refresh = time.time() + config.refresh_time
+                next_refresh = time.time() + utils.config.refresh_time
     except KeyboardInterrupt:
         return 0
 

@@ -2,6 +2,8 @@ import time
 import argparse
 from OpenSSL import crypto
 
+config = None
+
 def log(message, verbose_level):
     if config.verbose >= verbose_level:
         print time.strftime("%d-%m-%Y %H:%M:%S : " + message)

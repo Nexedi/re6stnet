@@ -1,4 +1,5 @@
 import subprocess
+import utils
 import os
 
 def openvpn(*args, **kw):
@@ -15,9 +16,9 @@ def openvpn(*args, **kw):
             # '--ping', '1',
             # '--ping-exit', '3',
         '--group', 'nogroup',
-        '--verb', str(config.verbose),
-        ] + list(args) + config.openvpn_args
-    if config.verbose >= 5:
+        '--verb', str(utils.config.verbose),
+        ] + list(args) + utils.config.openvpn_args
+    if utils.config.verbose >= 5:
         print repr(args)
     return subprocess.Popen(args, **kw)
 
@@ -28,11 +29,11 @@ def server(ip, pipe_fd, *args, **kw):
     return openvpn(
         '--tls-server',
         '--mode', 'server',
-        '--up', 'up-server %s/%u' % (ip, len(config.vifibnet)),
+        '--up', 'up-server %s/%u' % (ip, len(utils.config.vifibnet)),
         '--client-connect', 'client-connect ' + str(pipe_fd),
         '--client-disconnect', 'client-connect ' + str(pipe_fd),
-        '--dh', config.dh,
-        '--max-clients', str(config.max_clients),
+        '--dh', utils.config.dh,
+        '--max-clients', str(utils.config.max_clients),
         *args, **kw)
 
 def client(serverIp, pipe_fd, *args, **kw):
