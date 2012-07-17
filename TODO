@@ -1,4 +1,6 @@
 Bugs :
+    Find a name for the project : the projet is ( or should be ) independant from vifib, openvpn, babel,
+         and so should the name; btw we aim to build a distributed, scalable, resilient VPN....
     When no peer is avalaible without the --no-boot option, it crash => see below
     Once in a while, when exiting vifibnet ( not very properly, via Ctrl+C ), processes ( openvpn and babel )
          still remain and disturb further attemps ( must be killed for vifibnet to work again )
@@ -7,6 +9,7 @@ To be done :
     Replace comments at the beginning of functions with docstrings & give all fn docstrings
     Do a clean-up in the import
     Remove the parameters to choose the number of clients
+    Use the server events ( client connection/deconnection ) to do something useful
 
 To be discuss:
     Remove the --no-boot option since we know when no node is avalaible
