@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 import sqlite3, xmlrpclib, time
 import utils
 

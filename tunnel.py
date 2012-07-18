@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 import os, random, traceback, time
 import plib, utils, db
 
