@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 import argparse, time, struct, socket
 from OpenSSL import crypto
 

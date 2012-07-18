@@ -49,16 +49,16 @@ int main(int argc, char** argv)
             for(float a=0.01; a<=1; a+=0.05)
             {
                 int seed = rng();
-                outputStrings.push_back(async(launch::async, [seed, n, k, a]() 
+                outputStrings.push_back(async(launch::async, [seed, n, k, a]()
                     {
                         Results results = Simulate(seed, n, k, 3*k, 10000, a, 1);
                         ostringstream out;
-                        out << n << "," << k << "," << a << "," << 3*k << "," 
-                            << results.avgDistance << "," 
-                            << results.disconnected << "," 
-                            << results.disconnectionProba << "," 
+                        out << n << "," << k << "," << a << "," << 3*k << ","
+                            << results.avgDistance << ","
+                            << results.disconnected << ","
+                            << results.disconnectionProba << ","
                             << results.maxDistanceReached << ","
-                            << results.arityDistrib[3*k] << "," 
+                            << results.arityDistrib[3*k] << ","
                             << results.minKConnexity << ","
                             << results.avgAccessibility
                             << endl;

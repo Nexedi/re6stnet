@@ -9,7 +9,7 @@ using namespace std;
 
 template<class T>
 struct nullable
-{ 
+{
     T v;
     bool null;
 
@@ -75,7 +75,7 @@ public:
     double arityTooBig;
     double distanceTooBig;
     int64_t disconnected;
-    
+
     int maxArity;
     int maxDistance;
 

@@ -1,10 +1,9 @@
-#!/usr/bin/env python
 import sqlite3, xmlrpclib, time
 import utils
 
 class PeerManager:
 
-    def __init__(self, dbPath, server, server_port, refresh_time, external_ip, internal_ip, port, proto, db_size):
+    def __init__(self, db_path, server, server_port, refresh_time, external_ip, internal_ip, port, proto, db_size):
         self._refresh_time = refresh_time
         self._external_ip = external_ip
         self._internal_ip = internal_ip
@@ -14,7 +13,7 @@ class PeerManager:
         self._proxy = xmlrpclib.ServerProxy('http://%s:%u' % (server, server_port))
 
         utils.log('Connectiong to peers database', 4)
-        self._db = sqlite3.connect(dbPath, isolation_level=None)
+        self._db = sqlite3.connect(db_path, isolation_level=None)
         utils.log('Preparing peers database', 4)
         try:
             self._db.execute("UPDATE peers SET used = 0")
@@ -32,12 +31,12 @@ class PeerManager:
 
     def _declare(self):
         if self._external_ip != None:
-            utils.log('Declaring our connections info', 3)   
+            utils.log('Declaring our connections info', 3)
             self._proxy.declare((self._internal_ip, self._external_ip, self._external_port, self._proto))
         else:
             utils.log('Warning : could not declare the external ip because it is unknown', 4)
 
-    def _populate(self):   
+    def _populate(self):
         utils.log('Populating the peers DB', 2)
         new_peer_list = self._proxy.getPeerList(self._db_size, self._internal_ip)
         self._db.executemany("INSERT OR IGNORE INTO peers (ip, port, proto, used) VALUES (?,?,?,0)", new_peer_list)
@@ -45,9 +44,9 @@ class PeerManager:
             self._db.execute("DELETE FROM peers WHERE ip = ?", (self._external_ip,))
         utils.log('New peers : %s' % ', '.join(map(str, new_peer_list)), 5)
 
-    def getUnusedPeers(self, nPeers):
+    def getUnusedPeers(self, peer_count):
         return self._db.execute("SELECT id, ip, port, proto FROM peers WHERE used = 0 "
-                "ORDER BY RANDOM() LIMIT ?", (nPeers,))
+                "ORDER BY RANDOM() LIMIT ?", (peer_count,))
 
     def usePeer(self, id):
         utils.log('Updating peers database : using peer ' + str(id), 5)

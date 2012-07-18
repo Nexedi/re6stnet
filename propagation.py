@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 import socket, uuid
 import log
 
@@ -18,18 +17,18 @@ class RingMember:
         return str(self.id) + ' ' + self.ip + ' ' + str(self.port)
 
 class Ring:
-    
-    def __init__(self, entryPoint):
+
+    def __init__(self, entry_point):
         # initialize the connection
         self.sock = socket.socket( socket.AF_INET6, socket.SOCK_DGRAM )
         self.sock.bind(('', 0))
         self.me = RingMember(uuid.uuid1().int ,'',  self.sock.getsockname()[1]) # TODO : get the address
         # to enter the ring
         self.predecessor = None
-        if entryPoint == None:
+        if entry_point == None:
             self.successor = self.me
         else:
-            self.send('FIND_SUCCESSOR ' + str(self.me.id) + ' ' + self.me.toString(), entryPoint)
+            self.send('FIND_SUCCESSOR ' + str(self.me.id) + ' ' + self.me.toString(), entry_point)
         log.log('Init the ring with me = ' + self.me.toString(), 3)
 
     # TODO :
@@ -65,16 +64,17 @@ class Ring:
 #        if n < x && x < self.successor:
 #            self.successor = x
 #            SEND notify self.ip, self.id TO self.successor
-    
+
 #    def notify(self, n2)
 #        if self.predecessor == None || (predecessor < n2 && n2 < n):
 #            self.predecessor = n2
 
     # to be called periodically
 #    def fixFingers(self)
+#        # XXX: naming - should be finger_count
 #        next = (next + 1) mod (nFingers) # Or Random, cf google
 #        finger[next] = find_successor(n+2^{next-1});
-    
+
     # to be called periodically
 #    def checkPredecessor(self)
 #        if NO PING from self.predecessor:
