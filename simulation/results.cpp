@@ -1,6 +1,6 @@
 #include "main.h"
 
-Results::Results(int maxArity, int maxDistance) : 
+Results::Results(int maxArity, int maxDistance) :
     maxArity(maxArity), maxDistance(maxDistance)
 {
     arityDistrib = new double[maxArity+1];
@@ -54,7 +54,7 @@ void Results::AddDistanceSample(int distance)
 {
     if(distance == -1)
         disconnected++;
-    else 
+    else
     {
         avgDistance += distance;
         if(distance <= maxDistance)

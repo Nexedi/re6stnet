@@ -17,7 +17,7 @@ class RingMember:
         return str(self.id) + ' ' + self.ip + ' ' + str(self.port)
 
 class Ring:
-    
+
     def __init__(self, entryPoint):
         # initialize the connection
         self.sock = socket.socket( socket.AF_INET6, socket.SOCK_DGRAM )
@@ -64,7 +64,7 @@ class Ring:
 #        if n < x && x < self.successor:
 #            self.successor = x
 #            SEND notify self.ip, self.id TO self.successor
-    
+
 #    def notify(self, n2)
 #        if self.predecessor == None || (predecessor < n2 && n2 < n):
 #            self.predecessor = n2
@@ -73,7 +73,7 @@ class Ring:
 #    def fixFingers(self)
 #        next = (next + 1) mod (nFingers) # Or Random, cf google
 #        finger[next] = find_successor(n+2^{next-1});
-    
+
     # to be called periodically
 #    def checkPredecessor(self)
 #        if NO PING from self.predecessor:

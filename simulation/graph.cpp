@@ -3,7 +3,7 @@
 #include <map>
 #include <queue>
 
-Graph::Graph(int size, int k, int maxPeers, mt19937& rng) : 
+Graph::Graph(int size, int k, int maxPeers, mt19937& rng) :
     distrib(uniform_int_distribution<int>(0, size-1)),
     size(size), generator(rng)
 {
@@ -17,9 +17,9 @@ Graph::Graph(int size, int k, int maxPeers, mt19937& rng) :
         {
             int otherNode;
 
-            while(alreadyConnected.count(otherNode = distrib(rng)) == 1 
+            while(alreadyConnected.count(otherNode = distrib(rng)) == 1
                 || otherNode > i && adjacency[otherNode].size() > maxPeers-10
-                || adjacency[otherNode].size() > maxPeers) 
+                || adjacency[otherNode].size() > maxPeers)
             { }
             adjacency[i].push_back(otherNode);
             adjacency[otherNode].push_back(i);
@@ -75,7 +75,7 @@ int Graph::CountUnreachableFrom(int node)
         unAccessible--;
         toVisit.pop();
     }
-    
+
     return unAccessible;
 }
 
@@ -156,7 +156,7 @@ void MinCutGraph::Merge(int nMerge, mt19937& rng)
 
         int n1 = edges[eId].v.first;
         int n2 = edges[eId].v.second;
-   
+
         // anilate n2
         nodes[n2].null = true;
 
