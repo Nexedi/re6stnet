@@ -17,9 +17,6 @@ def openvpn(hello_interval, *args, **kw):
     utils.log(str(args), 5)
     return subprocess.Popen(args, **kw)
 
-# TODO : set iface up when creating a server/client
-# ! check working directory before launching up script ?
-
 def server(server_ip, network, max_clients, dh_path, pipe_fd, port, proto, hello_interval, *args, **kw):
     utils.log('Starting server', 3)
     return openvpn(hello_interval,

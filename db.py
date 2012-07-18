@@ -31,10 +31,10 @@ class PeerManager:
 
     def _declare(self):
         if self._external_ip != None:
-            utils.log('Declaring our connections info', 3)
+            utils.log('Sendin connection info to server', 3)
             self._proxy.declare((self._internal_ip, self._external_ip, self._external_port, self._proto))
         else:
-            utils.log('Warning : could not declare the external ip because it is unknown', 4)
+            utils.log('Warning : could not send the external ip because it is unknown', 4)
 
     def _populate(self):
         utils.log('Populating the peers DB', 2)
