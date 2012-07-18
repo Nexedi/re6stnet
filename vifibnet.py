@@ -24,6 +24,10 @@ def getConfig():
             help='Path to dh file')
     _('--babel-state', default='/var/lib/vifibnet/babel_state',
             help='Path to babeld state-file')
+    _('--hello', type=int, default=30,
+            help='Hello interval for babel, in seconds')
+    _('-w', '--wireless', action='store_true',
+            help='Set all interfaces to be treated as wireless interfaces ( in babel )')
     _('--verbose', '-v', default=0, type=int,
             help='Defines the verbose level')
     _('--ca', required=True,
@@ -73,17 +77,18 @@ def main():
 
     peer_db = db.PeerManager(config.db, config.server, config.server_port, config.peers_db_refresh,
             config.external_ip, internal_ip, config.external_port, config.proto, 200)
-    tunnel_manager = tunnel.TunnelManager(write_pipe, peer_db, openvpn_args, config.tunnel_refresh, config.connection_count, config.refresh_rate)
+    tunnel_manager = tunnel.TunnelManager(write_pipe, peer_db, openvpn_args, config.hello,
+            config.tunnel_refresh, config.connection_count, config.refresh_rate)
 
     # Launch babel on all interfaces. WARNING : you have to be root to start babeld
     interface_list = ['vifibnet'] + list(tunnel_manager.free_interface_set)
-    router = plib.router(network, internal_ip, interface_list,
+    router = plib.router(network, internal_ip, interface_list, config.wireless, config.hello,
         stdout=os.open(os.path.join(config.log, 'vifibnet.babeld.log'),
         os.O_WRONLY | os.O_CREAT | os.O_TRUNC), stderr=subprocess.STDOUT)
 
    # Establish connections
     server_process = plib.server(internal_ip, network, config.connection_count, config.dh, write_pipe,
-            config.internal_port, config.proto, '--dev', 'vifibnet', *openvpn_args,
+            config.internal_port, config.proto, config.hello, '--dev', 'vifibnet', *openvpn_args,
             stdout=os.open(os.path.join(config.log, 'vifibnet.server.log'), os.O_WRONLY | os.O_CREAT | os.O_TRUNC))
 
     # main loop

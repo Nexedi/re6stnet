@@ -5,11 +5,12 @@ log = None
 
 class TunnelManager:
 
-    def __init__(self, write_pipe, peer_db, openvpn_args, refresh, connection_count, refresh_rate):
+    def __init__(self, write_pipe, peer_db, openvpn_args, hello_interval, refresh, connection_count, refresh_rate):
         self._write_pipe = write_pipe
         self._peer_db = peer_db
         self._connection_dict = {}
         self._ovpn_args = openvpn_args
+        self._hello = hello_interval
         self._refresh_time = refresh
         self.free_interface_set = set(('client1', 'client2', 'client3', 'client4', 'client5',
                                        'client6', 'client7', 'client8', 'client9', 'client10'))
@@ -53,10 +54,12 @@ class TunnelManager:
             for peer_id, ip, port, proto in self._peer_db.getUnusedPeers(self._client_count - len(self._connection_dict)):
                 utils.log('Establishing a connection with id %s (%s:%s)' % (peer_id, ip, port), 2)
                 iface = self.free_interface_set.pop()
-                self._connection_dict[peer_id] = ( plib.client( ip, self._write_pipe,
-                    '--dev', iface, '--proto', proto, '--rport', str(port), *self._ovpn_args,
-                    stdout=os.open(os.path.join(log, 'vifibnet.client.%s.log' % (peer_id,)),
-                                   os.O_WRONLY|os.O_CREAT|os.O_TRUNC) ), iface)
+                self._connection_dict[peer_id] = ( 
+                        plib.client( ip, self._write_pipe, self._hello,
+                            '--dev', iface, '--proto', proto, '--rport', str(port), *self._ovpn_args,
+                            stdout=os.open(os.path.join(log, 'vifibnet.client.%s.log' % (peer_id,)),
+                                os.O_WRONLY|os.O_CREAT|os.O_TRUNC) ),
+                        iface)
                 self._peer_db.usePeer(peer_id)
         except KeyError:
             utils.log("Can't establish connection with %s : no available interface" % ip, 2)

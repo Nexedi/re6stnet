@@ -3,15 +3,14 @@ import utils
 
 verbose = None
 
-def openvpn(*args, **kw):
+def openvpn(hello_interval, *args, **kw):
     args = ['openvpn',
         '--dev-type', 'tap',
         '--persist-tun',
         '--persist-key',
         '--script-security', '2',
         '--user', 'nobody',
-        '--ping', '1',
-        '--ping-exit', '3',
+        '--ping-exit', str(4 * hello_interval),
         '--group', 'nogroup',
         '--verb', str(verbose),
         ] + list(args)
@@ -21,9 +20,9 @@ def openvpn(*args, **kw):
 # TODO : set iface up when creating a server/client
 # ! check working directory before launching up script ?
 
-def server(server_ip, network, max_clients, dh_path, pipe_fd, port, proto, *args, **kw):
+def server(server_ip, network, max_clients, dh_path, pipe_fd, port, proto, hello_interval, *args, **kw):
     utils.log('Starting server', 3)
-    return openvpn(
+    return openvpn(hello_interval,
         '--tls-server',
         '--mode', 'server',
         '--up', 'ovpn-server %s/%u' % (server_ip, len(network)),
@@ -35,9 +34,9 @@ def server(server_ip, network, max_clients, dh_path, pipe_fd, port, proto, *args
         '--proto', proto,
         *args, **kw)
 
-def client(server_ip, pipe_fd, *args, **kw):
+def client(server_ip, pipe_fd, hello_interval, *args, **kw):
     utils.log('Starting client', 5)
-    return openvpn(
+    return openvpn(hello_interval,
         '--nobind',
         '--client',
         '--remote', server_ip,
@@ -45,7 +44,8 @@ def client(server_ip, pipe_fd, *args, **kw):
         '--route-up', 'ovpn-client ' + str(pipe_fd),
         *args, **kw)
 
-def router(network, internal_ip, interface_list, **kw):
+def router(network, internal_ip, interface_list,
+           wireless, hello_interval, **kw):
     utils.log('Starting babel', 3)
     args = ['babeld',
             '-C', 'redistribute local ip %s' % (internal_ip),
@@ -59,10 +59,14 @@ def router(network, internal_ip, interface_list, **kw):
             # Don't route other addresses
             '-C', 'in deny',
             '-d', str(verbose),
+            '-h', str(hello_interval),
+            '-H', str(hello_interval),
             '-s',
             ]
     #if utils.config.babel_state:
     #    args += '-S', utils.config.babel_state
+    if wireless:
+        args.append('-w')
     args = args + interface_list
     utils.log(str(args), 5)
     return subprocess.Popen(args, **kw)
