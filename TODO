@@ -8,12 +8,11 @@ Bugs :
 
 To be done :
     Replace comments at the beginning of functions with docstrings & give all fn docstrings
-    Do a clean-up in the import
-    Remove the parameters to choose the number of clients
     Use the server events ( client connection/deconnection ) to do something usefull
     In peers DB, remove some peers when they are too many of them
     Contact the server using vifibnet and not the underlying network when possible
     Use a timeout for the peersDB
+    The peer DB size should depend on the number of connection and the refresh time
 
 To be discuss:
     U : Remove the --no-boot option since we know when no node is avalaible
@@ -21,16 +20,10 @@ To be discuss:
         irl it should never happen, no-boot is a debug option
     U : Ok, but the server knows when no peers is avalaible, doesn't he ?
 
-    How we choose which protocol we use :
-        IMO, we should use UDP. I've read many times than TCP other TCP can be catastrophic in terme of performance
-        Every time a packet is lost, it is resend 2 times, one for each TCP tunnel
-        And many GW allow UDP port forwarding (for bittorent, Xbox, ...) but not TCP port forwarding
-
-    Use peers_db.populate(100) every once in a while ?
-    G : yes but be warry of the refresh time ( populate the db once every 20s is bad.. ) 
-    U : I agree. Once evry hours should be sufficient, and when their too few peers avalaible.
-
     G : don't reconnect to server each time we repopulate in peers_db ?
-    U : we might recontact the server evry 1H or even less. So i think it is a good thing not to keep the connection alive
+    U : From what I've read on the internet, when you create a server object, you don't connect to the server,
+        You only connect to the server once you send a request for a methode and then you can automatically use the same connection for 15sec
 
-    Why --ping-exit had been removed form openvpn args ? without this we can have zombie connections
+    Is the bootstrap node used ?
+
+    We should separate the getNodesList and advertise options
