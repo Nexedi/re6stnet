@@ -22,13 +22,16 @@ To be done :
     Handle LAN internally in order not to have catastrophic results ....
 
 To be discussed:
-    G : To get traffic stats ( bytes in/out ), you can use
+    G, J : To get traffic stats ( bytes in/out ), you can use
           /sys/class/net/interface/statistics/rx_bytes, etc...
         or /proc/net/dev/snmp6/interface ( all in one file ). This can be enough
         if used as follows: get traffic diff from last time we checked in order
         to choose which connection is significantly unused compared to others,
         and close it. Of course, too recent connections (i.e. those for which we
         have no previous stat) would be always kept.
+        This should be combined with routing table (i.e. how many nodes are
+        served by each tunnel), which is possibly redundant.
+        ip6tables should be avoided if possible.
 
     U : Babel seems to be very long to establish the routes : maybe we should
         tell him thant we are not on a wired network but on a mobile network ?
