@@ -21,12 +21,12 @@ def openvpn(*args, **kw):
 # TODO : set iface up when creating a server/client
 # ! check working directory before launching up script ?
 
-def server(serverIp, network, max_clients, dh_path, pipe_fd, port, proto, *args, **kw):
+def server(server_ip, network, max_clients, dh_path, pipe_fd, port, proto, *args, **kw):
     utils.log('Starting server', 3)
     return openvpn(
         '--tls-server',
         '--mode', 'server',
-        '--up', 'ovpn-server %s/%u' % (serverIp, len(network)),
+        '--up', 'ovpn-server %s/%u' % (server_ip, len(network)),
         '--client-connect', 'ovpn-server ' + str(pipe_fd),
         '--client-disconnect', 'ovpn-server ' + str(pipe_fd),
         '--dh', dh_path,
@@ -35,12 +35,12 @@ def server(serverIp, network, max_clients, dh_path, pipe_fd, port, proto, *args,
         '--proto', proto,
         *args, **kw)
 
-def client(serverIp, pipe_fd, *args, **kw):
+def client(server_ip, pipe_fd, *args, **kw):
     utils.log('Starting client', 5)
     return openvpn(
         '--nobind',
         '--client',
-        '--remote', serverIp,
+        '--remote', server_ip,
         '--up', 'ovpn-client',
         '--route-up', 'ovpn-client ' + str(pipe_fd),
         *args, **kw)

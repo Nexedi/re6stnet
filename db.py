@@ -3,7 +3,7 @@ import utils
 
 class PeerManager:
 
-    def __init__(self, dbPath, server, server_port, refresh_time, external_ip, internal_ip, port, proto, db_size):
+    def __init__(self, db_path, server, server_port, refresh_time, external_ip, internal_ip, port, proto, db_size):
         self._refresh_time = refresh_time
         self._external_ip = external_ip
         self._internal_ip = internal_ip
@@ -13,7 +13,7 @@ class PeerManager:
         self._proxy = xmlrpclib.ServerProxy('http://%s:%u' % (server, server_port))
 
         utils.log('Connectiong to peers database', 4)
-        self._db = sqlite3.connect(dbPath, isolation_level=None)
+        self._db = sqlite3.connect(db_path, isolation_level=None)
         utils.log('Preparing peers database', 4)
         try:
             self._db.execute("UPDATE peers SET used = 0")
@@ -44,9 +44,9 @@ class PeerManager:
             self._db.execute("DELETE FROM peers WHERE ip = ?", (self._external_ip,))
         utils.log('New peers : %s' % ', '.join(map(str, new_peer_list)), 5)
 
-    def getUnusedPeers(self, nPeers):
+    def getUnusedPeers(self, peer_count):
         return self._db.execute("SELECT id, ip, port, proto FROM peers WHERE used = 0 "
-                "ORDER BY RANDOM() LIMIT ?", (nPeers,))
+                "ORDER BY RANDOM() LIMIT ?", (peer_count,))
 
     def usePeer(self, id):
         utils.log('Updating peers database : using peer ' + str(id), 5)
