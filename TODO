@@ -25,4 +25,4 @@ To be discuss:
     U : From what I've read on the internet, when you create a server object, you don't connect to the server,
         You only connect to the server once you send a request for a methode and then you can automatically use the same connection for 15sec
 
-    Is the bootstrap node used ?
+    Use more than one boostrap node
