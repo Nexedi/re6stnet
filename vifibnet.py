@@ -7,7 +7,7 @@ def getConfig():
     parser = argparse.ArgumentParser(
             description='Resilient virtual private network application')
     _ = parser.add_argument
-    # Server address MUST be a vifib address ( else requests will be denied )
+    # Server address SHOULD be a vifib address ( else requests will be denied )
     _('--server', required=True,
             help='Address for peer discovery server')
     _('--server-port', required=True, type=int,

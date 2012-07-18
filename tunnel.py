@@ -48,7 +48,7 @@ class TunnelManager:
         self._peer_db.unusePeer(peer_id)
 
     def _makeNewTunnels(self):
-        utils.log('Making %i new tunnels' % (self._client_count - len(self._connection_dict)), 3)
+        #utils.log('Making %i new tunnels' % (self._client_count - len(self._connection_dict)), 3)
         try:
             for peer_id, ip, port, proto in self._peer_db.getUnusedPeers(self._client_count - len(self._connection_dict)):
                 utils.log('Establishing a connection with id %s (%s:%s)' % (peer_id, ip, port), 2)

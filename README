@@ -1,9 +1,10 @@
-Vsifibnet is a daemon setting up a resilient virtual private network over the internet
+Vifibnet is a daemon setting up a resilient virtual private network over the internet
 
 The organisation of the code
     vifibnet.py         Just contain the main loop and the init
     plib.py             To launch server/client/routing processes
-    utils.py            Small functions to do some usefull job
+    utils.py            Small functions to do some useful job
     db.py               Function to manage peers
     tunnel.py           To choose wich connection delete/keep/...
     upnpigd.py          To open a port
+
