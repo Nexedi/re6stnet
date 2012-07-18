@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import argparse, errno, math, os, select, subprocess, sys, time, traceback
+import argparse, errno, math, os, select, subprocess, sys, time, traceback, upnpigd
 from OpenSSL import crypto
 import db, plib, upnpigd, utils, tunnel
 
@@ -12,7 +12,7 @@ def getConfig():
             help='Address for peer discovery server')
     _('--server-port', required=True, type=int,
             help='Peer discovery server port')
-    _('-l', '--log', default='/var/log',
+    _('-log', '-l', default='/var/log',
             help='Path to vifibnet logs directory')
     _('--tunnel-refresh', default=300, type=int,
             help='the time (seconds) to wait before changing the connections')
@@ -65,6 +65,12 @@ def main():
     read_pipe = os.fdopen(r_pipe)
 
     # Init db and tunnels
+    if config.external_ip == None:
+        try:
+            config.external_ip, config.external_port = upnpigd.ForwardViaUPnP(config.internal_port)
+        except Exception:
+            utils.log('An atempt to forward a port via UPnP failed', 5)
+
     peer_db = db.PeerManager(config.db, config.server, config.server_port, config.peers_db_refresh,
             config.external_ip, internal_ip, config.external_port, config.proto, 200)
     tunnel_manager = tunnel.TunnelManager(write_pipe, peer_db, openvpn_args, config.tunnel_refresh, config.connection_count, config.refresh_rate)

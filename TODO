@@ -13,6 +13,7 @@ To be done :
     Contact the server using vifibnet and not the underlying network when possible
     Use a timeout for the peersDB
     The peer DB size should depend on the number of connection and the refresh time
+    Specify a lease duration in ForwardViaUPnP
 
 To be discuss:
     U : Remove the --no-boot option since we know when no node is avalaible
@@ -25,5 +26,3 @@ To be discuss:
         You only connect to the server once you send a request for a methode and then you can automatically use the same connection for 15sec
 
     Is the bootstrap node used ?
-
-    We should separate the getNodesList and advertise options

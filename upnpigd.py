@@ -10,7 +10,7 @@ def ForwardViaUPnP(localPort):
 	u.selectigd()
 	externalPort = 1194
 	while True:
-		while u.getspecificportmapping(externalPort, 'TCP') != None:
+		while u.getspecificportmapping(externalPort, 'UDP') != None:
 			externalPort = max(externalPort + 1, 49152)
 			if externalPort == 65536:
 				raise Exception
@@ -18,18 +18,3 @@ def ForwardViaUPnP(localPort):
 			return (u.externalipaddress(), externalPort)
 
 # TODO : specify a lease duration
-# TODO : use more precises exceptions
-# TODO : be sure that GetLocalIp do not bug
-
-def GetLocalIp():
-	s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-	s.connect(('10.8.8.8', 0))
-	return s.getsockname()[0]
-
-
-def GetExternalInfo(localPort):
-	try:
-		return  ForwardViaUPnP(localPort)
-	except Exception:
-		return (GetLocalIp(), localPort)
-
