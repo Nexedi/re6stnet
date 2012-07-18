@@ -1,25 +1,31 @@
 #!/usr/bin/env python
-import os, random, traceback
+import os, random, traceback, time
 import plib, utils, db
 
 log = None
 
 class TunnelManager:
 
-    def __init__(self, write_pipe, peer_db, client_count, refresh_count, openvpn_args):
+    def __init__(self, write_pipe, peer_db, openvpn_args, refresh, connection_count, refresh_rate):
         self._write_pipe = write_pipe
         self._peer_db = peer_db
         self._connection_dict = {}
-        self._client_count = client_count
-        self._refresh_count = refresh_count
         self._ovpn_args = openvpn_args
+        self._refresh_time = refresh
         self.free_interface_set = set(('client1', 'client2', 'client3', 'client4', 'client5',
                                        'client6', 'client7', 'client8', 'client9', 'client10'))
+        self.next_refresh = time.time()
+
+        # TODO : choose this automatically
+        self._client_count = connection_count/2
+        self._refresh_count = refresh_rate*self._client_count
 
     def refresh(self):
+        utils.log('Refreshing the tunnels', 2)
         self._cleanDeads()
         self._removeSomeTunnels()
         self._makeNewTunnels()
+        self.next_refresh = time.time() + self._refresh_time
 
     def _cleanDeads(self):
         for id in self._connection_dict.keys():
@@ -43,6 +49,7 @@ class TunnelManager:
         self._peer_db.unusePeer(peer_id)
 
     def _makeNewTunnels(self):
+        utils.log('Making %i new tunnels' % (self._client_count - len(self._connection_dict)), 3)
         try:
             for peer_id, ip, port, proto in self._peer_db.getUnusedPeers(self._client_count - len(self._connection_dict)):
                 utils.log('Establishing a connection with id %s (%s:%s)' % (peer_id, ip, port), 2)
