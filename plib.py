@@ -68,3 +68,11 @@ def router(network, internal_ip, interface_list,
     utils.log(str(args), 5)
     return subprocess.Popen(args, **kw)
 
+def watch(interface):
+    return ( subprocess.call(['ip6tables', '-I', 'INPUT', '-i', interface]) and
+             subprocess.call(['ip6tables', '-I', 'OUTPUT', '-o', interface]))
+
+def unwatch(interface):
+    return ( subprocess.call(['ip6tables', '-D', 'INPUT', '-i', interface]) and
+             subprocess.call(['ip6tables', '-D', 'OUTPUT', '-o', interface]))
+

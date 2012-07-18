@@ -54,7 +54,7 @@ class TunnelManager:
             for peer_id, ip, port, proto in self._peer_db.getUnusedPeers(self._client_count - len(self._connection_dict)):
                 utils.log('Establishing a connection with id %s (%s:%s)' % (peer_id, ip, port), 2)
                 iface = self.free_interface_set.pop()
-                self._connection_dict[peer_id] = ( 
+                self._connection_dict[peer_id] = (
                         plib.client( ip, self._write_pipe, self._hello,
                             '--dev', iface, '--proto', proto, '--rport', str(port), *self._ovpn_args,
                             stdout=os.open(os.path.join(log, 'vifibnet.client.%s.log' % (peer_id,)),

@@ -1,41 +1,70 @@
 For Ulysse : useful is spelled with only ONE l and not two.....
+            + ALL files should now respect a maximum 80 rows convention
 
 Bugs :
-    When no peer is avalaible, the setup crash without the --no-boot option => see below
+    When no peer is avalaible, the setup crash without the --no-boot option
+    => see below
 
 To be done :
-   Use an algorithm to choose which connections to keep and/or establish instead or pure randomness
-    Find a name for the project : the projet is ( or should be ) independant from vifib, openvpn, babel,
-         and so should the name; btw we aim to build a distributed, scalable, resilient VPN....
-    Replace comments at the beginning of functions with docstrings & give all fn docstrings
-    Use the server events ( client connection/deconnection ) to do something useful
-    In peers DB, remove some peers when they are too many of them -> remove the dead peers
+    Use an algorithm to choose which connections to keep and/or establish
+    instead of pure randomness
+    Find a name for the project : the projet is ( or should be ) independant
+    from vifib, openvpn, babel, and so should the name; btw we aim to build a
+    distributed, scalable, resilient VPN.... ( if it helps with the name )
+    Replace comments at the beginning of functions with docstrings & give all
+    fn docstrings
+    Use the server events ( client connection/deconnection ) to do something
+    useful
+    In peers DB, remove some peers when they are too many of them -> remove the
+    dead peers
     Use a timeout for the peersDB -> ?, removing the dead peers should be enough
     Specify a lease duration in ForwardViaUPnP
+    Handle LAN internally in order not to have catastrophic results ....
 
 To be discussed:
-    U : Babel seems to be very long to establish the routes : maybe we should tell him thant we are not on a wired network but on a mobile network ?
-    G : babel establish routes quickly enough i'd say. There are two new options : hello and wireless, for hello_interval and
-        treating all interfaces as wireless. However, treating an interface as wireless doesn't lessen the hello_interval, it only
-        changes how babel estimates quality link, and cost.
+    G : To get traffic stats ( bytes in/out ), you can use
+          /sys/class/net/interface/statistics/rx_bytes, etc...
+        or /proc/net/dev/snmp6/interface ( all in one file ). This can be enough
+        if used as follows: get traffic diff from last time we checked in order
+        to choose which connection is significantly unused compared to others,
+        and close it. Of course, too recent connections (i.e. those for which we
+        have no previous stat) would be always kept.
 
-    U : Contact the server using vifibnet and not the underlying network when possible
-    G : done by giving the vifibnet address of the server. Anyways, if you give the 'internet' address of the server,
-        it CANNOT be reached via vifib, as there isn't yet a border vpn through which the internet traffic would be routed
+    U : Babel seems to be very long to establish the routes : maybe we should
+        tell him thant we are not on a wired network but on a mobile network ?
+    G : babel establish routes quickly enough i'd say. There are two new
+        options : hello and wireless, for hello_interval and treating all
+        interfaces as wireless. However, treating an interface as wireless
+        doesn't lessen the hello_interval, it only changes how babel estimates
+        quality link, and cost.
 
-    U : The peer DB size should depend on the number of connection and the refresh time
-    G : ?! I don't agree, the db size should be proportional ( with a factor like 0.01 or less ) to the total number of peers in the entire network, with maybe a max size.
+    U : Contact the server using vifibnet and not the underlying network when
+        possible
+    G : done by giving the vifibnet address of the server. Anyways, if you give
+        the 'internet' address of the server, it CANNOT be reached via vifib,
+        as there isn't yet a border vpn through which the internet traffic
+        would be routed
+
+    U : The peer DB size should depend on the number of connection and the
+        refresh time
+    G : ?! I don't agree, the db size should be proportional ( with a factor
+        like 0.01 or less ) to the total number of peers in the entire network,
+        with maybe a max size.
 
     U : Remove the --no-boot option since we know when no node is avalaible
     G : the no-boot option is only useful when the server knows no peer,
         irl it should never happen, no-boot is a debug option
     U : Ok, but the server knows when no peers is avalaible, doesn't he ?
-    G : Well when no peer is available the SQL request ( + next() method ) raise a StopIteration exception
+    G : Well when no peer is available the SQL request ( + next() method ) raise
+        a StopIteration exception
 
     G : don't reconnect to server each time we repopulate in peers_db ?
-    U : From what I've read on the internet, when you create a server object, you don't connect to the server,
-        You only connect to the server once you send a request for a methode and then you can automatically use the same connection for 15sec
-    G : ok, it justs need testing ( for when some requests for the server will require to be plugged in the network )
+    U : From what I've read on the internet, when you create a server object,
+        you don't connect to the server, You only connect to the server once you
+        send a request for a methode and then you can automatically use the same
+        connection for 15sec
+    G : ok, it justs need testing ( for when some requests for the server will
+        require to be plugged in the network )
 
     U : Use more than one boostrap node
     G : we'll use the server as a bootstrap node
