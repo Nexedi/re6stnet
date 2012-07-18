@@ -177,6 +177,7 @@ class main(object):
         return ip, port, proto
 
     def declare(self, handler, address):
+        print "declaring new node"
         client_address, ip, port, proto = address
         #client_address, _ = handler.client_address
         client_ip = utils.binFromIp(client_address)
@@ -190,15 +191,16 @@ class main(object):
             print "Unauthorized connection from %s which does not start with %s" % (client_ip, self.network)
             return False
 
-    def getPeerList(self, handler, n, address):
+    def getPeerList(self, handler, n, client_address):
         assert 0 < n < 1000
-        print "declaring new node"
-        if address != 0:
-            if not self.declare(handler, address):
-                # TODO: do something intelligent
-                raise RuntimeError
-        print "sending peers"
-        return self.db.execute("SELECT ip, port, proto FROM peers ORDER BY random() LIMIT ?", (n,)).fetchall()
+        client_ip = utils.binFromIp(client_address)
+        if client_ip.startswith(self.network):
+            print "sending peers"
+            return self.db.execute("SELECT ip, port, proto FROM peers ORDER BY random() LIMIT ?", (n,)).fetchall()
+        else:
+            # TODO: use log + DO NOT PRINT BINARY IP
+            print "Unauthorized connection from %s which does not start with %s" % (client_ip, self.network)
+            raise RuntimeError
 
 if __name__ == "__main__":
     main()
