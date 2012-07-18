@@ -33,8 +33,8 @@ class TunnelManager:
             if p.poll() != None:
                 utils.log('Connection with %s has failed with return code %s' % (id, p.returncode), 3)
                 self.free_interface_set.add(iface)
-                self.peer_db.unusePeer(id)
-                del self.connection_dict[id]
+                self._peer_db.unusePeer(id)
+                del self._connection_dict[id]
 
     def _removeSomeTunnels(self):
         for i in range(0, max(0, len(self._connection_dict) - self._client_count + self._refresh_count)):

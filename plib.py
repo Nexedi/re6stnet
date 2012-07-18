@@ -11,12 +11,8 @@ def openvpn(*args, **kw):
         '--persist-key',
         '--script-security', '2',
         '--user', 'nobody',
-            # I don't kown how Babel works, but if it test the
-            # connection often, the ping directive might not be needed
-            # if it test the connection very often, we could also decrease
-            # ping-exit to 1 sec
-            # '--ping', '1',
-            # '--ping-exit', '3',
+        '--ping', '1',
+        '--ping-exit', '3',
         '--group', 'nogroup',
         '--verb', str(verbose),
         ] + list(args)
@@ -26,7 +22,7 @@ def openvpn(*args, **kw):
 # TODO : set iface up when creating a server/client
 # ! check working directory before launching up script ?
 
-def server(serverIp, network, max_clients, dh_path, pipe_fd, *args, **kw):
+def server(serverIp, network, max_clients, dh_path, pipe_fd, port, proto, *args, **kw):
     utils.log('Starting server', 3)
     return openvpn(
         '--tls-server',
@@ -36,6 +32,8 @@ def server(serverIp, network, max_clients, dh_path, pipe_fd, *args, **kw):
         '--client-disconnect', 'ovpn-server ' + str(pipe_fd),
         '--dh', dh_path,
         '--max-clients', str(max_clients),
+        '--port', str(port),
+        '--proto', proto,
         *args, **kw)
 
 def client(serverIp, pipe_fd, *args, **kw):

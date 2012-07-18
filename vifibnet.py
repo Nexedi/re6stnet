@@ -30,8 +30,14 @@ def getConfig():
             help='Path to the certificate authority file')
     _('--cert', required=True,
             help='Path to the certificate file')
-    _('--ip', required=True, dest='external_ip',
+    _('--ip', default=None, dest='external_ip',
             help='Ip address of the machine on the internet')
+    _('--internal-port', default=1194,
+            help='The internal port to listen on for incomming connections')
+    _('--external-port', default=1194,
+            help='The external port to advertise for other peers to connect')
+    _('--proto', default='udp',
+            help='The protocol to use for the others peers to connect')
     # args to be removed ?
     _('--connection-count', default=30, type=int,
             help='Number of client connections')
@@ -49,10 +55,6 @@ def main():
     internal_ip = utils.ipFromCert(network, config.cert)
     openvpn_args = utils.ovpnArgs(config.openvpn_args, config.ca, config.cert)
 
-    # Get real port and proto ?
-    port = 1194
-    proto = 'udp'
-
     # Set global variables
     tunnel.log = config.log
     utils.verbose = plib.verbose = config.verbose
@@ -63,7 +65,7 @@ def main():
     read_pipe = os.fdopen(r_pipe)
 
     # Init db and tunnels
-    peer_db = db.PeerManager(config.db, config.server, config.server_port, config.peers_db_refresh)
+    peer_db = db.PeerManager(config.db, config.server, config.server_port, config.peers_db_refresh, config.external_ip)
     tunnel_manager = tunnel.TunnelManager(write_pipe, peer_db, openvpn_args, config.tunnel_refresh, config.connection_count, config.refresh_rate)
 
     # Launch babel on all interfaces. WARNING : you have to be root to start babeld
@@ -73,8 +75,8 @@ def main():
         os.O_WRONLY | os.O_CREAT | os.O_TRUNC), stderr=subprocess.STDOUT)
 
    # Establish connections
-    server_process = plib.server(internal_ip, network, config.connection_count, config.dh, write_pipe, 
-            '--dev', 'vifibnet', *openvpn_args,
+    server_process = plib.server(internal_ip, network, config.connection_count, config.dh, write_pipe,
+            config.internal_port, config.proto, '--dev', 'vifibnet', *openvpn_args,
             stdout=os.open(os.path.join(config.log, 'vifibnet.server.log'), os.O_WRONLY | os.O_CREAT | os.O_TRUNC))
 
     # main loop
@@ -85,7 +87,7 @@ def main():
             if ready:
                 peer_db.handle_message(read_pipe.readline())
             if time.time() >= peer_db.next_refresh:
-                peer_db.populate(200, (internal_ip, config.external_ip, port, proto))
+                peer_db.populate(200, internal_ip, config.external_port, config.proto)
             if time.time() >= tunnel_manager.next_refresh:
                 tunnel_manager.refresh()
     except KeyboardInterrupt:

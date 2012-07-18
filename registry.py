@@ -193,9 +193,10 @@ class main(object):
     def getPeerList(self, handler, n, address):
         assert 0 < n < 1000
         print "declaring new node"
-        if not self.declare(handler, address):
-            # TODO: do something intelligent
-            raise RuntimeError
+        if address != 0:
+            if not self.declare(handler, address):
+                # TODO: do something intelligent
+                raise RuntimeError
         print "sending peers"
         return self.db.execute("SELECT ip, port, proto FROM peers ORDER BY random() LIMIT ?", (n,)).fetchall()
 

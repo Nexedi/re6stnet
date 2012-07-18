@@ -4,6 +4,7 @@ Bugs :
     When no peer is avalaible without the --no-boot option, it crash => see below
     Once in a while, when exiting vifibnet ( not very properly, via Ctrl+C ), processes ( openvpn and babel )
          still remain and disturb further attemps ( must be killed for vifibnet to work again )
+    Babel seems to be very long to establish the routes : maybe we should tell him thant we are not on a wired network but on a mobile network ?
 
 To be done :
     Replace comments at the beginning of functions with docstrings & give all fn docstrings
@@ -12,6 +13,7 @@ To be done :
     Use the server events ( client connection/deconnection ) to do something usefull
     In peers DB, remove some peers when they are too many of them
     Contact the server using vifibnet and not the underlying network when possible
+    Use a timeout for the peersDB
 
 To be discuss:
     U : Remove the --no-boot option since we know when no node is avalaible
@@ -30,3 +32,5 @@ To be discuss:
 
     G : don't reconnect to server each time we repopulate in peers_db ?
     U : we might recontact the server evry 1H or even less. So i think it is a good thing not to keep the connection alive
+
+    Why --ping-exit had been removed form openvpn args ? without this we can have zombie connections
