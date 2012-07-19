@@ -39,6 +39,7 @@ To be discussed:
         This should be combined with routing table (i.e. how many nodes are
         served by each tunnel), which is possibly redundant.
         ip6tables should be avoided if possible.
+    U : Great !!!
 
     U : Babel seems to be very long to establish the routes : maybe we should
         tell him thant we are not on a wired network but on a mobile network ?
@@ -47,6 +48,18 @@ To be discussed:
         interfaces as wireless. However, treating an interface as wireless
         doesn't lessen the hello_interval, it only changes how babel estimates
         quality link, and cost.
+    U : from babel web page : "When the Babel daemon detects a wired network, 
+        it will use a larger interval between hellos".
+        Moreover, it seems that the wireless option only means 
+        "hostile environment" which seems best for a resilient network. 
+        30 sec of hello interval seams also too much. The default value for
+        babel is 4 sec (from babel man page).
+        According to raphael's stats on the nexedi's server downtime, 
+        most of the problems dont last more than 3 min. If it takes 2 min to 
+        detect a dead connection, then we wont be solving anything with our 
+        overlay network
+        Thimothée is making some stats about this for his internship. I will 
+        commit them as soon as he as finished
 
     U : The peer DB size should depend on the number of connection and the
         refresh time
