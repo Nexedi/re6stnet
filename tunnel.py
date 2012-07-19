@@ -31,8 +31,7 @@ class Connection:
         else:
             self._bandwidth = (1-smooth)*self._bandwidth + smooth*trafic
         self._lastTrafic = trafic
-        utils.log('New bandwidth calculated on iface %s : %sb' 
-                % self._bandwidth, 4)
+        utils.log('New bandwidth calculated on iface %s : %sb' % self._bandwidth, 4)
 
         return True
 
