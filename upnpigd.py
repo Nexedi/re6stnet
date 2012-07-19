@@ -16,4 +16,3 @@ def ForwardViaUPnP(local_port):
         if u.addportmapping(external_port, 'UDP', u.lanaddr, local_port, 'Vifib openvpn server', ''):
             return (u.externalipaddress(), external_port)
 
-# TODO : specify a lease duration
