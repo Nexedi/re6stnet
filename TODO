@@ -1,9 +1,6 @@
-Bugs :
-    When no peer is avalaible, the setup crash without the --no-boot option
-    G : see below
-    U : this is still a bug to be solved
-
 To be done :
+    use the server as a bootstrap node
+
     Use an algorithm to choose which connections to keep and/or establish
     instead of pure randomness
     
@@ -17,12 +14,10 @@ To be done :
     Use the server events ( client connection/deconnection ) to do something
     useful
     
-    In peers DB, remove some peers when they are too many of them -> remove the
-    dead peers
+    In peers DB, flag the dead peers so we only choose them if necessary and we can remove them if we have enought peers
     
-    Use a timeout for the peersDB 
-    G : removing the dead peers should be enough
-    U : I was speaking of the server peers DB
+    Use a timeout for the server peersDB so we can rflag unreachable peers and
+    remove the peers whose certificate is no longer valid
     
     Specify a lease duration in ForwardViaUPnP
     
@@ -69,15 +64,6 @@ To be discussed:
         directly from the server. The requiered db size can be calculated from
         the number of connections and the refresh time.
 
-    U : Remove the --no-boot option since we know when no node is avalaible
-    G : the no-boot option is only useful when the server knows no peer,
-        irl it should never happen, no-boot is a debug option
-    U : Ok, but the server knows when no peers is avalaible, doesn't he ?
-    G : Well when no peer is available the SQL request ( + next() method ) raise
-        a StopIteration exception
-    U : Well, I don't think this is a good thing. When not in debug, a node 
-        cannot now if their is anyone else already connected
-
     G : don't reconnect to server each time we repopulate in peers_db ?
     U : From what I've read on the internet, when you create a server object,
         you don't connect to the server, You only connect to the server once you
@@ -85,6 +71,3 @@ To be discussed:
         connection for 15sec
     G : ok, it justs need testing ( for when some requests for the server will
         require to be plugged in the network )
-
-    U : Use more than one boostrap node
-    G : we'll use the server as a bootstrap node
