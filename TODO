@@ -1,4 +1,6 @@
 To be done :
+    Add options to start udp server, tcp server or both
+
     use the server as a bootstrap node
 
     Use an algorithm to choose which connections to keep and/or establish
@@ -24,6 +26,12 @@ To be done :
     Handle LAN internally in order not to have catastrophic results ....
 
 To be discussed:
+    G : Database structure for bith vifibnet and registry have been changed.
+        Index is now always on the prefix ( there is no id anymore ). And
+        the (ip, port, proto) tuples have been replaced with addresses :
+        it is a list of ip, port, proto, that way a peer can announce
+        different (port, proto) combination.
+
     G, J : To get traffic stats ( bytes in/out ), you can use
           /sys/class/net/interface/statistics/rx_bytes, etc...
         or /proc/net/dev/snmp6/interface ( all in one file ). This can be enough
