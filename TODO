@@ -2,30 +2,33 @@ Bugs :
     When no peer is avalaible, the setup crash without the --no-boot option
     G : see below
     U : this is still a bug to be solved
+    G : since the server is now a node it shouldn't ( the server will always
+        have a peer availabel which is himself )
 
 To be done :
     Use an algorithm to choose which connections to keep and/or establish
     instead of pure randomness
-    
+
     Find a name for the project : the projet is ( or should be ) independant
     from vifib, openvpn, babel, and so should the name; btw we aim to build a
     distributed, scalable, resilient VPN.... ( if it helps with the name )
-    
+
     Replace comments at the beginning of functions with docstrings & give all
     fn docstrings
-    
+
     Use the server events ( client connection/deconnection ) to do something
     useful
-    
+
     In peers DB, remove some peers when they are too many of them -> remove the
     dead peers
-    
-    Use a timeout for the peersDB 
+
+    Use a timeout for the peersDB
     G : removing the dead peers should be enough
     U : I was speaking of the server peers DB
-    
+    G : the timeout is the duration of the certificate delivered ( 1y for now )
+
     Specify a lease duration in ForwardViaUPnP
-    
+
     Handle LAN internally in order not to have catastrophic results ....
 
 To be discussed:
@@ -48,13 +51,13 @@ To be discussed:
         interfaces as wireless. However, treating an interface as wireless
         doesn't lessen the hello_interval, it only changes how babel estimates
         quality link, and cost.
-    U : from babel web page : "When the Babel daemon detects a wired network, 
+    U : from babel web page : "When the Babel daemon detects a wired network,
         it will use a larger interval between hellos".
-        Moreover, it seems that the wireless option only means 
-        "hostile environment" which seems best for a resilient network. 
+        Moreover, it seems that the wireless option only means
+        "hostile environment" which seems best for a resilient network.
         30 sec of hello interval seams also too much. The default value for
         babel is 4 sec (from babel man page).
-        According to raphael's stats on the nexedi's server downtime, 
+        According to raphael's stats on the nexedi's server downtime,
         45% of the problems dont last more than 2 minutes, 55% no more than
         3 minutes If it takes 2 min to detect a dead connection, then we wont be
         solving many problems with our overlay network
@@ -65,7 +68,7 @@ To be discussed:
         like 0.01 or less ) to the total number of peers in the entire network,
         with maybe a max size.
     U : what we need to do  is to keep the randomness. For this, we need a big
-        enought DB to ensure we can still choose a peer as if it was choosen 
+        enought DB to ensure we can still choose a peer as if it was choosen
         directly from the server. The requiered db size can be calculated from
         the number of connections and the refresh time.
 
@@ -75,8 +78,8 @@ To be discussed:
     U : Ok, but the server knows when no peers is avalaible, doesn't he ?
     G : Well when no peer is available the SQL request ( + next() method ) raise
         a StopIteration exception
-    U : Well, I don't think this is a good thing. When not in debug, a node 
-        cannot now if their is anyone else already connected
+    U : Well, I don't think this is a good thing. When not in debug, a node
+        cannot now if there is anyone else already connected
 
     G : don't reconnect to server each time we repopulate in peers_db ?
     U : From what I've read on the internet, when you create a server object,
