@@ -55,11 +55,9 @@ To be discussed:
         30 sec of hello interval seams also too much. The default value for
         babel is 4 sec (from babel man page).
         According to raphael's stats on the nexedi's server downtime, 
-        most of the problems dont last more than 3 min. If it takes 2 min to 
-        detect a dead connection, then we wont be solving anything with our 
-        overlay network
-        Thimothée is making some stats about this for his internship. I will 
-        commit them as soon as he as finished
+        45% of the problems dont last more than 2 minutes, 55% no more than
+        3 minutes If it takes 2 min to detect a dead connection, then we wont be
+        solving many problems with our overlay network
 
     U : The peer DB size should depend on the number of connection and the
         refresh time
