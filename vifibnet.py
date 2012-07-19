@@ -1,7 +1,25 @@
 #!/usr/bin/env python
-import argparse, errno, math, os, select, subprocess, sys, time, traceback, upnpigd
+import argparse, errno, math, os, select, subprocess, sys, time, traceback
+from argparse import ArgumentParser
 from OpenSSL import crypto
 import db, plib, upnpigd, utils, tunnel
+
+def ArgParser(ArgumentParser):
+
+    def convert_arg_line_to_args(self, arg_line):
+        for arg in ('--' + arg_line.strip()).split():
+            if arg.strip():
+                yield arg
+
+def ovpnArgs(optional_args, ca_path, cert_path):
+    # Treat openvpn arguments
+    if optional_args[0] == "--":
+        del optional_args[0]
+    optional_args.append('--ca')
+    optional_args.append(ca_path)
+    optional_args.append('--cert')
+    optional_args.append(cert_path)
+    return optional_args
 
 def getConfig():
     parser = argparse.ArgumentParser(
@@ -9,9 +27,9 @@ def getConfig():
     _ = parser.add_argument
     # Server address SHOULD be a vifib address ( else requests will be denied )
     _('--server', required=True,
-            help='Address for peer discovery server')
+            help="VPN address of the discovery peer server")
     _('--server-port', required=True, type=int,
-            help='Peer discovery server port')
+            help="VPN port of the discovery peer server")
     _('-log', '-l', default='/var/log',
             help='Path to vifibnet logs directory')
     _('--tunnel-refresh', default=300, type=int,
@@ -34,15 +52,15 @@ def getConfig():
             help='Path to the certificate authority file')
     _('--cert', required=True,
             help='Path to the certificate file')
-    _('--ip', default=None, dest='external_ip',
-            help='Ip address of the machine on the internet')
-    _('--internal-port', default=1194,
-            help='The internal port to listen on for incomming connections')
-    _('--external-port', default=1194,
-            help='The external port to advertise for other peers to connect')
-    _('--proto', default='udp',
-            help='The protocol to use for the others peers to connect')
+    ipconfig = parser.add_mutually_exclusive_group()
+    __ = ipconfig.add_argument
+    __('--ip', default=None, dest='address', action='append', nargs=3,
+            help='Ip address, port and protocol advertised to other vpn nodes')
+    __('--internal-port', default=1194,
+            help='Internal port to listen on for incomming connections')
     # args to be removed ?
+    _('--proto', default='udp',
+            help='The protocol used by other peers to connect')
     _('--connection-count', default=30, type=int,
             help='Number of client connections')
     _('--refresh-rate', default=0.05, type=float,
@@ -55,9 +73,10 @@ def getConfig():
 def main():
     # Get arguments
     config = getConfig()
+    manual = bool(config.address)
     network = utils.networkFromCa(config.ca)
-    internal_ip = utils.ipFromCert(network, config.cert)
-    openvpn_args = utils.ovpnArgs(config.openvpn_args, config.ca, config.cert)
+    internal_ip, prefix = utils.ipFromCert(network, config.cert)
+    openvpn_args = ovpnArgs(config.openvpn_args, config.ca, config.cert)
 
     # Set global variables
     tunnel.log = config.log
@@ -69,14 +88,20 @@ def main():
     read_pipe = os.fdopen(r_pipe)
 
     # Init db and tunnels
-    if config.external_ip == None:
+    if manual:
+        utils.log('Manual external configuration', 3)
+    else:
+        utils.log('Attempting automatic configuration via UPnP', 3)
         try:
-            config.external_ip, config.external_port = upnpigd.ForwardViaUPnP(config.internal_port)
+            external_ip, external_port = upnpigd.ForwardViaUPnP(config.internal_port)
+            config.address = [[external_ip, external_port, 'udp'],
+                              [external_ip, external_port, 'tcp-client']]
         except Exception:
-            utils.log('An atempt to forward a port via UPnP failed', 5)
+            utils.log('An atempt to forward a port via UPnP failed', 3)
+            raise RuntimeError
 
-    peer_db = db.PeerManager(config.db, config.server, config.server_port, config.peers_db_refresh,
-            config.external_ip, internal_ip, config.external_port, config.proto, 200)
+    peer_db = db.PeerManager(config.db, config.server, config.server_port,
+            config.peers_db_refresh, config.address, internal_ip, prefix, manual, 200)
     tunnel_manager = tunnel.TunnelManager(write_pipe, peer_db, openvpn_args, config.hello,
             config.tunnel_refresh, config.connection_count, config.refresh_rate)
 
@@ -84,7 +109,7 @@ def main():
     interface_list = ['vifibnet'] + list(tunnel_manager.free_interface_set)
     router = plib.router(network, internal_ip, interface_list, config.wireless, config.hello,
         stdout=os.open(os.path.join(config.log, 'vifibnet.babeld.log'),
-        os.O_WRONLY | os.O_CREAT | os.O_TRUNC), stderr=subprocess.STDOUT)
+            os.O_WRONLY | os.O_CREAT | os.O_TRUNC), stderr=subprocess.STDOUT)
 
    # Establish connections
     server_process = plib.server(internal_ip, network, config.connection_count, config.dh, write_pipe,

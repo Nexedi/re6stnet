@@ -17,8 +17,7 @@ def openvpn(hello_interval, *args, **kw):
     utils.log(str(args), 5)
     return subprocess.Popen(args, **kw)
 
-def server(server_ip, network, max_clients, dh_path, pipe_fd, port, proto, 
-        hello_interval, *args, **kw):
+def server(server_ip, network, max_clients, dh_path, pipe_fd, port, proto, hello_interval, *args, **kw):
     utils.log('Starting server', 3)
     return openvpn(hello_interval,
         '--tls-server',
@@ -32,15 +31,16 @@ def server(server_ip, network, max_clients, dh_path, pipe_fd, port, proto,
         '--proto', proto,
         *args, **kw)
 
-def client(server_ip, pipe_fd, hello_interval, *args, **kw):
+def client(server_address, pipe_fd, hello_interval, *args, **kw):
     utils.log('Starting client', 5)
-    return openvpn(hello_interval,
-        '--nobind',
-        '--client',
-        '--remote', server_ip,
-        '--up', 'ovpn-client',
-        '--route-up', 'ovpn-client ' + str(pipe_fd),
-        *args, **kw)
+    remote= ['--nobind', 
+             '--client',
+             '--up', 'ovpn-client',
+             '--route-up', 'ovpn-client ' + str(pipe_fd) ]
+    for ip, port, proto in utils.address_set(server_address):
+        remote += '--remote', ip, port, proto
+    remote += args
+    return openvpn(hello_interval, *remote, **kw)
 
 def router(network, internal_ip, interface_list,
            wireless, hello_interval, **kw):
@@ -68,12 +68,4 @@ def router(network, internal_ip, interface_list,
     args = args + interface_list
     utils.log(str(args), 5)
     return subprocess.Popen(args, **kw)
-
-def watch(interface):
-    return ( subprocess.call(['ip6tables', '-I', 'INPUT', '-i', interface]) and
-             subprocess.call(['ip6tables', '-I', 'OUTPUT', '-o', interface]))
-
-def unwatch(interface):
-    return ( subprocess.call(['ip6tables', '-D', 'INPUT', '-i', interface]) and
-             subprocess.call(['ip6tables', '-D', 'OUTPUT', '-o', interface]))
 

@@ -21,7 +21,7 @@ def ipFromBin(prefix):
 def ipFromPrefix(vifibnet, prefix, prefix_len):
     prefix = bin(int(prefix))[2:].rjust(prefix_len, '0')
     ip_t = (vifibnet + prefix).ljust(128, '0')
-    return ipFromBin(ip_t)
+    return ipFromBin(ip_t), prefix
 
 def networkFromCa(ca_path):
     # Get network prefix from ca.crt
@@ -37,13 +37,9 @@ def ipFromCert(network, cert_path):
         prefix, prefix_len = subject.CN.split('/')
         return ipFromPrefix(network, prefix, int(prefix_len))
 
-def ovpnArgs(optional_args, ca_path, cert_path):
-    # Treat openvpn arguments
-    if optional_args[0] == "--":
-        del optional_args[0]
-    optional_args.append('--ca')
-    optional_args.append(ca_path)
-    optional_args.append('--cert')
-    optional_args.append(cert_path)
-    return optional_args
+def address_list(address_set):
+    return ';'.join(map(','.join, address_set))
 
+def address_set(address_list):
+    return set(tuple(address.split(','))
+        for address in address_list.split(';'))

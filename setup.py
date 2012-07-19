@@ -18,13 +18,9 @@ def main():
             help='Port to which connect on the server')
     _('-d', '--dir', default='/etc/vifib',
             help='Directory where the key and certificate will be stored')
-    _('-r', '--req', nargs='+',
-            help='''Certificate request additional arguments. For example :
-                  --req name1 value1 name2 value2, to add attributes name1 and name2''')
+    _('-r', '--req', nargs=2, action='append',
+            help='Name and value of certificate request additional arguments')
     config = parser.parse_args()
-    if config.req and len(config.req) % 2 == 1:
-        print "Sorry, request argument was incorrect, there must be an even number of request arguments"
-        sys.exit(1)
 
     # Establish connection with server
     s = xmlrpclib.ServerProxy('http://%s:%u' % (config.server, config.port))
@@ -41,17 +37,14 @@ def main():
     db = sqlite3.connect(os.path.join(config.dir, 'peers.db'), isolation_level=None)
     try:
         db.execute("""CREATE TABLE peers (
-                   id INTEGER PRIMARY KEY AUTOINCREMENT,
-                   ip TEXT NOT NULL,
-                   port INTEGER NOT NULL,
-                   proto TEXT NOT NULL,
-                   used INTEGER NOT NULL default 0,
+                   prefix TEXT PRIMARY KEY,
+                   address TEXT NOT NULL,
+                   used INTEGER NOT NULL DEFAULT 0,
                    date INTEGER DEFAULT (strftime('%s', 'now')))""")
         db.execute("CREATE INDEX _peers_used ON peers(used)")
-        db.execute("CREATE UNIQUE INDEX _peers_address ON peers(ip, port, proto)")
         if not config.no_boot:
-            boot_ip, boot_port, boot_proto = s.getBootstrapPeer()
-            db.execute("INSERT INTO peers (ip, port, proto) VALUES (?,?,?)", (boot_ip, boot_port, boot_proto))
+            prefix, address = s.getBootstrapPeer()
+            db.execute("INSERT INTO peers (prefix, address) VALUES (?,?)", (prefix, address))
     except sqlite3.OperationalError, e:
         if e.args[0] == 'table peers already exists':
             print "Table peers already exists, leaving it as it is"
@@ -75,10 +68,8 @@ def main():
     req = crypto.X509Req()
     subj = req.get_subject()
     if config.req:
-        while len(config.req) > 1:
-            key = config.req.pop(0)
-            value = config.req.pop(0)
-            setattr(subj, key, value)
+        for arg in config.req:
+            setattr(subj, arg[0], arg[1])
     req.set_pubkey(pkey)
     req.sign(pkey, 'sha1')
     req = crypto.dump_certificate_request(crypto.FILETYPE_PEM, req)

@@ -52,9 +52,7 @@ class main(object):
         self.db = sqlite3.connect(self.config.db, isolation_level=None)
         self.db.execute("""CREATE TABLE IF NOT EXISTS peers (
                         prefix text primary key not null,
-                        ip text not null,
-                        port integer not null,
-                        proto text not null,
+                        address text not null,
                         date integer default (strftime('%s','now')))""")
         self.db.execute("""CREATE TABLE IF NOT EXISTS tokens (
                         token text primary key not null,
@@ -62,22 +60,22 @@ class main(object):
                         prefix_len integer not null,
                         date integer not null)""")
         try:
-            self.db.execute("""CREATE TABLE vifib (
+            self.db.execute("""CREATE TABLE vpn (
                                prefix text primary key not null,
                                email text,
                                cert text)""")
         except sqlite3.OperationalError, e:
-            if e.args[0] != 'table vifib already exists':
+            if e.args[0] != 'table vpn already exists':
                 raise RuntimeError
         else:
-            self.db.execute("INSERT INTO vifib VALUES ('',null,null)")
+            self.db.execute("INSERT INTO vpn VALUES ('',null,null)")
 
         # Loading certificates
         with open(self.config.ca) as f:
             self.ca = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
         with open(self.config.key) as f:
             self.key = crypto.load_privatekey(crypto.FILETYPE_PEM, f.read())
-        # Get vifib network prefix
+        # Get vpn network prefix
         self.network = bin(self.ca.get_serial_number())[3:]
         print "Network prefix : %s/%u" % (self.network, len(self.network))
 
@@ -121,12 +119,12 @@ class main(object):
 
     def _getPrefix(self, prefix_len):
         assert 0 < prefix_len <= 128 - len(self.network)
-        for prefix, in self.db.execute("""SELECT prefix FROM vifib WHERE length(prefix) <= ? AND cert is null
+        for prefix, in self.db.execute("""SELECT prefix FROM vpn WHERE length(prefix) <= ? AND cert is null
                                          ORDER BY length(prefix) DESC""", (prefix_len,)):
             while len(prefix) < prefix_len:
-                self.db.execute("UPDATE vifib SET prefix = ? WHERE prefix = ?", (prefix + '1', prefix))
+                self.db.execute("UPDATE vpn SET prefix = ? WHERE prefix = ?", (prefix + '1', prefix))
                 prefix += '0'
-                self.db.execute("INSERT INTO vifib VALUES (?,null,null)", (prefix,))
+                self.db.execute("INSERT INTO vpn VALUES (?,null,null)", (prefix,))
             return prefix
         raise RuntimeError # TODO: raise better exception
 
@@ -158,7 +156,7 @@ class main(object):
             cert = crypto.dump_certificate(crypto.FILETYPE_PEM, cert)
 
             # Insert certificate into db
-            self.db.execute("UPDATE vifib SET email = ?, cert = ? WHERE prefix = ?", (email, cert, prefix) )
+            self.db.execute("UPDATE vpn SET email = ?, cert = ? WHERE prefix = ?", (email, cert, prefix) )
 
         return cert
       except:
@@ -172,19 +170,19 @@ class main(object):
         # TODO: Insert a flag column for bootstrap ready servers in peers
         # ( servers which shouldn't go down or change ip and port as opposed to servers owned by particulars )
         # that way, we also ascertain that the server sent is not the new node....
-        ip, port, proto = self.db.execute("SELECT ip, port, proto FROM peers ORDER BY random() LIMIT 1").next()
-        print "Sending bootstrap peer ( %s, %s, %s)" % (ip, port, proto)
-        return ip, port, proto
+        prefix, address = self.db.execute("SELECT prefix, address FROM peers ORDER BY random() LIMIT 1").next()
+        print "Sending bootstrap peer (%s, %s)" % (prefix, str(address))
+        return prefix, address
 
     def declare(self, handler, address):
         print "declaring new node"
-        client_address, ip, port, proto = address
+        client_address, address = address
         #client_address, _ = handler.client_address
         client_ip = utils.binFromIp(client_address)
         if client_ip.startswith(self.network):
             prefix = client_ip[len(self.network):]
-            prefix, = self.db.execute("SELECT prefix FROM vifib WHERE prefix <= ? ORDER BY prefix DESC LIMIT 1", (prefix,)).next()
-            self.db.execute("INSERT OR REPLACE INTO peers (prefix, ip, port, proto) VALUES (?,?,?,?)", (prefix, ip, port, proto))
+            prefix, = self.db.execute("SELECT prefix FROM vpn WHERE prefix <= ? ORDER BY prefix DESC LIMIT 1", (prefix,)).next()
+            self.db.execute("INSERT OR REPLACE INTO peers (prefix, address) VALUES (?,?)", (prefix, address))
             return True
         else:
             # TODO: use log + DO NOT PRINT BINARY IP
@@ -196,7 +194,7 @@ class main(object):
         client_ip = utils.binFromIp(client_address)
         if client_ip.startswith(self.network):
             print "sending peers"
-            return self.db.execute("SELECT ip, port, proto FROM peers ORDER BY random() LIMIT ?", (n,)).fetchall()
+            return self.db.execute("SELECT prefix, address FROM peers ORDER BY random() LIMIT ?", (n,)).fetchall()
         else:
             # TODO: use log + DO NOT PRINT BINARY IP
             print "Unauthorized connection from %s which does not start with %s" % (client_ip, self.network)

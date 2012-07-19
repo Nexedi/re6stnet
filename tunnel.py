@@ -5,24 +5,24 @@ log = None
 smooth = 0.3
 
 class Connection:
-    def __init__(self, ip, write_pipe, hello, port, proto, iface, peer_id,
+    def __init__(self, address, write_pipe, hello, iface, prefix,
             ovpn_args):
-        self.process = plib.client(ip, write_pipe, hello,
+        self.process = plib.client(address, write_pipe, hello,
                 '--dev', iface, '--proto', proto, '--rport', str(port),
-                *ovpn_args, stdout=os.open(os.path.join(log, 
-                'vifibnet.client.%s.log' % (peer_id,)),
+                *ovpn_args, stdout=os.open(os.path.join(log,
+                'vifibnet.client.%s.log' % (prefix,)),
                 os.O_WRONLY|os.O_CREAT|os.O_TRUNC) )
 
         self.iface = iface
         self._lastTrafic = self._getTrafic()
         self._bandwidth = None
 
-    # TODO : update the stats 
+    # TODO : update the stats
     def refresh(self):
         # Check that the connection is alive
         if self.process.poll() != None:
             utils.log('Connection with %s has failed with return code %s' 
-                     % (id, self.process.returncode), 3)
+                     % (prefix, self.process.returncode), 3)
             return False
 
         trafic = self._getTrafic()
@@ -45,7 +45,7 @@ class Connection:
 
 class TunnelManager:
 
-    def __init__(self, write_pipe, peer_db, openvpn_args, hello_interval, 
+    def __init__(self, write_pipe, peer_db, openvpn_args, hello_interval,
                 refresh, connection_count, refresh_rate):
         self._write_pipe = write_pipe
         self._peer_db = peer_db
@@ -53,9 +53,9 @@ class TunnelManager:
         self._ovpn_args = openvpn_args
         self._hello = hello_interval
         self._refresh_time = refresh
-        self.free_interface_set = set(('client1', 'client2', 'client3', 
+        self.free_interface_set = set(('client1', 'client2', 'client3',
                                        'client4', 'client5', 'client6',
-                                       'client7', 'client8', 'client9', 
+                                       'client7', 'client8', 'client9',
                                        'client10', 'client11', 'client12'))
         self.next_refresh = time.time()
 
@@ -70,42 +70,41 @@ class TunnelManager:
         self.next_refresh = time.time() + self._refresh_time
 
     def _cleanDeads(self):
-        for id in self._connection_dict.keys():
-            if not self._connection_dict[id].refresh():
-                self._kill(id)
+        for prefix in self._connection_dict.keys():
+            if not self._connection_dict[prefix].refresh():
+                self._kill(prefix)
 
     def _removeSomeTunnels(self):
-        for i in range(0, max(0, len(self._connection_dict) - 
+        for i in range(0, max(0, len(self._connection_dict) -
                     self._client_count + self._refresh_count)):
-            peer_id = random.choice(self._connection_dict.keys())
-            self._kill(peer_id)
+            prefix = random.choice(self._connection_dict.keys())
+            self._kill(prefix)
 
-    def _kill(self, peer_id):
-        utils.log('Killing the connection with id ' + str(peer_id), 2)
-        connection = self._connection_dict.pop(peer_id)
+    def _kill(self, prefix):
+        utils.log('Killing the connection with ' + prefix, 2)
+        connection = self._connection_dict.pop(prefix)
         try:
             connection.process.kill()
         except OSError:
             # If the process is already exited
             pass
         self.free_interface_set.add(connection.iface)
-        self._peer_db.unusePeer(peer_id)
+        self._peer_db.unusePeer(prefix)
 
     def _makeNewTunnels(self):
-        utils.log('Trying to make %i new tunnels' % 
-                (self._client_count - len(self._connection_dict)), 3)
+        utils.log('Trying to make %i new tunnels' %
+                (self._client_count - len(self._connection_dict)), 5)
         try:
-            for peer_id, ip, port, proto in self._peer_db.getUnusedPeers(
+            for prefix, address in self._peer_db.getUnusedPeers(
                     self._client_count - len(self._connection_dict)):
-                utils.log('Establishing a connection with id %s (%s:%s)'
-                        % (peer_id, ip, port), 2)
+                utils.log('Establishing a connection with %s (%s:%s)' % prefix, 2)
                 iface = self.free_interface_set.pop()
-                self._connection_dict[peer_id] = Connection(ip, 
-                        self._write_pipe, self._hello, port, proto, iface,
-                        peer_id, self._ovpn_args)
-                self._peer_db.usePeer(peer_id)
+                self._connection_dict[prefix] = Connection(address,
+                        self._write_pipe, self._hello, iface,
+                        prefix, self._ovpn_args)
+                self._peer_db.usePeer(prefix)
         except KeyError:
-            utils.log("Can't establish connection with %s"
-                    ": no available interface" % ip, 2)
+            utils.log("""Can't establish connection with %s
+                         : no available interface""" % prefix, 2)
         except Exception:
             traceback.print_exc()
