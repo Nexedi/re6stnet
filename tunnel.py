@@ -13,9 +13,10 @@ class Connection:
                 os.O_WRONLY|os.O_CREAT|os.O_TRUNC) )
 
         self.iface = iface
-        self._lastTrafic = self._getTrafic()
-        self._bandwidth = None
         self._prefix = prefix
+        self._creation_date = time.time()
+        self._bandwidth = None
+        self._last_trafic = None
 
     # TODO : update the stats
     def refresh(self):
@@ -25,23 +26,35 @@ class Connection:
                      % (self._prefix, self.process.returncode), 3)
             return False
 
-        trafic = self._getTrafic()
-        if self._bandwidth == None:
-            self._bandwidth = trafic - self._lastTrafic
-        else:
-            self._bandwidth = (1-smooth)*self._bandwidth + smooth*trafic
-        self._lastTrafic = trafic
-        utils.log('New bandwidth calculated on iface %s : %sb' % self._bandwidth, 4)
-
+        self._updateBandwidth()
         return True
 
-    def _getTrafic(self):
+    def _updateBandwidth(self):
         try:
-            f_rx = open('/sys/class/net/%s/statistics/rx_bytes' % self.iface, 'r')
-            f_tx = open('/sys/class/net/%s/statistics/tx_bytes' % self.iface, 'r')
-            return int(f_rx.read()) + int(f_tx.read())
-        except Exception:
-            return 0
+            f_rx = open('/sys/class/net/%s/statistics/rx_bytes' %
+                    self.iface, 'r')
+            f_tx = open('/sys/class/net/%s/statistics/tx_bytes' %
+                    self.iface, 'r')
+
+            trafic = int(f_rx.read()) + int(f_tx.read())
+            t = time.time()
+
+            if bool(self._last_trafic):
+                bw = (trafic - self._last_trafic)/(t - 
+                        self._last_trafic_update)
+                if bool(self._bandwidth):
+                    self._bandwidth = (1-smooth)*self._bandwidth + smooth*bw
+                else:
+                    self._bandwidth = bw
+
+                utils.log('New bandwidth calculated on iface %s : %s' % 
+                        (self.iface, self._bandwidth), 4)
+
+            self._last_trafic_update = t
+            self._last_trafic = trafic
+        except IOError: # This just means that the interface is downs
+            utils.log('Unable to calculate bandwidth on iface %s' % 
+                self.iface, 4)
 
 class TunnelManager:
 

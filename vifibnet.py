@@ -61,8 +61,8 @@ def getConfig():
     # args to be removed ?
     _('--proto', default='udp',
             help='The protocol used by other peers to connect')
-    _('--connection-count', default=30, type=int,
-            help='Number of client connections')
+    _('--connection-count', default=20, type=int,
+            help='Number of tunnels')
     _('--refresh-rate', default=0.05, type=float,
             help='The ratio of connections to drop when refreshing the connections')
     # Openvpn options
