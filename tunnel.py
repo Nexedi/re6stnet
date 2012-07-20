@@ -1,4 +1,4 @@
-import os, random, traceback, time
+import os, random, traceback, time, struct
 import plib, utils, db
 
 log = None
@@ -10,7 +10,7 @@ class Connection:
         self.process = plib.client(address, write_pipe, hello, '--dev', iface,
                 *ovpn_args, stdout=os.open(os.path.join(log,
                 'vifibnet.client.%s.log' % (prefix,)),
-                os.O_WRONLY|os.O_CREAT|os.O_TRUNC) )
+                os.O_WRONLY|os.O_CREAT|os.O_TRUNC))
 
         self.iface = iface
         self._prefix = prefix
@@ -63,6 +63,7 @@ class TunnelManager:
         self._write_pipe = write_pipe
         self._peer_db = peer_db
         self._connection_dict = {}
+        self._route_count = {}
         self._ovpn_args = openvpn_args
         self._hello = hello_interval
         self._refresh_time = refresh
@@ -78,6 +79,7 @@ class TunnelManager:
     def refresh(self):
         utils.log('Refreshing the tunnels', 2)
         self._cleanDeads()
+        self._countRoutes()
         self._removeSomeTunnels()
         self._makeNewTunnels()
         self.next_refresh = time.time() + self._refresh_time
@@ -103,6 +105,7 @@ class TunnelManager:
             pass
         self.free_interface_set.add(connection.iface)
         self._peer_db.unusePeer(prefix)
+        del self._route_count[connection.iface]
 
     def _makeNewTunnels(self):
         utils.log('Trying to make %i new tunnels' %
@@ -115,9 +118,26 @@ class TunnelManager:
                 self._connection_dict[prefix] = Connection(address,
                         self._write_pipe, self._hello, iface,
                         prefix, self._ovpn_args)
+                self._route_count[iface] = 0
                 self._peer_db.usePeer(prefix)
         except KeyError:
             utils.log("""Can't establish connection with %s
                     : no available interface""" % prefix, 2)
         except Exception:
             traceback.print_exc()
+
+    def _countRoutes(self):
+        utils.log('Starting to count the routes on each interface', 3)
+        for iface in self._route_count.keys():
+            self._route_count[iface] = 0
+        f = open('/proc/net/ipv6_route', 'r')
+        for line in f:
+            ip, subnet_size, iface = struct.unpack("""32s x 2s x 32x x 2x x 
+                    32x x 8x x 8x x 8x x 8x x %ss x""" % (len(line)-142), line)
+            iface = iface.replace(' ', '')
+            if iface in self._route_count.keys():
+                self._route_count[iface] += 1
+        for iface in self._route_count.keys():
+            utils.log('Routes on iface %s : %s' % (iface,self._route_count[iface] ), 5)
+
+
