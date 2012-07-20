@@ -34,7 +34,7 @@ def getConfig():
             help='Port on the machine to listen on for incomming connections')
     _('--peers-db-refresh', default=3600, type=int,
             help='the time (seconds) to wait before refreshing the peers db')
-    _('-log', '-l', default='/var/log',
+    _('-l', '-log', default='/var/log',
             help='Path to vifibnet logs directory')
     _('-s', '--state', default='/var/lib/vifibnet',
             help='Path to VPN state directory')
@@ -44,7 +44,6 @@ def getConfig():
     #        help='Path to babeld state-file')
     #_('--db', default='/var/lib/vifibnet/peers.db',
     #        help='Path to peers database')
-    # Server address SHOULD be a vifib address ( else requests will be denied )
     _('--server', required=True,
             help="VPN address of the discovery peer server")
     _('--server-port', required=True, type=int,
@@ -126,7 +125,8 @@ def main():
     server_process = list(plib.server(internal_ip, network,
         config.connection_count, config.dh, write_pipe, config.internal_port,
         proto, config.hello, '--dev', 'vifibnet', *openvpn_args,
-        stdout=os.open(os.path.join(config.log, 'vifibnet.server.log'),
+        stdout=os.open(os.path.join(config.log,
+            'vifibnet.server.%s.log' % (proto,)),
             os.O_WRONLY | os.O_CREAT | os.O_TRUNC)) for proto in config.proto)
     tunnel_manager.refresh()
 

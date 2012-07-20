@@ -41,5 +41,5 @@ def address_list(address_set):
     return ';'.join(map(','.join, address_set))
 
 def address_set(address_list):
-    return set(tuple(address.split(','))
+    return list(tuple(address.split(','))
         for address in address_list.split(';'))

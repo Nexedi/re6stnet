@@ -1,3 +1,6 @@
+G : We should focus on clearing the TODO List, then go to testing phase,
+    since the end is nearing... ( I finish on august, 3 )
+
 To be done :
     Catch a more precise exception thant Exception at line 108 in vifibnet.py
     ( UPnP forwarding )
@@ -6,9 +9,8 @@ To be done :
     "Refreshing peers DB ... done", or add log messages to specify that an
     action advertised by a previous log message has been completed
 
-    Add options to start udp server, tcp server or both
-
-    use the server as a bootstrap node
+    use the server as a bootstrap node -> switch peer discovery to be done
+    by vifibnet directly ?
 
     Use an algorithm to choose which connections to keep and/or establish
     instead of pure randomness
@@ -20,9 +22,6 @@ To be done :
     Replace comments at the beginning of functions with docstrings & give all
     fn docstrings
 
-    Use the server events ( client connection/deconnection ) to do something
-    useful
-
     In peers DB, flag the dead peers so we only choose them if necessary and we
     can remove them if we have enought peers
 
@@ -32,6 +31,7 @@ To be done :
     Specify a lease duration in ForwardViaUPnP
 
     Handle LAN internally in order not to have catastrophic results ....
+    ( avahi could be used )
 
 To be discussed:
     G, J : To get traffic stats ( bytes in/out ), you can use
