@@ -1,7 +1,6 @@
 #!/usr/bin/env python
-import argparse, errno, math, os, select, subprocess, sys, time, traceback
+import argparse, errno, os, select, subprocess, time
 from argparse import ArgumentParser
-from OpenSSL import crypto
 import db, plib, upnpigd, utils, tunnel
 
 class ArgParser(ArgumentParser):
@@ -27,46 +26,54 @@ def getConfig():
     parser = ArgParser(fromfile_prefix_chars='@',
             description='Resilient virtual private network application')
     _ = parser.add_argument
+
+    # General Configuration options
+    _('--ip', default=None, dest='address', action='append', nargs=3,
+            help='Ip address, port and protocol advertised to other vpn nodes')
+    _('--internal-port', default=1194,
+            help='Port on the machine to listen on for incomming connections')
+    _('--peers-db-refresh', default=3600, type=int,
+            help='the time (seconds) to wait before refreshing the peers db')
+    _('-log', '-l', default='/var/log',
+            help='Path to vifibnet logs directory')
+    _('-s', '--state', default='/var/lib/vifibnet',
+            help='Path to VPN state directory')
+    _('--verbose', '-v', default=0, type=int,
+            help='Defines the verbose level')
+    #_('--babel-state', default='/var/lib/vifibnet/babel_state',
+    #        help='Path to babeld state-file')
+    #_('--db', default='/var/lib/vifibnet/peers.db',
+    #        help='Path to peers database')
     # Server address SHOULD be a vifib address ( else requests will be denied )
     _('--server', required=True,
             help="VPN address of the discovery peer server")
     _('--server-port', required=True, type=int,
             help="VPN port of the discovery peer server")
-    _('-log', '-l', default='/var/log',
-            help='Path to vifibnet logs directory')
-    _('--tunnel-refresh', default=300, type=int,
-            help='the time (seconds) to wait before changing the connections')
-    _('--peers-db-refresh', default=3600, type=int,
-            help='the time (seconds) to wait before refreshing the peers db')
-    _('--db', default='/var/lib/vifibnet/peers.db',
-            help='Path to peers database')
-    _('--dh', required=True,
-            help='Path to dh file')
-    _('--babel-state', default='/var/lib/vifibnet/babel_state',
-            help='Path to babeld state-file')
+
+    # Routing algorithm options
     _('--hello', type=int, default=30,
             help='Hello interval for babel, in seconds')
     _('-w', '--wireless', action='store_true',
-            help='Set all interfaces to be treated as wireless interfaces ( in babel )')
-    _('--verbose', '-v', default=0, type=int,
-            help='Defines the verbose level')
+            help='''Set all interfaces to be treated as wireless interfaces
+                    for the routing protocol''')
+
+    # Tunnel options
+    _('--proto', choices=['udp', 'tcp-server'], nargs='+', default=['udp'],
+            help='Protocol(s) to be used by other peers to connect')
+    _('--tunnel-refresh', default=300, type=int,
+            help='the time (seconds) to wait before changing the connections')
+    _('--dh', required=True,
+            help='Path to dh file')
     _('--ca', required=True,
             help='Path to the certificate authority file')
     _('--cert', required=True,
             help='Path to the certificate file')
-    ipconfig = parser.add_mutually_exclusive_group()
-    __ = ipconfig.add_argument
-    __('--ip', default=None, dest='address', action='append', nargs=3,
-            help='Ip address, port and protocol advertised to other vpn nodes')
-    __('--internal-port', default=1194,
-            help='Internal port to listen on for incomming connections')
     # args to be removed ?
-    _('--proto', default='udp',
-            help='The protocol used by other peers to connect')
     _('--connection-count', default=20, type=int,
             help='Number of tunnels')
     _('--refresh-rate', default=0.05, type=float,
-            help='The ratio of connections to drop when refreshing the connections')
+            help='''The ratio of connections to drop when refreshing the
+                    connections''')
     # Openvpn options
     _('openvpn_args', nargs=argparse.REMAINDER,
             help="Common OpenVPN options (e.g. certificates)")
@@ -95,34 +102,40 @@ def main():
     else:
         utils.log('Attempting automatic configuration via UPnP', 4)
         try:
-            external_ip, external_port = upnpigd.ForwardViaUPnP(config.internal_port)
-            config.address = [[external_ip, external_port, 'udp'],
-                              [external_ip, external_port, 'tcp-client']]
+            ext_ip, ext_port = upnpigd.ForwardViaUPnP(config.internal_port)
+            config.address = list([ext_ip, ext_port, proto]
+                                  for proto in config.proto)
         except Exception:
             utils.log('An atempt to forward a port via UPnP failed', 4)
 
-    peer_db = db.PeerManager(config.db, config.server, config.server_port,
-            config.peers_db_refresh, config.address, internal_ip, prefix, manual, 200)
-    tunnel_manager = tunnel.TunnelManager(write_pipe, peer_db, openvpn_args, config.hello,
-            config.tunnel_refresh, config.connection_count, config.refresh_rate)
+    peer_db = db.PeerManager(config.state, config.server, config.server_port,
+            config.peers_db_refresh, config.address, internal_ip, prefix,
+            manual, config.proto, 200)
+    tunnel_manager = tunnel.TunnelManager(write_pipe, peer_db, openvpn_args,
+            config.hello, config.tunnel_refresh, config.connection_count,
+            config.refresh_rate)
 
-    # Launch babel on all interfaces. WARNING : you have to be root to start babeld
+    # Launch routing protocol. WARNING : you have to be root to start babeld
     interface_list = ['vifibnet'] + list(tunnel_manager.free_interface_set)
-    router = plib.router(network, internal_ip, interface_list, config.wireless, config.hello,
-        stdout=os.open(os.path.join(config.log, 'vifibnet.babeld.log'),
-            os.O_WRONLY | os.O_CREAT | os.O_TRUNC), stderr=subprocess.STDOUT)
+    router = plib.router(network, internal_ip, interface_list, config.wireless,
+            config.hello, os.path.join(config.state, 'vifibnet.babeld.state'),
+            stdout=os.open(os.path.join(config.log, 'vifibnet.babeld.log'),
+                os.O_WRONLY|os.O_CREAT|os.O_TRUNC), stderr=subprocess.STDOUT)
 
    # Establish connections
-    server_process = plib.server(internal_ip, network, config.connection_count, config.dh, write_pipe,
-            config.internal_port, config.proto, config.hello, '--dev', 'vifibnet', *openvpn_args,
-            stdout=os.open(os.path.join(config.log, 'vifibnet.server.log'), os.O_WRONLY | os.O_CREAT | os.O_TRUNC))
+    server_process = list(plib.server(internal_ip, network,
+        config.connection_count, config.dh, write_pipe, config.internal_port,
+        proto, config.hello, '--dev', 'vifibnet', *openvpn_args,
+        stdout=os.open(os.path.join(config.log, 'vifibnet.server.log'),
+            os.O_WRONLY | os.O_CREAT | os.O_TRUNC)) for proto in config.proto)
     tunnel_manager.refresh()
 
     # main loop
     try:
         while True:
             ready, tmp1, tmp2 = select.select([read_pipe], [], [],
-                    max(0, min(tunnel_manager.next_refresh, peer_db.next_refresh) - time.time()))
+                    max(0, min(tunnel_manager.next_refresh,
+                               peer_db.next_refresh) - time.time()))
             if ready:
                 peer_db.handle_message(read_pipe.readline())
             if time.time() >= peer_db.next_refresh:

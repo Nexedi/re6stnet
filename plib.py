@@ -33,7 +33,7 @@ def server(server_ip, network, max_clients, dh_path, pipe_fd, port, proto, hello
 
 def client(server_address, pipe_fd, hello_interval, *args, **kw):
     utils.log('Starting client', 5)
-    remote= ['--nobind', 
+    remote= ['--nobind',
              '--client',
              '--up', 'ovpn-client',
              '--route-up', 'ovpn-client ' + str(pipe_fd) ]
@@ -43,7 +43,7 @@ def client(server_address, pipe_fd, hello_interval, *args, **kw):
     return openvpn(hello_interval, *remote, **kw)
 
 def router(network, internal_ip, interface_list,
-           wireless, hello_interval, **kw):
+           wireless, hello_interval, state_path, **kw):
     utils.log('Starting babel', 3)
     args = ['babeld',
             '-C', 'redistribute local ip %s' % (internal_ip),
@@ -59,10 +59,9 @@ def router(network, internal_ip, interface_list,
             '-d', str(verbose),
             '-h', str(hello_interval),
             '-H', str(hello_interval),
+            '-S', state_path,
             '-s',
             ]
-    #if utils.config.babel_state:
-    #    args += '-S', utils.config.babel_state
     if wireless:
         args.append('-w')
     args = args + interface_list

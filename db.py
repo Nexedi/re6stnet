@@ -1,10 +1,11 @@
-import sqlite3, socket, xmlrpclib, time
+import sqlite3, socket, xmlrpclib, time, os
 import utils
 
 class PeerManager:
 
     # internal ip = temp arg/attribute
-    def __init__(self, db_path, server, server_port, refresh_time, address, internal_ip, prefix, manual, db_size):
+    def __init__(self, db_dir_path, server, server_port, refresh_time, address,
+                       internal_ip, prefix, manual, proto, db_size):
         self._refresh_time = refresh_time
         self._address = address
         self._internal_ip = internal_ip
@@ -12,12 +13,14 @@ class PeerManager:
         self._server = server
         self._server_port = server_port
         self._db_size = db_size
+        self._proto = proto
         self._manual = manual
 
         self._proxy = xmlrpclib.ServerProxy('http://%s:%u' % (server, server_port))
 
         utils.log('Connectiong to peers database', 4)
-        self._db = sqlite3.connect(db_path, isolation_level=None)
+        self._db = sqlite3.connect(os.path.join(db_dir_path, 'peers.db'),
+                                   isolation_level=None)
         utils.log('Preparing peers database', 4)
         try:
             self._db.execute("UPDATE peers SET used = 0")
@@ -34,7 +37,7 @@ class PeerManager:
             self._populate()
             self.next_refresh = time.time() + self._refresh_time
         except socket.error, e:
-            utils.log(str(e), 3)
+            utils.log(str(e), 4)
             utils.log('Connection to server failed, retrying in 30s', 2)
             self.next_refresh = time.time() + 30
 
@@ -73,8 +76,8 @@ class PeerManager:
         elif script_type == 'route-up':
             if not self._manual:
                 external_ip, external_port = arg.split(',')
-                new_address = [[external_ip, external_port, 'udp'],
-                                 [external_ip, external_port, 'tcp-client']]
+                new_address = list([external_ip, external_port, proto]
+                                   for proto in self._proto)
                 if self._address != new_address:
                     self._address = new_address
                     utils.log('Received new external configuration : %s:%s' % (external_ip, external_port), 3)
