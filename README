@@ -1,4 +1,9 @@
-Vifibnet is a daemon setting up a resilient virtual private network over the internet
+Vifibnet is a daemon setting up a resilient virtual private network over the
+internet
+
+To use vifibnet, you need to launch the registry.py on a server to provide the 
+certificates. Then you should run setup.py on each clients tu prepare the
+clients and then run vifibnet.py on each client
 
 The organisation of the code
     vifibnet.py         Just contain the main loop and the init
