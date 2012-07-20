@@ -7,9 +7,11 @@ import db, plib, upnpigd, utils, tunnel
 class ArgParser(ArgumentParser):
 
     def convert_arg_line_to_args(self, arg_line):
-        for arg in ('--' + arg_line.lstrip('--')).split():
-            if arg.strip():
-                yield arg
+        arg_line = arg_line.split('#')[0].rstrip()
+        if arg_line:
+            for arg in ('--' + arg_line.lstrip('--')).split():
+                if arg.strip():
+                    yield arg
 
 def ovpnArgs(optional_args, ca_path, cert_path):
     # Treat openvpn arguments
