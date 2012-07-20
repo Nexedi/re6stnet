@@ -7,7 +7,7 @@ import db, plib, upnpigd, utils, tunnel
 class ArgParser(ArgumentParser):
 
     def convert_arg_line_to_args(self, arg_line):
-        for arg in ('--' + arg_line.strip()).split():
+        for arg in ('--' + arg_line.lstrip('--')).split():
             if arg.strip():
                 yield arg
 
