@@ -71,3 +71,10 @@ To be discussed:
         enought DB to ensure we can still choose a peer as if it was choosen
         directly from the server. The requiered db size can be calculated from
         the number of connections and the refresh time.
+
+    U : Why are --ip and internal-port mutually exclusive ?
+        Currently upnp only forward via UDP. Should he also forward via TCP ?
+        Why dont we only use UDP ?
+        No error should be raised when no upnp is detected : we should allow
+        machines having public IP to do an automatic configuration using the
+        discovery by an other peer

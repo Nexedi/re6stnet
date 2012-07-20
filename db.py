@@ -57,7 +57,7 @@ class PeerManager:
 
     def unusePeer(self, prefix):
         utils.log('Updating peers database : unusing peer ' + str(prefix), 5)
-        self._db.execute("UPDATE peers SET used = 0 WHERE id = ?", (prefix,))
+        self._db.execute("UPDATE peers SET used = 0 WHERE prefix = ?", (prefix,))
 
     def handle_message(self, msg):
         script_type, arg = msg.split()
@@ -72,7 +72,7 @@ class PeerManager:
                                  [external_ip, external_port, 'tcp-client']]
                 if self._address != new_address:
                     self._address = new_address
-                    utils.log('Received new external configuration : %:%s' % (external_ip, external_port), 3)
+                    utils.log('Received new external configuration : %s:%s' % (external_ip, external_port), 3)
                     self._declare()
         else:
             utils.log('Unknow message recieved from the openvpn pipe : ' + msg, 1)

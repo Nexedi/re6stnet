@@ -7,8 +7,7 @@ smooth = 0.3
 class Connection:
     def __init__(self, address, write_pipe, hello, iface, prefix,
             ovpn_args):
-        self.process = plib.client(address, write_pipe, hello,
-                '--dev', iface, '--proto', proto, '--rport', str(port),
+        self.process = plib.client(address, write_pipe, hello, '--dev', iface,
                 *ovpn_args, stdout=os.open(os.path.join(log,
                 'vifibnet.client.%s.log' % (prefix,)),
                 os.O_WRONLY|os.O_CREAT|os.O_TRUNC) )
@@ -16,13 +15,14 @@ class Connection:
         self.iface = iface
         self._lastTrafic = self._getTrafic()
         self._bandwidth = None
+        self._prefix = prefix
 
     # TODO : update the stats
     def refresh(self):
         # Check that the connection is alive
         if self.process.poll() != None:
             utils.log('Connection with %s has failed with return code %s' 
-                     % (prefix, self.process.returncode), 3)
+                     % (self._prefix, self.process.returncode), 3)
             return False
 
         trafic = self._getTrafic()
@@ -40,7 +40,7 @@ class Connection:
             f_rx = open('/sys/class/net/%s/statistics/rx_bytes' % self.iface, 'r')
             f_tx = open('/sys/class/net/%s/statistics/tx_bytes' % self.iface, 'r')
             return int(f_rx.read()) + int(f_tx.read())
-        except Exception: # TODO : change this
+        except Exception:
             return 0
 
 class TunnelManager:
@@ -97,7 +97,7 @@ class TunnelManager:
         try:
             for prefix, address in self._peer_db.getUnusedPeers(
                     self._client_count - len(self._connection_dict)):
-                utils.log('Establishing a connection with %s (%s:%s)' % prefix, 2)
+                utils.log('Establishing a connection with %s' % prefix, 2)
                 iface = self.free_interface_set.pop()
                 self._connection_dict[prefix] = Connection(address,
                         self._write_pipe, self._hello, iface,
@@ -105,6 +105,6 @@ class TunnelManager:
                 self._peer_db.usePeer(prefix)
         except KeyError:
             utils.log("""Can't establish connection with %s
-                         : no available interface""" % prefix, 2)
+                    : no available interface""" % prefix, 2)
         except Exception:
             traceback.print_exc()

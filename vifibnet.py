@@ -97,8 +97,8 @@ def main():
             config.address = [[external_ip, external_port, 'udp'],
                               [external_ip, external_port, 'tcp-client']]
         except Exception:
-            utils.log('An atempt to forward a port via UPnP failed', 3)
-            raise RuntimeError
+            utils.log('An atempt to forward a port via UPnP failed', 4)
+            #raise RuntimeError => this shouldn't raise an error since upnp is not mandatory
 
     peer_db = db.PeerManager(config.db, config.server, config.server_port,
             config.peers_db_refresh, config.address, internal_ip, prefix, manual, 200)
