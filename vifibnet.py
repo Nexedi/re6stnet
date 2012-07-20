@@ -4,7 +4,7 @@ from argparse import ArgumentParser
 from OpenSSL import crypto
 import db, plib, upnpigd, utils, tunnel
 
-def ArgParser(ArgumentParser):
+class ArgParser(ArgumentParser):
 
     def convert_arg_line_to_args(self, arg_line):
         for arg in ('--' + arg_line.strip()).split():
@@ -22,7 +22,7 @@ def ovpnArgs(optional_args, ca_path, cert_path):
     return optional_args
 
 def getConfig():
-    parser = argparse.ArgumentParser(
+    parser = ArgParser(fromfile_prefix_chars='@',
             description='Resilient virtual private network application')
     _ = parser.add_argument
     # Server address SHOULD be a vifib address ( else requests will be denied )
@@ -91,14 +91,13 @@ def main():
     if manual:
         utils.log('Manual external configuration', 3)
     else:
-        utils.log('Attempting automatic configuration via UPnP', 3)
+        utils.log('Attempting automatic configuration via UPnP', 4)
         try:
             external_ip, external_port = upnpigd.ForwardViaUPnP(config.internal_port)
             config.address = [[external_ip, external_port, 'udp'],
                               [external_ip, external_port, 'tcp-client']]
         except Exception:
             utils.log('An atempt to forward a port via UPnP failed', 4)
-            #raise RuntimeError => this shouldn't raise an error since upnp is not mandatory
 
     peer_db = db.PeerManager(config.db, config.server, config.server_port,
             config.peers_db_refresh, config.address, internal_ip, prefix, manual, 200)
