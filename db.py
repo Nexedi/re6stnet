@@ -1,4 +1,4 @@
-import sqlite3, xmlrpclib, time
+import sqlite3, socket, xmlrpclib, time
 import utils
 
 class PeerManager:
@@ -29,9 +29,14 @@ class PeerManager:
 
     def refresh(self):
         utils.log('Refreshing the peers DB', 2)
-        self._declare()
-        self._populate()
-        self.next_refresh = time.time() + self._refresh_time
+        try:
+            self._declare()
+            self._populate()
+            self.next_refresh = time.time() + self._refresh_time
+        except socket.error, e:
+            utils.log(str(e), 3)
+            utils.log('Connection to server failed, retrying in 30s', 2)
+            self.next_refresh = time.time() + 30
 
     def _declare(self):
         if self._address != None:

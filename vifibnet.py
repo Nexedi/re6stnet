@@ -116,6 +116,7 @@ def main():
     server_process = plib.server(internal_ip, network, config.connection_count, config.dh, write_pipe,
             config.internal_port, config.proto, config.hello, '--dev', 'vifibnet', *openvpn_args,
             stdout=os.open(os.path.join(config.log, 'vifibnet.server.log'), os.O_WRONLY | os.O_CREAT | os.O_TRUNC))
+    tunnel_manager.refresh()
 
     # main loop
     try:
