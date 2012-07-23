@@ -14,6 +14,7 @@ class Connection:
                 os.O_WRONLY|os.O_CREAT|os.O_TRUNC))
 
         self.iface = iface
+        self.routes = 0
         self._prefix = prefix
         self._creation_date = time.time()
         self._bandwidth = None
@@ -64,7 +65,7 @@ class TunnelManager:
         self._write_pipe = write_pipe
         self._peer_db = peer_db
         self._connection_dict = {}
-        self._route_count = {}
+        self._iface_to_prefix = {}
         self._ovpn_args = openvpn_args
         self._hello = hello_interval
         self._refresh_time = refresh
@@ -106,7 +107,7 @@ class TunnelManager:
             pass
         self.free_interface_set.add(connection.iface)
         self._peer_db.unusePeer(prefix)
-        del self._route_count[connection.iface]
+        del self._iface_to_prefix[connection.iface]
 
     def _makeNewTunnels(self):
         utils.log('Trying to make %i new tunnels' %
@@ -119,7 +120,7 @@ class TunnelManager:
                 self._connection_dict[prefix] = Connection(address,
                         self._write_pipe, self._hello, iface,
                         prefix, self._ovpn_args)
-                self._route_count[iface] = 0
+                self._iface_to_prefix[iface] = prefix
                 self._peer_db.usePeer(prefix)
         except KeyError:
             utils.log("""Can't establish connection with %s
@@ -129,17 +130,18 @@ class TunnelManager:
 
     def _countRoutes(self):
         utils.log('Starting to count the routes on each interface', 3)
-        for iface in self._route_count.keys():
-            self._route_count[iface] = 0
+        for iface in self._iface_to_prefix.keys():
+            self._connection_dict[self._iface_to_prefix[iface]].routes = 0
         f = open('/proc/net/ipv6_route', 'r')
         for line in f:
-            ip, subnet_size, iface = struct.unpack("""32s x 2s x 32x x 2x x 
-                    32x x 8x x 8x x 8x x 8x x %ss x""" % (len(line)-142), line)
+            ip, subnet_size, iface = struct.unpack("""32s x 2s 106x 
+                %ss x""" % (len(line)-142), line)
             iface = iface.replace(' ', '')
-            if iface in self._route_count.keys():
-                self._route_count[iface] += 1
-        for iface in self._route_count.keys():
+            if iface in self._iface_to_prefix.keys():
+                self._connection_dict[self._iface_to_prefix[iface]].routes += 1
+        for p in self._connection_dict.keys():
             utils.log('Routes on iface %s : %s' % (
-                    iface,self._route_count[iface] ), 5)
+                self._connection_dict[p].iface,
+                self._connection_dict[p].routes ), 5)
 
 

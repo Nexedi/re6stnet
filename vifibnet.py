@@ -34,7 +34,7 @@ def getConfig():
             help='Port on the machine to listen on for incomming connections')
     _('--peers-db-refresh', default=3600, type=int,
             help='the time (seconds) to wait before refreshing the peers db')
-    _('-l', '-log', default='/var/log',
+    _('-l', '-log', default='/var/log', dest='log', 
             help='Path to vifibnet logs directory')
     _('-s', '--state', default='/var/lib/vifibnet',
             help='Path to VPN state directory')

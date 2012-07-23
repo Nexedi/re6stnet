@@ -22,7 +22,8 @@ def server(server_ip, network, max_clients, dh_path, pipe_fd, port, proto, hello
     return openvpn(hello_interval,
         '--tls-server',
         '--mode', 'server',
-        '--up', 'ovpn-server %s/%u' % (server_ip, len(network)),
+        #'--up', 'ovpn-server %s/%u' % (server_ip, len(network)),
+        '--up', 'ovpn-server %s/%u' % (server_ip, 64), # Isn't this better ?
         '--client-connect', 'ovpn-server ' + str(pipe_fd),
         '--client-disconnect', 'ovpn-server ' + str(pipe_fd),
         '--dh', dh_path,
