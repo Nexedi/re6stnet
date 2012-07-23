@@ -17,12 +17,12 @@ def openvpn(hello_interval, *args, **kw):
     utils.log(str(args), 5)
     return subprocess.Popen(args, **kw)
 
-def server(server_ip, network, max_clients, dh_path, pipe_fd, port, proto, hello_interval, *args, **kw):
+def server(server_ip, ip_length, max_clients, dh_path, pipe_fd, port, proto, hello_interval, *args, **kw):
     utils.log('Starting server', 3)
     return openvpn(hello_interval,
         '--tls-server',
         '--mode', 'server',
-        '--up', 'ovpn-server %s/%u' % (server_ip, len(network)),
+        '--up', 'ovpn-server %s/%u' % (server_ip, ip_length),
         '--client-connect', 'ovpn-server ' + str(pipe_fd),
         '--client-disconnect', 'ovpn-server ' + str(pipe_fd),
         '--dh', dh_path,

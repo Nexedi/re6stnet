@@ -15,10 +15,6 @@ To be done :
     Use an algorithm to choose which connections to keep and/or establish
     instead of pure randomness
 
-    Find a name for the project : the projet is ( or should be ) independant
-    from vifib, openvpn, babel, and so should the name; btw we aim to build a
-    distributed, scalable, resilient VPN.... ( if it helps with the name )
-
     Replace comments at the beginning of functions with docstrings & give all
     fn docstrings
 
@@ -34,6 +30,9 @@ To be done :
     ( avahi could be used )
 
 To be discussed:
+    Ideas for the name :
+          CON ( cloud overlay network ), cloudnet. From J.P -> already taken
+
     G, J : To get traffic stats ( bytes in/out ), you can use
           /sys/class/net/interface/statistics/rx_bytes, etc...
         or /proc/net/dev/snmp6/interface ( all in one file ). This can be enough
