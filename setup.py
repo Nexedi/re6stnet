@@ -42,15 +42,16 @@ def main():
                    used INTEGER NOT NULL DEFAULT 0,
                    date INTEGER DEFAULT (strftime('%s', 'now')))""")
         db.execute("CREATE INDEX _peers_used ON peers(used)")
-        if not config.no_boot:
-            prefix, address = s.getBootstrapPeer()
-            db.execute("INSERT INTO peers (prefix, address) VALUES (?,?)", (prefix, address))
     except sqlite3.OperationalError, e:
         if e.args[0] == 'table peers already exists':
             print "Table peers already exists, leaving it as it is"
         else:
             print "sqlite3.OperationalError :" + e.args[0]
             sys.exit(1)
+
+    if not config.no_boot:
+        prefix, address = s.getBootstrapPeer()
+        db.execute("INSERT INTO peers (prefix, address) VALUES (?,?)", (prefix, address))
 
     if config.db_only:
         sys.exit(0)

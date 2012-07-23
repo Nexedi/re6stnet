@@ -5,6 +5,7 @@ log = None
 smooth = 0.3
 
 class Connection:
+
     def __init__(self, address, write_pipe, hello, iface, prefix,
             ovpn_args):
         self.process = plib.client(address, write_pipe, hello, '--dev', iface,

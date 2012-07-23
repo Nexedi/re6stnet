@@ -1,7 +1,16 @@
-To be done :
-    Add options to start udp server, tcp server or both
+G : We should focus on clearing the TODO List, then go to testing phase,
+    since the end is nearing... ( I finish on august, 3 )
 
-    use the server as a bootstrap node
+To be done :
+    Catch a more precise exception thant Exception at line 108 in vifibnet.py
+    ( UPnP forwarding )
+
+    Upgrade the logging function in order to be able to log message like
+    "Refreshing peers DB ... done", or add log messages to specify that an
+    action advertised by a previous log message has been completed
+
+    use the server as a bootstrap node -> switch peer discovery to be done
+    by vifibnet directly ?
 
     Use an algorithm to choose which connections to keep and/or establish
     instead of pure randomness
@@ -13,25 +22,18 @@ To be done :
     Replace comments at the beginning of functions with docstrings & give all
     fn docstrings
 
-    Use the server events ( client connection/deconnection ) to do something
-    useful
+    In peers DB, flag the dead peers so we only choose them if necessary and we
+    can remove them if we have enought peers
 
-    In peers DB, flag the dead peers so we only choose them if necessary and we can remove them if we have enought peers
-
-    Use a timeout for the server peersDB so we can rflag unreachable peers and
+    Use a timeout for the server peersDB so we can flag unreachable peers and
     remove the peers whose certificate is no longer valid
 
     Specify a lease duration in ForwardViaUPnP
 
     Handle LAN internally in order not to have catastrophic results ....
+    ( avahi could be used )
 
 To be discussed:
-    G : Database structure for bith vifibnet and registry have been changed.
-        Index is now always on the prefix ( there is no id anymore ). And
-        the (ip, port, proto) tuples have been replaced with addresses :
-        it is a list of ip, port, proto, that way a peer can announce
-        different (port, proto) combination.
-
     G, J : To get traffic stats ( bytes in/out ), you can use
           /sys/class/net/interface/statistics/rx_bytes, etc...
         or /proc/net/dev/snmp6/interface ( all in one file ). This can be enough
@@ -61,6 +63,12 @@ To be discussed:
         45% of the problems dont last more than 2 minutes, 55% no more than
         3 minutes If it takes 2 min to detect a dead connection, then we wont be
         solving many problems with our overlay network
+    G : ok, so babel hello-interval should be set to a lower value,
+        we should do some tests to pinpoint the best compromise between
+        speed and bandwith usage.
+        Btw, is there a doc ( pdf, image, file ) resuming Raphael's stats
+        on nexedi's server downtime ? it could be useful for the internship
+        rapport
 
     U : The peer DB size should depend on the number of connection and the
         refresh time
@@ -71,6 +79,7 @@ To be discussed:
         enought DB to ensure we can still choose a peer as if it was choosen
         directly from the server. The requiered db size can be calculated from
         the number of connections and the refresh time.
+    G : ok, you can erase this talk
 
     U : Why are --ip and internal-port mutually exclusive ?
         Currently upnp only forward via UDP. Should he also forward via TCP ?
@@ -78,3 +87,11 @@ To be discussed:
         No error should be raised when no upnp is detected : we should allow
         machines having public IP to do an automatic configuration using the
         discovery by an other peer
+    G : Actually, i was wrong, --ip and internal-port are no longer exclusive
+        Julien said udp might not be used by some people because of
+        restrictions imposed by the ISP ( FAI in french ), so we should
+        allow both, and act according to the options specifying which servers
+        to start (upd, tcp-server)
+
+    G : I think the number of route going through an interface should be a
+        Connection attribute, not a dict in tunnelManager
