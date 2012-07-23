@@ -138,6 +138,7 @@ class TunnelManager:
             if iface in self._route_count.keys():
                 self._route_count[iface] += 1
         for iface in self._route_count.keys():
-            utils.log('Routes on iface %s : %s' % (iface,self._route_count[iface] ), 5)
+            utils.log('Routes on iface %s : %s' % (
+                    iface,self._route_count[iface] ), 5)
 
 
