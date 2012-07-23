@@ -56,8 +56,8 @@ class PeerManager:
         utils.log('New peers : %s' % ', '.join(map(str, new_peer_list)), 5)
 
     def getUnusedPeers(self, peer_count):
-        return self._db.execute("""SELECT prefix, address FROM peers WHERE used = 0
-                                   ORDER BY RANDOM() LIMIT ?""", (peer_count,))
+        return self._db.execute("""SELECT prefix, address FROM peers WHERE used <= 0
+                                   ORDER BY used DESC,RANDOM() LIMIT ?""", (peer_count,))
 
     def usePeer(self, prefix):
         utils.log('Updating peers database : using peer ' + str(prefix), 5)
@@ -66,6 +66,10 @@ class PeerManager:
     def unusePeer(self, prefix):
         utils.log('Updating peers database : unusing peer ' + str(prefix), 5)
         self._db.execute("UPDATE peers SET used = 0 WHERE prefix = ?", (prefix,))
+
+    def flagPeer(self, prefix):
+        utils.log('Updating peers database : flagging peer ' + str(prefix), 5)
+        self._db.execute("UPDATE peers SET used = -1 WHERE prefix = ?", (prefix,))
 
     def handle_message(self, msg):
         script_type, arg = msg.split()
