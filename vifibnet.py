@@ -101,8 +101,8 @@ def main():
     else:
         utils.log('Attempting automatic configuration via UPnP', 4)
         try:
-            ext_ip, ext_port = upnpigd.ForwardViaUPnP(config.internal_port)
-            config.address = list([ext_ip, ext_port, proto]
+            ext_ip, ext_port = upnpigd.ForwardViaUPnP(config.internal_port, config.proto)
+            config.address = list([ext_ip, str(ext_port), proto]
                                   for proto in config.proto)
         except Exception:
             utils.log('An atempt to forward a port via UPnP failed', 4)

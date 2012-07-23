@@ -1,10 +1,4 @@
-G : We should focus on clearing the TODO List, then go to testing phase,
-    since the end is nearing... ( I finish on august, 3 )
-
 To be done :
-    Catch a more precise exception thant Exception at line 108 in vifibnet.py
-    ( UPnP forwarding )
-
     Upgrade the logging function in order to be able to log message like
     "Refreshing peers DB ... done", or add log messages to specify that an
     action advertised by a previous log message has been completed
@@ -14,6 +8,8 @@ To be done :
 
     Use an algorithm to choose which connections to keep and/or establish
     instead of pure randomness
+        |-> number of routes / tunnel : doesn't work
+        |-> favorise most used roads ?
 
     Replace comments at the beginning of functions with docstrings & give all
     fn docstrings
@@ -24,27 +20,12 @@ To be done :
     Use a timeout for the server peersDB so we can flag unreachable peers and
     remove the peers whose certificate is no longer valid
 
-    Specify a lease duration in ForwardViaUPnP
+    Specify a lease duration in ForwardViaUPnP and also forward a tcp port
 
     Handle LAN internally in order not to have catastrophic results ....
     ( avahi could be used )
 
 To be discussed:
-    Ideas for the name :
-          CON ( cloud overlay network ), cloudnet. From J.P -> already taken
-
-    G, J : To get traffic stats ( bytes in/out ), you can use
-          /sys/class/net/interface/statistics/rx_bytes, etc...
-        or /proc/net/dev/snmp6/interface ( all in one file ). This can be enough
-        if used as follows: get traffic diff from last time we checked in order
-        to choose which connection is significantly unused compared to others,
-        and close it. Of course, too recent connections (i.e. those for which we
-        have no previous stat) would be always kept.
-        This should be combined with routing table (i.e. how many nodes are
-        served by each tunnel), which is possibly redundant.
-        ip6tables should be avoided if possible.
-    U : Great !!!
-
     U : Babel seems to be very long to establish the routes : maybe we should
         tell him thant we are not on a wired network but on a mobile network ?
     G : babel establish routes quickly enough i'd say. There are two new
@@ -69,28 +50,13 @@ To be discussed:
         on nexedi's server downtime ? it could be useful for the internship
         rapport
 
-    U : The peer DB size should depend on the number of connection and the
-        refresh time
-    G : ?! I don't agree, the db size should be proportional ( with a factor
-        like 0.01 or less ) to the total number of peers in the entire network,
-        with maybe a max size.
-    U : what we need to do  is to keep the randomness. For this, we need a big
-        enought DB to ensure we can still choose a peer as if it was choosen
-        directly from the server. The requiered db size can be calculated from
-        the number of connections and the refresh time.
-    G : ok, you can erase this talk
-
-    U : Why are --ip and internal-port mutually exclusive ?
-        Currently upnp only forward via UDP. Should he also forward via TCP ?
-        Why dont we only use UDP ?
-        No error should be raised when no upnp is detected : we should allow
-        machines having public IP to do an automatic configuration using the
-        discovery by an other peer
-    G : Actually, i was wrong, --ip and internal-port are no longer exclusive
-        Julien said udp might not be used by some people because of
-        restrictions imposed by the ISP ( FAI in french ), so we should
-        allow both, and act according to the options specifying which servers
-        to start (upd, tcp-server)
-
     G : I think the number of route going through an interface should be a
         Connection attribute, not a dict in tunnelManager
+    U : Yes, it was planned, just wait for me to finish implementing it
+
+    U :  '--up', 'ovpn-server %s/%u' % (server_ip, len(network)) in plib.py
+        if you use len(network), this means that all our network is on the 
+        same LAN and that the interface of the server is connected to it
+        wich means that any packet should be routed to this interface
+        an interface should only advertise the /64 (or less) which has been 
+        attributed to it

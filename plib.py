@@ -22,7 +22,7 @@ def server(server_ip, ip_length, max_clients, dh_path, pipe_fd, port, proto, hel
     return openvpn(hello_interval,
         '--tls-server',
         '--mode', 'server',
-        '--up', 'ovpn-server %s/%u' % (server_ip, ip_length),
+        '--up', 'ovpn-server %s/%u' % (server_ip, 64), 
         '--client-connect', 'ovpn-server ' + str(pipe_fd),
         '--client-disconnect', 'ovpn-server ' + str(pipe_fd),
         '--dh', dh_path,

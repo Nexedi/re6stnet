@@ -2,29 +2,62 @@
 #include <cmath>
 #include <map>
 #include <queue>
+#include <stack>
+
+void erase(vector<int>& v, int value)
+{
+    for(int i=0;;i++)
+        if(v[i] == value)
+        {
+            v[i] = v.back();
+            v.pop_back();
+            break;
+        }
+}
 
 Graph::Graph(int size, int k, int maxPeers, mt19937& rng) :
     distrib(uniform_int_distribution<int>(0, size-1)),
-    size(size), generator(rng)
+    size(size), generator(rng), k(k), maxPeers(maxPeers)
 {
     adjacency = new vector<int>[size];
+    generated = new vector<int>[size];
+
     for(int i=0; i<size; i++)
     {
+        int otherNode;
         unordered_set<int> alreadyConnected;
         alreadyConnected.insert(i);
 
         for(int j=0; j<k; j++)
         {
-            int otherNode;
-
-            while(alreadyConnected.count(otherNode = distrib(rng)) == 1
-                || otherNode > i && adjacency[otherNode].size() > maxPeers-10
+            while(alreadyConnected.count(otherNode = distrib(generator)) >= 1
+                || otherNode > i && adjacency[otherNode].size() > maxPeers-k
                 || adjacency[otherNode].size() > maxPeers)
             { }
             adjacency[i].push_back(otherNode);
+            generated[i].push_back(otherNode);
             adjacency[otherNode].push_back(i);
         }
     }
+}
+
+int Graph::AddEdge(int from, unordered_set<int>& alreadyConnected)
+{
+    int otherNode;
+    while(alreadyConnected.count(otherNode = distrib(generator)) >= 1
+        || (adjacency[otherNode].size() > maxPeers ))
+    { }
+    adjacency[from].push_back(otherNode);
+    generated[from].push_back(otherNode);
+    adjacency[otherNode].push_back(from);
+    return otherNode;
+}
+
+int Graph::RemoveEdge(int from, int to)
+{
+    erase(generated[from], to);
+    erase(adjacency[from], to);
+    erase(adjacency[to], from);
 }
 
 void Graph::GetDistancesFrom(int node, int* distance)
@@ -48,6 +81,54 @@ void Graph::GetDistancesFrom(int node, int* distance)
                 remainingNodes.push(neighbor);
             }
     }
+}
+
+void Graph::GetRoutesFrom(int node, int* distance, float* routesCount)
+{
+    
+    unordered_set<int> prevs[size];
+
+    for(int i=0; i<size; i++)
+    {
+        distance[i] = -1;
+        routesCount[i] = 1;
+    }
+    distance[node] = 0;
+
+    queue<int> remainingNodes;
+    remainingNodes.push(node);
+
+    stack<int> order;
+
+    // Get the order
+    while(!remainingNodes.empty())
+    {
+        int node = remainingNodes.front();
+        int d = distance[node];
+        remainingNodes.pop();
+        order.push(node);
+
+        for(int neighbor : adjacency[node])
+            if(distance[neighbor] == -1)
+            {
+                distance[neighbor] = d+1;
+                prevs[neighbor].insert(node);
+                remainingNodes.push(neighbor);
+            }
+            else if(distance[neighbor] == d+1)
+                prevs[neighbor].insert(node);
+    }
+
+    // get the BC
+    while(!order.empty())
+    {
+        int node = order.top();
+        order.pop();
+        float w = routesCount[node];
+        for(int i : prevs[node])
+            routesCount[i] += w;
+    }
+
 }
 
 int Graph::CountUnreachableFrom(int node)

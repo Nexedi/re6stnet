@@ -1,4 +1,4 @@
-// To compile : g++ -std=c++0x results.cpp graph.cpp main.cpp -lpthread
+// To compile : g++ -std=c++0x results.cpp graph.cpp main.cpp -lpthread 
 #include "main.h"
 #include <future>
 #include <sstream>
@@ -14,8 +14,8 @@ Results Simulate(int seed,  int n, int k, int maxPeer, int maxDistanceFrom, floa
     for(int r=0; r<runs; r++)
     {
         Graph graph(n, k, maxPeer, rng);
-        graph.KillMachines(alivePercent);
-        results.AddAccessibilitySample(((double)graph.CountUnreachableFrom(0))/((double)n));
+        //graph.KillMachines(alivePercent);
+        //results.AddAccessibilitySample(((double)graph.CountUnreachableFrom(0))/((double)n));
         //int minCut = graph.GetMinCut();
         //if(results.minKConnexity == -1 || results.minKConnexity > minCut)
         //results.minKConnexity = minCut;
@@ -28,6 +28,56 @@ Results Simulate(int seed,  int n, int k, int maxPeer, int maxDistanceFrom, floa
             graph.GetDistancesFrom(i, distance);
             results.UpdateDistance(distance, graph.size);
         }*/
+
+        int distance[graph.size];
+        float routesCount[graph.size];
+        int nRefresh = 1;
+
+        graph.GetDistancesFrom(0, distance);
+        double moy = 0;
+        for(int i=0; i<graph.size; i++)
+            moy += distance[i];
+        moy /= graph.size;
+        cout << "Avg distance : " << moy << endl; cout.flush();
+
+        for(int i = 0; i<100; i++)
+        {
+            for(int j=0; j<graph.size; j++)
+            {
+                graph.GetRoutesFrom(j, distance, routesCount);
+                unordered_set<int> alreadyConnected;
+
+                // erase some edge
+                for(int k=0; k<nRefresh; k++)
+                {
+                    int minNode = -1;
+                    int minimum = -1;
+                    for(int index = 0; index < graph.generated[j].size(); index++)
+                        if(minNode == -1 || routesCount[graph.generated[j][index]] < minimum)
+                        {
+                            minNode = graph.generated[j][index];
+                            minimum = routesCount[minNode];
+                        }
+
+                    graph.RemoveEdge(j, minNode);
+                }
+
+                // Add new edges
+                alreadyConnected.insert(j);
+                for(int k : graph.adjacency[j])
+                    alreadyConnected.insert(k);
+
+                for(int k=0; k<nRefresh; k++)
+                    alreadyConnected.insert(graph.AddEdge(j, alreadyConnected));
+            }
+
+            graph.GetDistancesFrom(0, distance);
+            moy = 0;
+            for(int i=0; i<graph.size; i++)
+                moy += distance[i];
+            moy /= graph.size;
+            cout << "Avg distance : " << moy << endl;
+        }
     }
 
     results.Finalise();
@@ -46,12 +96,12 @@ int main(int argc, char** argv)
     vector<future<string>> outputStrings;
     for(int n=2000; n<=2000; n*=2)
         for(int k=10; k<=10; k+=5)
-            for(float a=0.01; a<=1; a+=0.05)
+            for(float a=1; a<=1; a+=0.05)
             {
                 int seed = rng();
                 outputStrings.push_back(async(launch::async, [seed, n, k, a]()
                     {
-                        Results results = Simulate(seed, n, k, 3*k, 10000, a, 1);
+                        Results results = Simulate(seed, n, k, 2.5*k, 10000, a, 1);
                         ostringstream out;
                         out << n << "," << k << "," << a << "," << 3*k << ","
                             << results.avgDistance << ","

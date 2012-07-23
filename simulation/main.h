@@ -35,22 +35,28 @@ class Graph
 {
 public:
     Graph(int size, int k, int maxPeers, mt19937& rng);
-    ~Graph() { delete[] adjacency; };
+    ~Graph() { delete[] adjacency; delete[] generated; };
 
     void GetDistancesFrom(int node, int* distance);
+    int AddEdge(int from, unordered_set<int>& alreadyConnected);
+    int RemoveEdge(int from, int to);
     int GetMinCut();
     int CountUnreachableFrom(int node);
+    void GetRoutesFrom(int node, int* distance, float* routesCount);
 
     void KillMachines(float proportion);
     //void SplitAS(float proportionAS1, float proportionAS2);
 
     vector<int>* adjacency;
+    vector<int>* generated;
     int size;
 private:
     int GetMinCut(MinCutGraph& graph);
 
     uniform_int_distribution<int> distrib;
     mt19937& generator;
+    int maxPeers;
+    int k;
 };
 
 class Results
