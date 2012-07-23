@@ -122,7 +122,7 @@ def main():
                 os.O_WRONLY|os.O_CREAT|os.O_TRUNC), stderr=subprocess.STDOUT)
 
    # Establish connections
-    server_process = list(plib.server(internal_ip, network,
+    server_process = list(plib.server(internal_ip, len(network) + len(prefix),
         config.connection_count, config.dh, write_pipe, config.internal_port,
         proto, config.hello, '--dev', 'vifibnet', *openvpn_args,
         stdout=os.open(os.path.join(config.log,

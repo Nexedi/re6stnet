@@ -11,10 +11,6 @@ To be done :
         |-> number of routes / tunnel : doesn't work
         |-> favorise most used roads ?
 
-    Find a name for the project : the projet is ( or should be ) independant
-    from vifib, openvpn, babel, and so should the name; btw we aim to build a
-    distributed, scalable, resilient VPN.... ( if it helps with the name )
-
     Replace comments at the beginning of functions with docstrings & give all
     fn docstrings
 
