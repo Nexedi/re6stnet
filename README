@@ -107,7 +107,10 @@ OPTIONS : VIFIBNET.PY
     -s, --state directory
             Path to the directory used for state files. State files include :
             - peers.db : the peers db used to establish connection
-            - vifibnet.babeld.state : babeld state file
+            - vifibnet.babeld.state : babeld state file ( created if does not
+              exists, overriden if exists )
+              There must be a valid peers db file ( named peers.db ) in the
+              directory. A valid peers db file can be created with setup.py
             Default : /var/lib/vifibnet
 
     -v, --verbose level
