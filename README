@@ -2,8 +2,8 @@ Vifibnet is a daemon setting up a resilient virtual private network over the
 internet
 
 HOW TO:
-    Vifibnet ( sic ) has three separate components : a setup, a server and
-    a client.
+    Vifibnet ( sic ) has three separate components : a setup (setup.py), a 
+    server (registry.py) and a client (vifibnet.py.
     Lambda users only have to launch the setup and then their client.
     The server is meant to be started once on a node which also will be running
     a client instance.

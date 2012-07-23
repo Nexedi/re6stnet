@@ -1,10 +1,4 @@
-G : We should focus on clearing the TODO List, then go to testing phase,
-    since the end is nearing... ( I finish on august, 3 )
-
 To be done :
-    Catch a more precise exception thant Exception at line 108 in vifibnet.py
-    ( UPnP forwarding )
-
     Upgrade the logging function in order to be able to log message like
     "Refreshing peers DB ... done", or add log messages to specify that an
     action advertised by a previous log message has been completed
@@ -14,6 +8,8 @@ To be done :
 
     Use an algorithm to choose which connections to keep and/or establish
     instead of pure randomness
+        |-> number of routes / tunnel : doesn't work
+        |-> favorise most used roads ?
 
     Find a name for the project : the projet is ( or should be ) independant
     from vifib, openvpn, babel, and so should the name; btw we aim to build a
@@ -28,13 +24,10 @@ To be done :
     Use a timeout for the server peersDB so we can flag unreachable peers and
     remove the peers whose certificate is no longer valid
 
-    Specify a lease duration in ForwardViaUPnP
+    Specify a lease duration in ForwardViaUPnP and also forward a tcp port
 
     Handle LAN internally in order not to have catastrophic results ....
     ( avahi could be used )
-
-    When we count the number of routes througt an interface, we should filter on
-    the prefix size and the subnet
 
 To be discussed:
     U : Babel seems to be very long to establish the routes : maybe we should
@@ -60,18 +53,6 @@ To be discussed:
         Btw, is there a doc ( pdf, image, file ) resuming Raphael's stats
         on nexedi's server downtime ? it could be useful for the internship
         rapport
-
-    U : Why are --ip and internal-port mutually exclusive ?
-        Currently upnp only forward via UDP. Should he also forward via TCP ?
-        Why dont we only use UDP ?
-        No error should be raised when no upnp is detected : we should allow
-        machines having public IP to do an automatic configuration using the
-        discovery by an other peer
-    G : Actually, i was wrong, --ip and internal-port are no longer exclusive
-        Julien said udp might not be used by some people because of
-        restrictions imposed by the ISP ( FAI in french ), so we should
-        allow both, and act according to the options specifying which servers
-        to start (upd, tcp-server)
 
     G : I think the number of route going through an interface should be a
         Connection attribute, not a dict in tunnelManager

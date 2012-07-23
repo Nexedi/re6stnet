@@ -88,6 +88,7 @@ class TunnelManager:
 
     def _cleanDeads(self):
         for prefix in self._connection_dict.keys():
+
             if not self._connection_dict[prefix].refresh():
                 self._kill(prefix)
 
