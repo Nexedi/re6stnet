@@ -3,7 +3,6 @@ import argparse, math, random, select, smtplib, sqlite3, string, socket, time, t
 from SimpleXMLRPCServer import SimpleXMLRPCServer, SimpleXMLRPCRequestHandler
 from email.mime.text import MIMEText
 from OpenSSL import crypto
-from time import time
 import utils
 
 # To generate server ca and key with serial for 2001:db8:42::/48
@@ -35,7 +34,7 @@ class main(object):
         self.cert_duration = 365 * 86400
         self.time_out = 86400
         self.refresh_interval = 600
-        self.last_refresh = time()
+        self.last_refresh = time.time()
 
         # Command line parsing
         parser = argparse.ArgumentParser(
@@ -198,10 +197,10 @@ class main(object):
         assert 0 < n < 1000
         client_ip = utils.binFromIp(client_address)
         if client_ip.startswith(self.network):
-            if time() > self.last_refresh + self.refresh_interval:
+            if time.time() > self.last_refresh + self.refresh_interval:
                 print "refreshing peers for dead ones"
                 self.db.execute("DELETE FROM peers WHERE ( date + ? ) <= CAST (strftime('%s', 'now') AS INTEGER)", (self.time_out,))
-                self.last_refesh = time()
+                self.last_refesh = time.time()
             print "sending peers"
             return self.db.execute("SELECT prefix, address FROM peers ORDER BY random() LIMIT ?", (n,)).fetchall()
         else:

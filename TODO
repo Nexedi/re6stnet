@@ -49,6 +49,8 @@ To be discussed:
         Btw, is there a doc ( pdf, image, file ) resuming Raphael's stats
         on nexedi's server downtime ? it could be useful for the internship
         rapport
+==>     It takes babel between 3 times and 4 times the hello interval to
+        reestablish connection, if a direct link is cut
 
     G : I think the number of route going through an interface should be a
         Connection attribute, not a dict in tunnelManager

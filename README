@@ -135,6 +135,9 @@ OPTIONS : VIFIBNET.PY
             to :
             -h duration -H duration
             in babeld ( for more information, see babeld man page )
+            It takes between 3 times and 4 times the hello interval for babel
+            to re-establish connection with a node for which the direct
+            connection has been cut
             Default : 30
 
     -w, --wireless
