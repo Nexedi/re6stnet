@@ -1,6 +1,6 @@
 To be done :
     The address of the client is declared while it should only be the address
-    of the server 
+    of the server
 
     Upgrade the logging function in order to be able to log message like
     "Refreshing peers DB ... done", or add log messages to specify that an
@@ -11,7 +11,7 @@ To be done :
 
     Use an algorithm to choose which connections to keep and/or establish
     instead of pure randomness
-        |-> number of routes / tunnel 
+        |-> number of routes / tunnel
         |-> favorise most used roads ?
 
     Replace comments at the beginning of functions with docstrings & give all
