@@ -40,14 +40,10 @@ def getConfig():
             help='Path to vifibnet logs directory')
     _('-s', '--state', default='/var/lib/vifibnet',
             help='Path to VPN state directory')
-    _('--verbose', '-v', default=0, type=int,
+    _('-v', '--verbose', default=0, type=int,
             help='Defines the verbose level')
     _('-i', '--interface', action='append', dest='iface_list', default=[],
             help='Extra interface for LAN discovery')
-    #_('--babel-state', default='/var/lib/vifibnet/babel_state',
-    #        help='Path to babeld state-file')
-    #_('--db', default='/var/lib/vifibnet/peers.db',
-    #        help='Path to peers database')
     _('--server', required=True,
             help="VPN address of the discovery peer server")
     _('--server-port', required=True, type=int,
@@ -97,7 +93,7 @@ def main():
     tunnel.log = config.log
     utils.verbose = plib.verbose = config.verbose
 
-    utils.log(str(config), 5)
+    utils.log("Configuration :\n" + str(config), 5)
 
     # Create and open read_only pipe to get server events
     utils.log('Creating pipe for server events...', 3)
