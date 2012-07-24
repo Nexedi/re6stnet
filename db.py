@@ -35,8 +35,12 @@ class PeerManager:
 
         self.next_refresh = time.time()
 
+    def reset_blacklist(self):
+        self._blacklist = [(self._prefix)]
+
     def blacklist(self, prefix):
         utils.log('Blacklisting %s' % (prefix,), 4)
+        self._db.execute("DELETE FROM peers WHERE prefix = ?", (prefix,))
         self._blacklist = list(set(self._blacklist + [(prefix,)]))
 
     def refresh(self):

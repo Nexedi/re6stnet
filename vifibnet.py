@@ -54,7 +54,7 @@ def getConfig():
             help="VPN port of the discovery peer server")
 
     # Routing algorithm options
-    _('--hello', type=int, default=30,
+    _('--hello', type=int, default=15,
             help='Hello interval for babel, in seconds')
     _('-w', '--wireless', action='store_true',
             help='''Set all interfaces to be treated as wireless interfaces
