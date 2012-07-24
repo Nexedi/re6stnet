@@ -1,27 +1,28 @@
-To be done :
+Bugs:
     The address of the client is declared while it should only be the address
     of the server 
 
-    Upgrade the logging function in order to be able to log message like
-    "Refreshing peers DB ... done", or add log messages to specify that an
-    action advertised by a previous log message has been completed
-
+To be done :
     use the server as a bootstrap node -> switch peer discovery to be done
     by vifibnet directly ?
 
     Use an algorithm to choose which connections to keep and/or establish
     instead of pure randomness
-        |-> number of routes / tunnel 
-        |-> favorise most used roads ?
+        number of routes / tunnel 
+        favorise most used roads
+
+    Handle LAN internally in order not to have catastrophic results ....
+        the first thing to do is to include the LAN iface on the intarfaces
+        given to babel => pb : someone who has a lan acces to our network can 
+        provide false informations. Needs of signature
+        If it is not sufficient, we could use avahi (dm-dns for linux)
 
     Replace comments at the beginning of functions with docstrings & give all
     fn docstrings
 
-    Use a timeout for the server peersDB so we can flag unreachable peers and
-    remove the peers whose certificate is no longer valid
-
-    Handle LAN internally in order not to have catastrophic results ....
-    ( avahi could be used )
+    Upgrade the logging function in order to be able to log message like
+    "Refreshing peers DB ... done", or add log messages to specify that an
+    action advertised by a previous log message has been completed
 
 To be discussed:
     U : Babel seems to be very long to establish the routes : maybe we should
@@ -47,7 +48,7 @@ To be discussed:
         Btw, is there a doc ( pdf, image, file ) resuming Raphael's stats
         on nexedi's server downtime ? it could be useful for the internship
         rapport
-==>     It takes babel between 3 times and 4 times the hello interval to
+    G : It takes babel between 3 times and 4 times the hello interval to
         reestablish connection, if a direct link is cut
     U : So we have to reduce the hello interval. 2min to detect a dead link is
         far too much.
