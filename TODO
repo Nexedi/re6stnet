@@ -1,4 +1,7 @@
 To be done :
+    The address of the client is declared while it should only be the address
+    of the server 
+
     Upgrade the logging function in order to be able to log message like
     "Refreshing peers DB ... done", or add log messages to specify that an
     action advertised by a previous log message has been completed
@@ -8,19 +11,14 @@ To be done :
 
     Use an algorithm to choose which connections to keep and/or establish
     instead of pure randomness
-        |-> number of routes / tunnel : doesn't work
+        |-> number of routes / tunnel 
         |-> favorise most used roads ?
 
     Replace comments at the beginning of functions with docstrings & give all
     fn docstrings
 
-    In peers DB, flag the dead peers so we only choose them if necessary and we
-    can remove them if we have enought peers
-
     Use a timeout for the server peersDB so we can flag unreachable peers and
     remove the peers whose certificate is no longer valid
-
-    Specify a lease duration in ForwardViaUPnP and also forward a tcp port
 
     Handle LAN internally in order not to have catastrophic results ....
     ( avahi could be used )
@@ -51,14 +49,5 @@ To be discussed:
         rapport
 ==>     It takes babel between 3 times and 4 times the hello interval to
         reestablish connection, if a direct link is cut
-
-    G : I think the number of route going through an interface should be a
-        Connection attribute, not a dict in tunnelManager
-    U : Yes, it was planned, just wait for me to finish implementing it
-
-    U :  '--up', 'ovpn-server %s/%u' % (server_ip, len(network)) in plib.py
-        if you use len(network), this means that all our network is on the 
-        same LAN and that the interface of the server is connected to it
-        wich means that any packet should be routed to this interface
-        an interface should only advertise the /64 (or less) which has been 
-        attributed to it
+    U : So we have to reduce the hello interval. 2min to detect a dead link is
+        far too much.

@@ -3,6 +3,7 @@ import argparse, errno, os, select, subprocess, time
 from argparse import ArgumentParser
 import db, plib, upnpigd, utils, tunnel
 
+
 class ArgParser(ArgumentParser):
 
     def convert_arg_line_to_args(self, arg_line):
@@ -11,6 +12,7 @@ class ArgParser(ArgumentParser):
             for arg in ('--' + arg_line.lstrip('--')).split():
                 if arg.strip():
                     yield arg
+
 
 def ovpnArgs(optional_args, ca_path, cert_path):
     # Treat openvpn arguments
@@ -21,6 +23,7 @@ def ovpnArgs(optional_args, ca_path, cert_path):
     optional_args.append('--cert')
     optional_args.append(cert_path)
     return optional_args
+
 
 def getConfig():
     parser = ArgParser(fromfile_prefix_chars='@',
@@ -78,6 +81,7 @@ def getConfig():
             help="Common OpenVPN options (e.g. certificates)")
     return parser.parse_args()
 
+
 def main():
     # Get arguments
     config = getConfig()
@@ -101,10 +105,11 @@ def main():
     else:
         utils.log('Attempting automatic configuration via UPnP', 4)
         try:
-            ext_ip, ext_port = upnpigd.ForwardViaUPnP(config.internal_port, config.proto)
-            config.address = list([ext_ip, str(ext_port), proto]
-                                  for proto in config.proto)
+            forward = upnpigd.UpnpForward(config.internal_port, config.proto)
+            config.address = list([forward.external_ip,
+                str(forward.external_port), proto] for proto in config.proto)
         except Exception:
+            forward = None
             utils.log('An atempt to forward a port via UPnP failed', 4)
 
     peer_db = db.PeerManager(config.state, config.server, config.server_port,
@@ -119,7 +124,7 @@ def main():
     router = plib.router(network, internal_ip, interface_list, config.wireless,
             config.hello, os.path.join(config.state, 'vifibnet.babeld.state'),
             stdout=os.open(os.path.join(config.log, 'vifibnet.babeld.log'),
-                os.O_WRONLY|os.O_CREAT|os.O_TRUNC), stderr=subprocess.STDOUT)
+            os.O_WRONLY | os.O_CREAT | os.O_TRUNC), stderr=subprocess.STDOUT)
 
    # Establish connections
     server_process = list(plib.server(internal_ip, len(network) + len(prefix),
@@ -133,9 +138,12 @@ def main():
     # main loop
     try:
         while True:
-            ready, tmp1, tmp2 = select.select([read_pipe], [], [],
-                    max(0, min(tunnel_manager.next_refresh,
-                               peer_db.next_refresh) - time.time()))
+            nextUpdate = min(tunnel_manager.next_refresh, peer_db.next_refresh)
+            if forward != None:
+                nextUpdate = min(nextUpdate, forward.next_refresh)
+            nextUpdate = max(0, nextUpdate - time.time())
+
+            ready, tmp1, tmp2 = select.select([read_pipe], [], [], nextUpdate)
             if ready:
                 peer_db.handle_message(read_pipe.readline())
             if time.time() >= peer_db.next_refresh:
@@ -147,4 +155,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

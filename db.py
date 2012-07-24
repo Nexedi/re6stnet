@@ -1,6 +1,7 @@
 import sqlite3, socket, xmlrpclib, time, os
 import utils
 
+
 class PeerManager:
 
     # internal ip = temp arg/attribute
@@ -16,7 +17,8 @@ class PeerManager:
         self._proto = proto
         self._manual = manual
 
-        self._proxy = xmlrpclib.ServerProxy('http://%s:%u' % (server, server_port))
+        self._proxy = xmlrpclib.ServerProxy('http://%s:%u'
+                % (server, server_port))
 
         utils.log('Connectiong to peers database', 4)
         self._db = sqlite3.connect(os.path.join(db_dir_path, 'peers.db'),
@@ -44,32 +46,43 @@ class PeerManager:
     def _declare(self):
         if self._address != None:
             utils.log('Sending connection info to server', 3)
-            self._proxy.declare((self._internal_ip, utils.address_list(self._address)))
+            self._proxy.declare((self._internal_ip,
+                    utils.address_list(self._address)))
         else:
-            utils.log("Warning : couldn't advertise to server, external config not known", 4)
+            utils.log("Warning : couldn't send ip, unknown external config", 4)
 
     def _populate(self):
         utils.log('Populating the peers DB', 2)
-        new_peer_list = self._proxy.getPeerList(self._db_size, self._internal_ip)
-        self._db.executemany("INSERT OR IGNORE INTO peers (prefix, address) VALUES (?,?)", new_peer_list)
+        new_peer_list = self._proxy.getPeerList(self._db_size,
+                self._internal_ip)
+        self._db.execute("""DELETE FROM peers WHERE used <= 0 ORDER BY used,
+                            RANDOM() LIMIT MAX(0, ? + (SELECT COUNT(*)
+                            FROM peers WHERE used <= 0))""",
+                            (str(len(new_peer_list) - self._db_size),))
+        self._db.executemany("""INSERT OR IGNORE INTO peers (prefix, address)
+                                VALUES (?,?)""", new_peer_list)
         self._db.execute("DELETE FROM peers WHERE prefix = ?", (self._prefix,))
         utils.log('New peers : %s' % ', '.join(map(str, new_peer_list)), 5)
 
     def getUnusedPeers(self, peer_count):
-        return self._db.execute("""SELECT prefix, address FROM peers WHERE used <= 0
-                                   ORDER BY used DESC,RANDOM() LIMIT ?""", (peer_count,))
+        return self._db.execute("""SELECT prefix, address FROM peers WHERE used
+                                   <= 0 ORDER BY used DESC,RANDOM() LIMIT ?""",
+                                   (peer_count,))
 
     def usePeer(self, prefix):
         utils.log('Updating peers database : using peer ' + str(prefix), 5)
-        self._db.execute("UPDATE peers SET used = 1 WHERE prefix = ?", (prefix,))
+        self._db.execute("UPDATE peers SET used = 1 WHERE prefix = ?",
+                (prefix,))
 
     def unusePeer(self, prefix):
         utils.log('Updating peers database : unusing peer ' + str(prefix), 5)
-        self._db.execute("UPDATE peers SET used = 0 WHERE prefix = ?", (prefix,))
+        self._db.execute("UPDATE peers SET used = 0 WHERE prefix = ?",
+                (prefix,))
 
     def flagPeer(self, prefix):
         utils.log('Updating peers database : flagging peer ' + str(prefix), 5)
-        self._db.execute("UPDATE peers SET used = -1 WHERE prefix = ?", (prefix,))
+        self._db.execute("UPDATE peers SET used = -1 WHERE prefix = ?",
+                (prefix,))
 
     def handle_message(self, msg):
         script_type, arg = msg.split()
@@ -84,7 +97,9 @@ class PeerManager:
                                    for proto in self._proto)
                 if self._address != new_address:
                     self._address = new_address
-                    utils.log('Received new external configuration : %s:%s' % (external_ip, external_port), 3)
+                    utils.log('Received new external configuration : %s:%s'
+                            % (external_ip, external_port), 3)
                     self._declare()
         else:
-            utils.log('Unknow message recieved from the openvpn pipe : ' + msg, 1)
+            utils.log('Unknow message recieved from the openvpn pipe : '
+                    + msg, 1)

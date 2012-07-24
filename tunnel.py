@@ -4,6 +4,7 @@ import plib, utils, db
 log = None
 smooth = 0.3
 
+
 class Connection:
 
     def __init__(self, address, write_pipe, hello, iface, prefix,
@@ -11,7 +12,7 @@ class Connection:
         self.process = plib.client(address, write_pipe, hello, '--dev', iface,
                 *ovpn_args, stdout=os.open(os.path.join(log,
                 'vifibnet.client.%s.log' % (prefix,)),
-                os.O_WRONLY|os.O_CREAT|os.O_TRUNC))
+                os.O_WRONLY | os.O_CREAT | os.O_TRUNC))
 
         self.iface = iface
         self.routes = 0
@@ -24,7 +25,7 @@ class Connection:
     def refresh(self):
         # Check that the connection is alive
         if self.process.poll() != None:
-            utils.log('Connection with %s has failed with return code %s' 
+            utils.log('Connection with %s has failed with return code %s'
                      % (self._prefix, self.process.returncode), 3)
             return False
 
@@ -42,21 +43,23 @@ class Connection:
             t = time.time()
 
             if bool(self._last_trafic):
-                bw = (trafic - self._last_trafic)/(t - 
+                bw = (trafic - self._last_trafic) / (t -
                         self._last_trafic_update)
                 if bool(self._bandwidth):
-                    self._bandwidth = (1-smooth)*self._bandwidth + smooth*bw
+                    self._bandwidth = ((1 - smooth) * self._bandwidth
+                            + smooth * bw)
                 else:
                     self._bandwidth = bw
 
-                utils.log('New bandwidth calculated on iface %s : %s' % 
+                utils.log('New bandwidth calculated on iface %s : %s' %
                         (self.iface, self._bandwidth), 4)
 
             self._last_trafic_update = t
             self._last_trafic = trafic
-        except IOError: # This just means that the interface is downs
-            utils.log('Unable to calculate bandwidth on iface %s' % 
+        except IOError:  # This just means that the interface is downs
+            utils.log('Unable to calculate bandwidth on iface %s' %
                 self.iface, 4)
+
 
 class TunnelManager:
 
@@ -75,8 +78,8 @@ class TunnelManager:
                                        'client10', 'client11', 'client12'))
         self.next_refresh = time.time()
 
-        self._client_count = connection_count/2
-        self._refresh_count = refresh_rate*self._client_count
+        self._client_count = connection_count / 2
+        self._refresh_count = refresh_rate * self._client_count
 
     def refresh(self):
         utils.log('Refreshing the tunnels', 2)
@@ -88,9 +91,9 @@ class TunnelManager:
 
     def _cleanDeads(self):
         for prefix in self._connection_dict.keys():
-
             if not self._connection_dict[prefix].refresh():
                 self._kill(prefix)
+                self._peer_db.flagPeer(prefix)
 
     def _removeSomeTunnels(self):
         for i in range(0, max(0, len(self._connection_dict) -
@@ -135,14 +138,12 @@ class TunnelManager:
             self._connection_dict[self._iface_to_prefix[iface]].routes = 0
         f = open('/proc/net/ipv6_route', 'r')
         for line in f:
-            ip, subnet_size, iface = struct.unpack("""32s x 2s 106x 
-                %ss x""" % (len(line)-142), line)
+            ip, subnet_size, iface = struct.unpack('32s x 2s 106x %ss x'
+                % (len(line) - 142), line)
             iface = iface.replace(' ', '')
             if iface in self._iface_to_prefix.keys():
                 self._connection_dict[self._iface_to_prefix[iface]].routes += 1
         for p in self._connection_dict.keys():
             utils.log('Routes on iface %s : %s' % (
                 self._connection_dict[p].iface,
-                self._connection_dict[p].routes ), 5)
-
-
+                self._connection_dict[p].routes), 5)
