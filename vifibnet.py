@@ -3,16 +3,17 @@ import argparse, errno, os, select, subprocess, time
 from argparse import ArgumentParser
 import db, plib, upnpigd, utils, tunnel
 
-
 class ArgParser(ArgumentParser):
 
     def convert_arg_line_to_args(self, arg_line):
         arg_line = arg_line.split('#')[0].rstrip()
         if arg_line:
+            if arg_line.startswith('@'):
+                yield arg_line
+                return
             for arg in ('--' + arg_line.lstrip('--')).split():
                 if arg.strip():
                     yield arg
-
 
 def ovpnArgs(optional_args, ca_path, cert_path):
     # Treat openvpn arguments
@@ -41,6 +42,8 @@ def getConfig():
             help='Path to VPN state directory')
     _('--verbose', '-v', default=0, type=int,
             help='Defines the verbose level')
+    _('-i', '--interface', action='append', dest='iface_list', default=[],
+            help='Extra interface for LAN discovery')
     #_('--babel-state', default='/var/lib/vifibnet/babel_state',
     #        help='Path to babeld state-file')
     #_('--db', default='/var/lib/vifibnet/peers.db',
@@ -94,22 +97,26 @@ def main():
     tunnel.log = config.log
     utils.verbose = plib.verbose = config.verbose
 
+    utils.log(str(config), 5)
+
     # Create and open read_only pipe to get server events
-    utils.log('Creating pipe for server events', 3)
+    utils.log('Creating pipe for server events...', 3)
     r_pipe, write_pipe = os.pipe()
     read_pipe = os.fdopen(r_pipe)
+    utils.log('Pipe created', 5)
 
     # Init db and tunnels
     if manual:
-        utils.log('Manual external configuration', 3)
+        utils.log('Detected manual external configuration', 3)
         forward = None
     else:
-        utils.log('Attempting automatic configuration via UPnP', 4)
+        utils.log('Attempting automatic configuration via UPnP...', 4)
         try:
             forward = list([upnpigd.UpnpForward(int(port), proto), proto]
                            for port, proto in config.pp)
             config.address = list([ext.external_ip, str(ext.external_port),
                 proto] for ext, proto in forward)
+            utils.log('Automatic configuration succeeded', 5)
         except Exception:
             forward = None
             utils.log('An atempt to forward a port via UPnP failed', 4)
@@ -119,10 +126,11 @@ def main():
             manual, config.pp, 200)
     tunnel_manager = tunnel.TunnelManager(write_pipe, peer_db, openvpn_args,
             config.hello, config.tunnel_refresh, config.connection_count,
-            config.refresh_rate)
+            config.refresh_rate, config.iface_list, network)
 
     # Launch routing protocol. WARNING : you have to be root to start babeld
-    interface_list = ['vifibnet'] + list(tunnel_manager.free_interface_set)
+    interface_list = ['vifibnet'] + list(tunnel_manager.free_interface_set) \
+                     + config.iface_list
     router = plib.router(network, internal_ip, interface_list, config.wireless,
             config.hello, os.path.join(config.state, 'vifibnet.babeld.state'),
             stdout=os.open(os.path.join(config.log, 'vifibnet.babeld.log'),
@@ -134,7 +142,8 @@ def main():
         proto, config.hello, '--dev', 'vifibnet', *openvpn_args,
         stdout=os.open(os.path.join(config.log,
             'vifibnet.server.%s.log' % (proto,)),
-            os.O_WRONLY | os.O_CREAT | os.O_TRUNC))
+            os.O_WRONLY | os.O_CREAT | os.O_TRUNC),
+        stderr=subprocess.STDOUT)
         for port, proto in config.pp)
     tunnel_manager.refresh()
 
