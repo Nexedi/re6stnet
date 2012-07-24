@@ -6,7 +6,7 @@ class PeerManager:
 
     # internal ip = temp arg/attribute
     def __init__(self, db_dir_path, server, server_port, refresh_time, address,
-                       internal_ip, prefix, manual, proto, port , db_size):
+                       internal_ip, prefix, manual, pp , db_size):
         self._refresh_time = refresh_time
         self._address = address
         self._internal_ip = internal_ip
@@ -14,8 +14,7 @@ class PeerManager:
         self._server = server
         self._server_port = server_port
         self._db_size = db_size
-        self._proto = proto
-        self._ovpn_port = port
+        self._pp = pp
         self._manual = manual
 
         self._proxy = xmlrpclib.ServerProxy('http://%s:%u'
@@ -94,12 +93,12 @@ class PeerManager:
         elif script_type == 'route-up':
             if not self._manual:
                 external_ip = arg
-                new_address = list([external_ip, self._ovpn_port, proto]
-                                   for proto in self._proto)
+                new_address = list([external_ip, port, proto]
+                                   for port, proto in self._pp)
                 if self._address != new_address:
                     self._address = new_address
-                    utils.log('Received new external configuration : %s:%s'
-                            % (external_ip, external_port), 3)
+                    utils.log('Received new external ip : %s' 
+                              % (external_ip,), 3)
                     self._declare()
         else:
             utils.log('Unknow message recieved from the openvpn pipe : '

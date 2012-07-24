@@ -33,8 +33,6 @@ def getConfig():
     # General Configuration options
     _('--ip', default=None, dest='address', action='append', nargs=3,
             help='Ip address, port and protocol advertised to other vpn nodes')
-    _('--internal-port', default=1194,
-            help='Port on the machine to listen on for incomming connections')
     _('--peers-db-refresh', default=3600, type=int,
             help='the time (seconds) to wait before refreshing the peers db')
     _('-l', '--log', default='/var/log',
@@ -60,8 +58,8 @@ def getConfig():
                     for the routing protocol''')
 
     # Tunnel options
-    _('--proto', choices=['udp', 'tcp-server'], nargs='+', default=['udp'],
-            help='Protocol(s) to be used by other peers to connect')
+    _('--pp', nargs=2, action='append',
+            help='Port and protocol to be used by other peers to connect')
     _('--tunnel-refresh', default=300, type=int,
             help='the time (seconds) to wait before changing the connections')
     _('--dh', required=True,
@@ -85,6 +83,8 @@ def getConfig():
 def main():
     # Get arguments
     config = getConfig()
+    if not config.pp:
+        config.pp = [['1194', 'udp']]
     manual = bool(config.address)
     network = utils.networkFromCa(config.ca)
     internal_ip, prefix = utils.ipFromCert(network, config.cert)
@@ -102,19 +102,21 @@ def main():
     # Init db and tunnels
     if manual:
         utils.log('Manual external configuration', 3)
+        forward = None
     else:
         utils.log('Attempting automatic configuration via UPnP', 4)
         try:
-            forward = upnpigd.UpnpForward(config.internal_port, config.proto)
-            config.address = list([forward.external_ip,
-                str(forward.external_port), proto] for proto in config.proto)
+            forward = list([upnpigd.UpnpForward(int(port), proto), proto]
+                           for port, proto in config.pp)
+            config.address = list([ext.external_ip, str(ext.external_port),
+                proto] for ext, proto in forward)
         except Exception:
             forward = None
             utils.log('An atempt to forward a port via UPnP failed', 4)
 
     peer_db = db.PeerManager(config.state, config.server, config.server_port,
             config.peers_db_refresh, config.address, internal_ip, prefix,
-            manual, config.proto, 200)
+            manual, config.pp, 200)
     tunnel_manager = tunnel.TunnelManager(write_pipe, peer_db, openvpn_args,
             config.hello, config.tunnel_refresh, config.connection_count,
             config.refresh_rate)
@@ -128,11 +130,12 @@ def main():
 
    # Establish connections
     server_process = list(plib.server(internal_ip, len(network) + len(prefix),
-        config.connection_count, config.dh, write_pipe, config.internal_port,
+        config.connection_count, config.dh, write_pipe, port,
         proto, config.hello, '--dev', 'vifibnet', *openvpn_args,
         stdout=os.open(os.path.join(config.log,
             'vifibnet.server.%s.log' % (proto,)),
-            os.O_WRONLY | os.O_CREAT | os.O_TRUNC)) for proto in config.proto)
+            os.O_WRONLY | os.O_CREAT | os.O_TRUNC))
+        for port, proto in config.pp)
     tunnel_manager.refresh()
 
     # main loop
