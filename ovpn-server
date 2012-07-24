@@ -49,8 +49,6 @@ if script_type == 'client-connect':
     with open(sys.argv[2], 'w') as f:
         f.write('push "setenv-safe external_ip %s"\n'
                 % os.environ['trusted_ip'])
-        f.write('push "setenv-safe external_port %s"\n'
-                % os.environ['trusted_port'])
 
 # Write into pipe connect/disconnect events
 os.write(int(sys.argv[1]), '%(script_type)s %(common_name)s\n' % os.environ)

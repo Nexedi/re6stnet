@@ -1,6 +1,6 @@
 Bugs:
     The address of the client is declared while it should only be the address
-    of the server 
+    of the server
 
 To be done :
     use the server as a bootstrap node -> switch peer discovery to be done
