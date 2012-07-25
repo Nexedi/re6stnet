@@ -1,8 +1,11 @@
-import os, random, traceback, time, struct
+import os, random, traceback, time, struct, operator
 import plib, utils, db
 
 log = None
-smooth = 0.3
+smooth = 0.3    # this is used to smooth the traffic sampling. Lower value
+                 # mean more smooth
+
+# Be carfull the refresh interval should let the routes be established
 
 
 class Connection:
@@ -17,7 +20,6 @@ class Connection:
         self.iface = iface
         self.routes = 0
         self._prefix = prefix
-        self._creation_date = time.time()
         self._bandwidth = None
         self._last_trafic = None
 
@@ -96,9 +98,12 @@ class TunnelManager:
                 self._peer_db.flagPeer(prefix)
 
     def _removeSomeTunnels(self):
-        for i in range(0, max(0, len(self._connection_dict) -
-                    self._client_count + self._refresh_count)):
-            prefix = random.choice(self._connection_dict.keys())
+        # Get the candidates to killing
+        candidates = sorted(self._connection_dict, key=lambda p:
+                self._connection_dict[p].routes)
+
+        for prefix in candidates[0: max(0, len(self._connection_dict) -
+                self._client_count + self._refresh_count)]:
             self._kill(prefix)
 
     def _kill(self, prefix):

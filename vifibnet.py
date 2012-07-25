@@ -100,19 +100,20 @@ def main():
     read_pipe = os.fdopen(r_pipe)
 
     # Init db and tunnels
+    forwarder = None
     if manual:
         utils.log('Manual external configuration', 3)
-        forward = None
     else:
         utils.log('Attempting automatic configuration via UPnP', 4)
         try:
-            forward = list([upnpigd.UpnpForward(int(port), proto), proto]
-                           for port, proto in config.pp)
-            config.address = list([ext.external_ip, str(ext.external_port),
-                proto] for ext, proto in forward)
-        except Exception:
-            forward = None
-            utils.log('An atempt to forward a port via UPnP failed', 4)
+            forwarder = upnpigd.Forwarder()
+            config.address = []
+            for port, proto in config.pp:
+                ext = forwarder.AddRule(port, proto)
+                if ext:
+                    config.address.append(ext)
+        except upnpigd.NoUPnPDevice:
+            utils.log('No upnp device found', 4)
 
     peer_db = db.PeerManager(config.state, config.server, config.server_port,
             config.peers_db_refresh, config.address, internal_ip, prefix,
@@ -142,8 +143,8 @@ def main():
     try:
         while True:
             nextUpdate = min(tunnel_manager.next_refresh, peer_db.next_refresh)
-            if forward != None:
-                nextUpdate = min(nextUpdate, forward.next_refresh)
+            if forwarder != None:
+                nextUpdate = min(nextUpdate, forwarder.next_refresh)
             nextUpdate = max(0, nextUpdate - time.time())
 
             ready, tmp1, tmp2 = select.select([read_pipe], [], [], nextUpdate)

@@ -3,47 +3,56 @@ import time
 import utils
 
 
-class UpnpForward:
-    def __init__(self, local_port, protos):
+class NoUPnPDevice(Exception):
+    def __init__(self):
+        pass
+
+    def __str__(self):
+        return 'No upnp device found'
+
+
+class Forwarder:
+    def __init__(self):
         self._u = miniupnpc.UPnP()
         self._u.discoverdelay = 200
-        self.external_port = 1000
-        self._local_port = local_port
-        self._protos = protos
-
+        self._rules = []
         self._u.discover()
-        self._u.selectigd()
+        try:
+            self._u.selectigd()
+        except:
+            raise NoUPnPDevice
+        self._external_ip = self._u.externalipaddress()
+        self.next_refresh = time.time()
 
-        if 'udp' in protos:
-            while self._u.getspecificportmapping(self.external_port,
-                    'UDP') != None:
-                self.external_port += 1
-                if self.external_port == 65536:
-                    raise Exception
-        if 'tcp-server' in protos:
-            while self._u.getspecificportmapping(self.external_port,
-                    'TCP') != None:
-                self.external_port += 1
-                if self._external_port == 65536:
-                    raise Exception
+    def  AddRule(self, local_port, proto):
+        # Init parameters
+        external_port = 1000
+        if proto == 'udp':
+            upnp_proto = 'UDP'
+        elif proto == 'tcp-server':
+            upnp_proto = 'TCP'
+        else:
+            utils.log('Unknown protocol : %s' % proto, 1)
+            raise RuntimeError
 
-        if 'udp' in protos:
-            self._u.addportmapping(self.external_port, 'UDP',
-                    self._u.lanaddr, local_port, 'Vifib openvpn server', '')
-        if 'tcp-server' in protos:
-            self._u.addportmapping(self.external_port, 'TCP',
-                    self._u.lanaddr, local_port, 'Vifib openvpn server', '')
+        # Choose a free port
+        while True:
+            while self._u.getspecificportmapping(external_port,
+                    upnp_proto) != None:
+                external_port += 1
+                if external_port == 65536:
+                    return None
 
-        self.external_ip = self._u.externalipaddress()
-        utils.log('Forwarding %s:%s to %s:%s' % (self.external_ip,
-                self.external_port, self._u.lanaddr, local_port), 3)
-        self.next_refresh = time.time() + 3600
+            # Make the redirection
+            if self._u.addportmapping(external_port, 'UDP', self._u.lanaddr,
+                    int(local_port), 'Vifib openvpn server', ''):
+                utils.log('Forwarding %s:%s to %s:%s' % (self._external_ip,
+                        external_port, self._u.lanaddr, local_port), 3)
+                self._rules.append((external_port, upnp_proto))
+                return (self._external_ip, str(external_port), proto)
 
     def Refresh(self):
-        if 'udp' in self._protos:
-            self._u.addportmapping(self.external_port, 'UDP', self._u.lanaddr,
-                    self._local_port, 'Vifib openvpn server', '')
-        if 'tcp-server' in self._protos:
-            self._u.addportmapping(self.external_port, 'TCP', self._u.lanaddr,
+        for external_port, proto in self._rules:
+            self._u.addportmapping(external_port, proto, self._u.lanaddr,
                     self._local_port, 'Vifib openvpn server', '')
         self.next_refresh = time.time() + 3600
