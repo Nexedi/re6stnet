@@ -1,11 +1,8 @@
-Name ideas :
+URGENT => Name ideas :
     resnet ( for Resiliable NET )
     rsnet ( Resiliable Scalable NET )
 
 To be done :
-    use the server as a bootstrap node -> switch peer discovery to be done
-    by vifibnet directly ?
-
     Use an algorithm to choose which connections to keep and/or establish
     instead of pure randomness
         number of routes / tunnel
