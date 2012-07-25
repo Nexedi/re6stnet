@@ -3,7 +3,8 @@ import plib, utils, db
 
 log = None
 smooth = 0.3    # this is used to smooth the traffic sampling. Lower value
-                 # mean more smooth
+                # mean more smooth
+
 
 # Be carfull the refresh interval should let the routes be established
 
