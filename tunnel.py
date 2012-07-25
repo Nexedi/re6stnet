@@ -3,8 +3,7 @@ import plib, utils, db
 
 log = None
 smooth = 0.3    # this is used to smooth the traffic sampling. Lower value
-                # mean more smooth
-
+                 # mean more smooth
 
 # Be carfull the refresh interval should let the routes be established
 
@@ -153,15 +152,13 @@ class TunnelManager:
         self._peer_db.clear_blacklist(0)
         for iface in self._iface_to_prefix.keys():
             self._connection_dict[self._iface_to_prefix[iface]].routes = 0
-        f = open('/proc/net/ipv6_route', 'r')
-        for line in f:
-            ip, subnet_size, iface = struct.unpack('32s x 2s 106x %ss x'
-                % (len(line) - 142), line)
-            ip = bin(int(ip, 16))[2:].rjust(128, '0')
+        for line in open('/proc/net/ipv6_route'):
+            line = line.split()
+            ip = bin(int(line[0], 16))[2:].rjust(128, '0')
 
             if ip.startswith(self._network):
-                iface = iface.strip()
-                subnet_size = int(subnet_size, 16)
+                iface = line[-1]
+                subnet_size = int(line[1], 16)
                 utils.log('Route on iface %s detected to %s/%s'
                         % (iface, ip, subnet_size), 8)
                 if iface in self._iface_to_prefix.keys():

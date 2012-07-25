@@ -4,24 +4,18 @@ To be done :
 
     Use an algorithm to choose which connections to keep and/or establish
     instead of pure randomness
-        number of routes / tunnel 
+        number of routes / tunnel
         favorise most used roads
 
     Handle LAN internally in order not to have catastrophic results ....
-        the first thing to do is to include the LAN iface on the intarfaces
-        given to babel => pb : someone who has a lan acces to our network can 
-        provide false informations. Needs of signature
-        If it is not sufficient, we could use avahi (dm-dns for linux)
+        pb : someone who has a lan acces to our network can provide false
+        informations. Needs of signature
+        => yeah it is a security problem to fix
 
     Write docstrings for all class/methods/functions
 
 
 To be discussed:
-    G : There is a blacklist system now ( blacklisted prefixes are deleted from
-        the peers database ). Since all nodes whose packets are routed through
-        the local network are blacklisted, I think we should reset the blacklist
-        from time to time....
-
     U : Babel seems to be very long to establish the routes : maybe we should
         tell him thant we are not on a wired network but on a mobile network ?
     G : babel establish routes quickly enough i'd say. There are two new
