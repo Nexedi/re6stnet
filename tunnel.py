@@ -1,4 +1,4 @@
-import os, random, traceback, time, struct, subprocess, operator
+import os, random, traceback, time, struct, subprocess, operator, math
 import plib, utils, db
 
 log = None
@@ -85,8 +85,8 @@ class TunnelManager:
                                        'client10', 'client11', 'client12'))
         self.next_refresh = time.time()
 
-        self._client_count = connection_count / 2
-        self._refresh_count = refresh_rate * self._client_count
+        self._client_count = int(math.ceil(float(connection_count) / 2.0))
+        self._refresh_count = int(math.ceil(refresh_rate * self._client_count))
 
     def refresh(self):
         utils.log('Refreshing the tunnels...', 2)
@@ -107,7 +107,8 @@ class TunnelManager:
         # Get the candidates to killing
         candidates = sorted(self._connection_dict, key=lambda p:
                 self._connection_dict[p].routes)
-
+        print max(0, len(self._connection_dict) - self._client_count + self._refresh_count)  # DEBUG
+        print self._client_count
         for prefix in candidates[0: max(0, len(self._connection_dict) -
                 self._client_count + self._refresh_count)]:
             self._kill(prefix)
