@@ -7,12 +7,6 @@ To be done :
         number of routes / tunnel 
         favorise most used roads
 
-    Handle LAN internally in order not to have catastrophic results ....
-        the first thing to do is to include the LAN iface on the intarfaces
-        given to babel => pb : someone who has a lan acces to our network can 
-        provide false informations. Needs of signature
-        If it is not sufficient, we could use avahi (dm-dns for linux)
-
     Write docstrings for all class/methods/functions
 
 

@@ -164,6 +164,15 @@ def main():
             if forwarder != None and time.time() > forwarder.next_refresh:
                 forwarder.refresh()
     except KeyboardInterrupt:
+        try:
+            router.kill()
+        except:
+            pass
+        try:
+            server_process.kill()
+        except:
+            pass
+        tunnel_manager.killAll()
         return 0
 
 if __name__ == "__main__":

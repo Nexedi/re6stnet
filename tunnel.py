@@ -178,3 +178,7 @@ class TunnelManager:
             utils.log('Routes on iface %s : %s' % (
                 self._connection_dict[p].iface,
                 self._connection_dict[p].routes), 5)
+
+    def killAll(self):
+        for prefix in self._connection_dict.keys():
+            self._kill(prefix)
