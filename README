@@ -211,3 +211,22 @@ OPTIONS : VIFIBNET.PY
             while "verbose 3" will)
             You can give a file ( with the @ prefix ) as an argument within a
             file
+
+
+If you are using a version of python < 2.7.3-2, then you should include this at 
+the beggining of registry.py
+
+--------------------------------------------------------------------------------
+# Fix for librpcxml to avoid doing reverse dns on each request
+# it was causing a 10s delay on each request when no reverse DNS was avalaible
+# for tis IP
+import BaseHTTPServer
+
+
+def not_insane_address_string(self):
+    host, port = self.client_address[:2]
+    return '%s (reverse DNS disabled)' % host  # used to call: socket.getfqdn(host)
+
+BaseHTTPServer.BaseHTTPRequestHandler.address_string = not_insane_address_string
+
+--------------------------------------------------------------------------------
