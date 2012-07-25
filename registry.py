@@ -188,7 +188,7 @@ class main(object):
         else:
             prefix, address = self.db.execute("""SELECT prefix, address
                               FROM peers ORDER BY random() LIMIT 1""")
-        print "Sending bootstrap peer (%s, %s)" % (prefix, str(address))
+        print "Sending bootstrap peer (%s, %s)" % (prefix, address)
         return prefix, address
 
     def declare(self, handler, address):

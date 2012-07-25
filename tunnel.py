@@ -32,9 +32,13 @@ class Connection:
                      % (self._prefix, self.process.returncode), 3)
             return False
 
-        self._updateBandwidth()
+        # self._updateBandwidth()
         return True
 
+    # Unused for now. By killing tunnels with significantly lower trafic
+    # in comparison to other tunnels, we hope to connect to nodes with
+    # better bandwith, in order to improve connectivity with destinations
+    # we are really interested in.
     def _updateBandwidth(self):
         try:
             f_rx = open('/sys/class/net/%s/statistics/rx_bytes' %
