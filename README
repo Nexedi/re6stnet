@@ -1,8 +1,12 @@
+
+Note (for U): logs haven't changed. I just added some logs messages to notify
+              when a task has been finished
+
 Vifibnet is a daemon setting up a resilient virtual private network over the
 internet
 
 HOW TO:
-    Vifibnet ( sic ) has three separate components : a setup (setup.py), a 
+    Vifibnet ( sic ) has three separate components : a setup (setup.py), a
     server (registry.py) and a client (vifibnet.py.
     Lambda users only have to launch the setup and then their client.
     The server is meant to be started once on a node which also will be running
@@ -31,7 +35,7 @@ OPTIONS : REGISTRY.PY
             MUST contain the VPN network prefix in its serial number. To
             generate correct ca and key files for the 2001:db8:42:: prefix,
             the following command can be used :
-            openssl req -nodes -new -x509 -key ca.key -set_serial
+            openssl req -nodes -new -x509 -key ca.key -set_serial \
                     0x120010db80042 -days 365 -out ca.crt
 
     --key path
@@ -87,12 +91,11 @@ OPTIONS : VIFIBNET.PY
             Specify connection information to be advertised to other nodes.
             address MUST be a ipv4 address since as of now openvpn does not
             support ipv6 addresses.
-            proto should be either udp or tcp-client
+            Proto should be either udp or tcp-client
 
-    --internal-port port
-            Specify the port on which will be launched the openvpn server(s)
-            Can differ from port given in the --ip option.
-            Default : 1194
+    -i, --interface interface
+            Give one interface name for each use of the argument. The interface
+            will be used to detect other nodes on the local network.
 
     --peers-db-refresh duration
             Duration in seconds of the peers DB refresh interval.
@@ -138,17 +141,20 @@ OPTIONS : VIFIBNET.PY
             It takes between 3 times and 4 times the hello interval for babel
             to re-establish connection with a node for which the direct
             connection has been cut
-            Default : 30
+            Default : 15
 
     -w, --wireless
             Consider all interfaces as being wireless interfaces. Argument
             directly passed down to the babeld daemon
 
-    --proto p [p']
-            Protocol used by the openvpn server(s). Start one openvpn server
-            for each protocl specified.
-            p (and p') should be either udp or tcp-server
-            Default : udp
+    --pp port proto
+            Port and protocol used by the openvpn server(s). Start one openvpn
+            server for each couple port/protocol specified.
+            Additionally, if no external configuration is given in the command
+            line, vifibnet will attempt to forward a port with upnp for each
+            couple port/proto given.
+            Protocols should be either udp or tcp-server.
+            Default : (1194, udp)
 
     --tunnel-refresh duration
             Interval in seconds between two tunnel refresh. Refreshing tunnels
@@ -203,3 +209,5 @@ OPTIONS : VIFIBNET.PY
             The file should contain one option per line, possibly ommitting
             the '--'. Only long option are allowed (i.e "v 3" will not work
             while "verbose 3" will)
+            You can give a file ( with the @ prefix ) as an argument within a
+            file

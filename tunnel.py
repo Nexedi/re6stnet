@@ -1,4 +1,4 @@
-import os, random, traceback, time, struct, operator
+import os, random, traceback, time, struct, subprocess, operator
 import plib, utils, db
 
 log = None
@@ -15,7 +15,8 @@ class Connection:
         self.process = plib.client(address, write_pipe, hello, '--dev', iface,
                 *ovpn_args, stdout=os.open(os.path.join(log,
                 'vifibnet.client.%s.log' % (prefix,)),
-                os.O_WRONLY | os.O_CREAT | os.O_TRUNC))
+                os.O_WRONLY | os.O_CREAT | os.O_TRUNC),
+                stderr=subprocess.STDOUT)
 
         self.iface = iface
         self.routes = 0
@@ -66,7 +67,7 @@ class Connection:
 class TunnelManager:
 
     def __init__(self, write_pipe, peer_db, openvpn_args, hello_interval,
-                refresh, connection_count, refresh_rate):
+                refresh, connection_count, refresh_rate, iface_list, network):
         self._write_pipe = write_pipe
         self._peer_db = peer_db
         self._connection_dict = {}
@@ -74,6 +75,10 @@ class TunnelManager:
         self._ovpn_args = openvpn_args
         self._hello = hello_interval
         self._refresh_time = refresh
+        self._network = network
+        self._net_len = len(network)
+        self._iface_list = iface_list
+        self.__indirect_connect = []
         self.free_interface_set = set(('client1', 'client2', 'client3',
                                        'client4', 'client5', 'client6',
                                        'client7', 'client8', 'client9',
@@ -84,11 +89,12 @@ class TunnelManager:
         self._refresh_count = refresh_rate * self._client_count
 
     def refresh(self):
-        utils.log('Refreshing the tunnels', 2)
+        utils.log('Refreshing the tunnels...', 2)
         self._cleanDeads()
         self._countRoutes()
         self._removeSomeTunnels()
         self._makeNewTunnels()
+        utils.log('Tunnels refreshed', 2)
         self.next_refresh = time.time() + self._refresh_time
 
     def _cleanDeads(self):
@@ -107,7 +113,7 @@ class TunnelManager:
             self._kill(prefix)
 
     def _kill(self, prefix):
-        utils.log('Killing the connection with ' + prefix, 2)
+        utils.log('Killing the connection with %s...' % (prefix,), 2)
         connection = self._connection_dict.pop(prefix)
         try:
             connection.process.kill()
@@ -117,9 +123,11 @@ class TunnelManager:
         self.free_interface_set.add(connection.iface)
         self._peer_db.unusePeer(prefix)
         del self._iface_to_prefix[connection.iface]
+        utils.log('Connection with %s killed' % (prefix,), 2)
 
     def _makeNewTunnels(self):
-        utils.log('Trying to make %i new tunnels' %
+        i = 0
+        utils.log('Trying to make %i new tunnels...' %
                 (self._client_count - len(self._connection_dict)), 5)
         try:
             for prefix, address in self._peer_db.getUnusedPeers(
@@ -131,6 +139,8 @@ class TunnelManager:
                         prefix, self._ovpn_args)
                 self._iface_to_prefix[iface] = prefix
                 self._peer_db.usePeer(prefix)
+                i += 1
+            utils.log('%u new tunnels established' % (i,), 3)
         except KeyError:
             utils.log("""Can't establish connection with %s
                     : no available interface""" % prefix, 2)
@@ -138,7 +148,8 @@ class TunnelManager:
             traceback.print_exc()
 
     def _countRoutes(self):
-        utils.log('Starting to count the routes on each interface', 3)
+        utils.log('Starting to count the routes on each interface...', 3)
+        self._indirect_connect = []
         for iface in self._iface_to_prefix.keys():
             self._connection_dict[self._iface_to_prefix[iface]].routes = 0
         f = open('/proc/net/ipv6_route', 'r')
@@ -146,9 +157,21 @@ class TunnelManager:
             ip, subnet_size, iface = struct.unpack('32s x 2s 106x %ss x'
                 % (len(line) - 142), line)
             iface = iface.replace(' ', '')
+            utils.log('Route on iface %s detected to %s/%s'
+                    % (iface, ip, subnet_size), 8)
             if iface in self._iface_to_prefix.keys():
                 self._connection_dict[self._iface_to_prefix[iface]].routes += 1
+            if iface in self._iface_list:
+                subnet_size = int(subnet_size, 16)
+                ip = bin(int(ip, 16))[2:].rjust(128, '0')
+                if self._net_len < subnet_size < 128 and ip.startswith(self._network):
+                    prefix = ip[self._net_len:subnet_size]
+                    utils.log('A route to %s has been discovered on the LAN'
+                            % (prefix,), 3)
+                    self._peer_db.blacklist(prefix)
+        utils.log("Routes have been counted", 3)
         for p in self._connection_dict.keys():
             utils.log('Routes on iface %s : %s' % (
                 self._connection_dict[p].iface,
                 self._connection_dict[p].routes), 5)
+

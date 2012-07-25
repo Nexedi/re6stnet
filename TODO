@@ -1,7 +1,3 @@
-Bugs:
-    The address of the client is declared while it should only be the address
-    of the server
-
 To be done :
     use the server as a bootstrap node -> switch peer discovery to be done
     by vifibnet directly ?
@@ -17,14 +13,15 @@ To be done :
         provide false informations. Needs of signature
         If it is not sufficient, we could use avahi (dm-dns for linux)
 
-    Replace comments at the beginning of functions with docstrings & give all
-    fn docstrings
+    Write docstrings for all class/methods/functions
 
-    Upgrade the logging function in order to be able to log message like
-    "Refreshing peers DB ... done", or add log messages to specify that an
-    action advertised by a previous log message has been completed
 
 To be discussed:
+    G : There is a blacklist system now ( blacklisted prefixes are deleted from
+        the peers database ). Since all nodes whose packets are routed through
+        the local network are blacklisted, I think we should reset the blacklist
+        from time to time....
+
     U : Babel seems to be very long to establish the routes : maybe we should
         tell him thant we are not on a wired network but on a mobile network ?
     G : babel establish routes quickly enough i'd say. There are two new
@@ -52,3 +49,4 @@ To be discussed:
         reestablish connection, if a direct link is cut
     U : So we have to reduce the hello interval. 2min to detect a dead link is
         far too much.
+    G : k

@@ -18,7 +18,7 @@ def openvpn(hello_interval, *args, **kw):
     return subprocess.Popen(args, **kw)
 
 def server(server_ip, ip_length, max_clients, dh_path, pipe_fd, port, proto, hello_interval, *args, **kw):
-    utils.log('Starting server', 3)
+    utils.log('Starting server...', 3)
     return openvpn(hello_interval,
         '--tls-server',
         '--mode', 'server',
@@ -32,7 +32,7 @@ def server(server_ip, ip_length, max_clients, dh_path, pipe_fd, port, proto, hel
         *args, **kw)
 
 def client(server_address, pipe_fd, hello_interval, *args, **kw):
-    utils.log('Starting client', 5)
+    utils.log('Starting client...', 5)
     remote= ['--nobind',
              '--client',
              '--up', 'ovpn-client',
@@ -44,16 +44,16 @@ def client(server_address, pipe_fd, hello_interval, *args, **kw):
 
 def router(network, internal_ip, interface_list,
            wireless, hello_interval, state_path, **kw):
-    utils.log('Starting babel', 3)
+    utils.log('Starting babel...', 3)
     args = ['babeld',
             '-C', 'redistribute local ip %s' % (internal_ip),
             '-C', 'redistribute local deny',
             # Route VIFIB ip adresses
             '-C', 'in ip %s::/%u' % (utils.ipFromBin(network), len(network)),
-            # Route only addresse in the 'local' network,
-            # or other entire networks
-            #'-C', 'in ip %s' % (config.internal_ip),
-            #'-C', 'in ip ::/0 le %s' % network_mask,
+                  # Route only addresse in the 'local' network,
+                  # or other entire networks
+                  #'-C', 'in ip %s' % (config.internal_ip),
+                  #'-C', 'in ip ::/0 le %s' % network_mask,
             # Don't route other addresses
             '-C', 'in deny',
             '-d', str(verbose),
