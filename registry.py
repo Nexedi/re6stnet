@@ -13,7 +13,7 @@ import BaseHTTPServer
 
 def not_insane_address_string(self):
     host, port = self.client_address[:2]
-    return '%s (no getfqdn)' % host  # used to call: socket.getfqdn(host)
+    return '%s (reverse DNS disabled)' % host  # used to call: socket.getfqdn(host)
 
 BaseHTTPServer.BaseHTTPRequestHandler.address_string = not_insane_address_string
 # end of the fix
