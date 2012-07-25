@@ -5,14 +5,9 @@ from email.mime.text import MIMEText
 from OpenSSL import crypto
 import utils
 
-# To generate server ca and key with serial for 2001:db8:42::/48
-# openssl req -nodes -new -x509 -key ca.key -set_serial 0x120010db80042 -days 365 -out ca.crt
-
-IPV6_V6ONLY = 26
-SOL_IPV6 = 41
-
-
-# Fix for librpcxml to avoid doing reverse dns on each request : it was causing a 5s delay on each request
+# Fix for librpcxml to avoid doing reverse dns on each request
+# it was causing a 5-10s delay on each request when no reverse DNS was avalaible
+# for tis IP
 import BaseHTTPServer
 
 
@@ -22,6 +17,13 @@ def not_insane_address_string(self):
 
 BaseHTTPServer.BaseHTTPRequestHandler.address_string = not_insane_address_string
 # end of the fix
+
+
+# To generate server ca and key with serial for 2001:db8:42::/48
+# openssl req -nodes -new -x509 -key ca.key -set_serial 0x120010db80042 -days 365 -out ca.crt
+
+IPV6_V6ONLY = 26
+SOL_IPV6 = 41
 
 
 class RequestHandler(SimpleXMLRPCRequestHandler):

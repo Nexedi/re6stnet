@@ -48,11 +48,12 @@ class Forwarder:
                     int(local_port), 'Vifib openvpn server', ''):
                 utils.log('Forwarding %s:%s to %s:%s' % (self._external_ip,
                         external_port, self._u.lanaddr, local_port), 3)
-                self._rules.append((external_port, upnp_proto))
+                self._rules.append((external_port, int(local_port), upnp_proto))
                 return (self._external_ip, str(external_port), proto)
 
-    def Refresh(self):
-        for external_port, proto in self._rules:
+    def refresh(self):
+        utils.log('Refreshing port forwarding', 3)
+        for external_port, local_port, proto in self._rules:
             self._u.addportmapping(external_port, proto, self._u.lanaddr,
-                    self._local_port, 'Vifib openvpn server', '')
+                    local_port, 'Vifib openvpn server', '')
         self.next_refresh = time.time() + 3600

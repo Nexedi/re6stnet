@@ -3,6 +3,7 @@ import argparse, errno, os, select, subprocess, time
 from argparse import ArgumentParser
 import db, plib, upnpigd, utils, tunnel
 
+
 class ArgParser(ArgumentParser):
 
     def convert_arg_line_to_args(self, arg_line):
@@ -14,6 +15,7 @@ class ArgParser(ArgumentParser):
             for arg in ('--' + arg_line.lstrip('--')).split():
                 if arg.strip():
                     yield arg
+
 
 def ovpnArgs(optional_args, ca_path, cert_path):
     # Treat openvpn arguments
@@ -146,6 +148,7 @@ def main():
     # main loop
     try:
         while True:
+            utils.log('Sleeping ...', 2)
             nextUpdate = min(tunnel_manager.next_refresh, peer_db.next_refresh)
             if forwarder != None:
                 nextUpdate = min(nextUpdate, forwarder.next_refresh)
@@ -158,6 +161,8 @@ def main():
                 peer_db.refresh()
             if time.time() >= tunnel_manager.next_refresh:
                 tunnel_manager.refresh()
+            if forwarder != None and time.time() > forwarder.next_refresh:
+                forwarder.refresh()
     except KeyboardInterrupt:
         return 0
 
