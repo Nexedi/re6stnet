@@ -5,20 +5,6 @@ from email.mime.text import MIMEText
 from OpenSSL import crypto
 import utils
 
-# Fix for librpcxml to avoid doing reverse dns on each request
-# it was causing a 5-10s delay on each request when no reverse DNS was avalaible
-# for tis IP
-import BaseHTTPServer
-
-
-def not_insane_address_string(self):
-    host, port = self.client_address[:2]
-    return '%s (no getfqdn)' % host  # used to call: socket.getfqdn(host)
-
-BaseHTTPServer.BaseHTTPRequestHandler.address_string = not_insane_address_string
-# end of the fix
-
-
 # To generate server ca and key with serial for 2001:db8:42::/48
 # openssl req -nodes -new -x509 -key ca.key -set_serial 0x120010db80042 -days 365 -out ca.crt
 
