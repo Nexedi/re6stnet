@@ -78,7 +78,6 @@ class TunnelManager:
         self._network = network
         self._net_len = len(network)
         self._iface_list = iface_list
-        self.__indirect_connect = []
         self.free_interface_set = set(('client1', 'client2', 'client3',
                                        'client4', 'client5', 'client6',
                                        'client7', 'client8', 'client9',
@@ -150,7 +149,7 @@ class TunnelManager:
 
     def _countRoutes(self):
         utils.log('Starting to count the routes on each interface...', 3)
-        self._indirect_connect = []
+        self._peer_db.clear_blacklist(0)
         for iface in self._iface_to_prefix.keys():
             self._connection_dict[self._iface_to_prefix[iface]].routes = 0
         f = open('/proc/net/ipv6_route', 'r')
@@ -170,7 +169,7 @@ class TunnelManager:
                     prefix = ip[self._net_len:subnet_size]
                     utils.log('A route to %s has been discovered on the LAN'
                             % (prefix,), 3)
-                    self._peer_db.blacklist(prefix)
+                    self._peer_db.blacklist(prefix, 0)
 
         utils.log("Routes have been counted", 3)
         for p in self._connection_dict.keys():
