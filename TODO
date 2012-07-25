@@ -1,3 +1,7 @@
+Name ideas :
+    resnet ( for Resiliable NET )
+    rsnet ( Resiliable Scalable NET )
+
 To be done :
     use the server as a bootstrap node -> switch peer discovery to be done
     by vifibnet directly ?

@@ -85,7 +85,7 @@ def main():
     # Get arguments
     config = getConfig()
     if not config.pp:
-        config.pp = [['1194', 'udp']]
+        config.pp = [['1194', 'udp'], ['1194', 'tcp-server']]
     manual = bool(config.address)
     network = utils.networkFromCa(config.ca)
     internal_ip, prefix = utils.ipFromCert(network, config.cert)
