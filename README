@@ -1,7 +1,3 @@
-
-Note (for U): logs haven't changed. I just added some logs messages to notify
-              when a task has been finished
-
 Vifibnet is a daemon setting up a resilient virtual private network over the
 internet
 
@@ -19,6 +15,10 @@ The organisation of the code
     db.py               Function to manage peers
     tunnel.py           To choose wich connection delete/keep/...
     upnpigd.py          To open a port
+
+Note: On certain version of python (e.g. 2.7.3~rc2-2.1 ) dns lookup is
+      performed for each request, and cause a delay in response.
+      To avoid this, one can either upgrade python, or fix their resolv.conf
 
 OPTIONS : REGISTRY.PY
     usage : ./registry port [options...]

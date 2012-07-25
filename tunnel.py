@@ -161,11 +161,11 @@ class TunnelManager:
             ip = bin(int(ip, 16))[2:].rjust(128, '0')
 
             if ip.startswith(self._network):
-                iface = iface.replace(' ', '')
+                iface = iface.strip()
                 subnet_size = int(subnet_size, 16)
                 utils.log('Route on iface %s detected to %s/%s'
                         % (iface, ip, subnet_size), 8)
-                if iface in self._iface_to_prefix.keys() and subnet_size <= 64:
+                if iface in self._iface_to_prefix.keys():
                     self._connection_dict[self._iface_to_prefix[iface]].routes += 1
                 if iface in self._iface_list and self._net_len < subnet_size < 128:
                     prefix = ip[self._net_len:subnet_size]
