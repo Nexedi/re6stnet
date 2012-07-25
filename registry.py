@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import argparse, math, random, select, smtplib, sqlite3, string, socket, time, traceback
+import argparse, math, random, select, smtplib, sqlite3, string, socket, time, traceback, errno
 from SimpleXMLRPCServer import SimpleXMLRPCServer, SimpleXMLRPCRequestHandler
 from email.mime.text import MIMEText
 from OpenSSL import crypto
@@ -11,14 +11,29 @@ import utils
 IPV6_V6ONLY = 26
 SOL_IPV6 = 41
 
+
+# Fix for librpcxml to avoid doing reverse dns on each request : it was causing a 5s delay on each request
+import BaseHTTPServer
+
+
+def not_insane_address_string(self):
+    host, port = self.client_address[:2]
+    return '%s (no getfqdn)' % host  # used to call: socket.getfqdn(host)
+
+BaseHTTPServer.BaseHTTPRequestHandler.address_string = not_insane_address_string
+# end of the fix
+
+
 class RequestHandler(SimpleXMLRPCRequestHandler):
 
     def _dispatch(self, method, params):
         return self.server._dispatch(method, (self,) + params)
 
+
 class SimpleXMLRPCServer4(SimpleXMLRPCServer):
 
     allow_reuse_address = True
+
 
 class SimpleXMLRPCServer6(SimpleXMLRPCServer4):
 
@@ -27,6 +42,7 @@ class SimpleXMLRPCServer6(SimpleXMLRPCServer4):
     def server_bind(self):
         self.socket.setsockopt(SOL_IPV6, IPV6_V6ONLY, 1)
         SimpleXMLRPCServer4.server_bind(self)
+
 
 class main(object):
 
@@ -108,7 +124,7 @@ class main(object):
             try:
                 self.db.execute("INSERT INTO tokens VALUES (?,?,?,?)", (token, email, 16, int(time.time())))
                 break
-            except sqlite3.IntegrityError, e:
+            except sqlite3.IntegrityError:
                 pass
 
         # Creating and sending email
@@ -130,42 +146,42 @@ class main(object):
                 prefix += '0'
                 self.db.execute("INSERT INTO vpn VALUES (?,null,null)", (prefix,))
             return prefix
-        raise RuntimeError # TODO: raise better exception
+        raise RuntimeError  # TODO: raise better exception
 
     def requestCertificate(self, handler, token, cert_req):
-      try:
-        req = crypto.load_certificate_request(crypto.FILETYPE_PEM, cert_req)
-        with self.db:
-            try:
-                token, email, prefix_len, _ = self.db.execute("SELECT * FROM tokens WHERE token = ?", (token,)).next()
-            except StopIteration:
-                # TODO: return nice error message
-                raise
-            self.db.execute("DELETE FROM tokens WHERE token = ?", (token,))
+        try:
+            req = crypto.load_certificate_request(crypto.FILETYPE_PEM, cert_req)
+            with self.db:
+                try:
+                    token, email, prefix_len, _ = self.db.execute("SELECT * FROM tokens WHERE token = ?", (token,)).next()
+                except StopIteration:
+                    # TODO: return nice error message
+                    raise
+                self.db.execute("DELETE FROM tokens WHERE token = ?", (token,))
 
-            # Get a new prefix
-            prefix = self._getPrefix(prefix_len)
+                # Get a new prefix
+                prefix = self._getPrefix(prefix_len)
 
-            # Create certificate
-            cert = crypto.X509()
-            #cert.set_serial_number(serial)
-            cert.gmtime_adj_notBefore(0)
-            cert.gmtime_adj_notAfter(self.cert_duration)
-            cert.set_issuer(self.ca.get_subject())
-            subject = req.get_subject()
-            subject.CN = "%u/%u" % (int(prefix, 2), prefix_len)
-            cert.set_subject(subject)
-            cert.set_pubkey(req.get_pubkey())
-            cert.sign(self.key, 'sha1')
-            cert = crypto.dump_certificate(crypto.FILETYPE_PEM, cert)
+                # Create certificate
+                cert = crypto.X509()
+                #cert.set_serial_number(serial)
+                cert.gmtime_adj_notBefore(0)
+                cert.gmtime_adj_notAfter(self.cert_duration)
+                cert.set_issuer(self.ca.get_subject())
+                subject = req.get_subject()
+                subject.CN = "%u/%u" % (int(prefix, 2), prefix_len)
+                cert.set_subject(subject)
+                cert.set_pubkey(req.get_pubkey())
+                cert.sign(self.key, 'sha1')
+                cert = crypto.dump_certificate(crypto.FILETYPE_PEM, cert)
 
-            # Insert certificate into db
-            self.db.execute("UPDATE vpn SET email = ?, cert = ? WHERE prefix = ?", (email, cert, prefix) )
+                # Insert certificate into db
+                self.db.execute("UPDATE vpn SET email = ?, cert = ? WHERE prefix = ?", (email, cert, prefix))
 
-        return cert
-      except:
-        traceback.print_exc()
-        raise
+            return cert
+        except:
+            traceback.print_exc()
+            raise
 
     def getCa(self, handler):
         return crypto.dump_certificate(crypto.FILETYPE_PEM, self.ca)

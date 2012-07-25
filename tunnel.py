@@ -156,22 +156,23 @@ class TunnelManager:
         for line in f:
             ip, subnet_size, iface = struct.unpack('32s x 2s 106x %ss x'
                 % (len(line) - 142), line)
-            iface = iface.replace(' ', '')
-            utils.log('Route on iface %s detected to %s/%s'
-                    % (iface, ip, subnet_size), 8)
-            if iface in self._iface_to_prefix.keys():
-                self._connection_dict[self._iface_to_prefix[iface]].routes += 1
-            if iface in self._iface_list:
+            ip = bin(int(ip, 16))[2:].rjust(128, '0')
+
+            if ip.startswith(self._network):
+                iface = iface.replace(' ', '')
                 subnet_size = int(subnet_size, 16)
-                ip = bin(int(ip, 16))[2:].rjust(128, '0')
-                if self._net_len < subnet_size < 128 and ip.startswith(self._network):
+                utils.log('Route on iface %s detected to %s/%s'
+                        % (iface, ip, subnet_size), 8)
+                if iface in self._iface_to_prefix.keys() and subnet_size <= 64:
+                    self._connection_dict[self._iface_to_prefix[iface]].routes += 1
+                if iface in self._iface_list and self._net_len < subnet_size < 128:
                     prefix = ip[self._net_len:subnet_size]
                     utils.log('A route to %s has been discovered on the LAN'
                             % (prefix,), 3)
                     self._peer_db.blacklist(prefix)
+
         utils.log("Routes have been counted", 3)
         for p in self._connection_dict.keys():
             utils.log('Routes on iface %s : %s' % (
                 self._connection_dict[p].iface,
                 self._connection_dict[p].routes), 5)
-
