@@ -1,13 +1,16 @@
-To be done :
-    use the server as a bootstrap node -> switch peer discovery to be done
-    by vifibnet directly ?
+URGENT => Name ideas :
+    resnet ( for Resiliable NET )
+    rsnet ( Resiliable Scalable NET )
 
+To be done :
     Use an algorithm to choose which connections to keep and/or establish
     instead of pure randomness
-        number of routes / tunnel 
+        number of routes / tunnel
         favorise most used roads
 
     Write docstrings for all class/methods/functions
+
+    Handle corrupt peers DB gracefully
 
 
 To be discussed:

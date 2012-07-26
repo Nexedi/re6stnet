@@ -154,7 +154,7 @@ OPTIONS : VIFIBNET.PY
             line, vifibnet will attempt to forward a port with upnp for each
             couple port/proto given.
             Protocols should be either udp or tcp-server.
-            Default : (1194, udp)
+            Default : (1194, udp), (1194, tcp-server)
 
     --tunnel-refresh duration
             Interval in seconds between two tunnel refresh. Refreshing tunnels

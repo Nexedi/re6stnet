@@ -28,6 +28,11 @@ class PeerManager:
         utils.log('Preparing peers database...', 4)
         try:
             self._db.execute("UPDATE peers SET used = 0")
+            self._db.execute("""CREATE TABLE IF NOT EXISTS blacklist (
+                                prefix TEXT PRIMARY KEY,
+                                flag INTEGER NOT NULL)""")
+            self._db.execute("""CREATE INDEX IF NOT EXISTS
+                                blacklist_flag ON blacklist(flag)""")
         except sqlite3.OperationalError, e:
             if e.args[0] == 'no such table: peers':
                 raise RuntimeError
@@ -35,13 +40,22 @@ class PeerManager:
 
         self.next_refresh = time.time()
 
-    def reset_blacklist(self):
-        self._blacklist = [(self._prefix)]
+    def clear_blacklist(self, flag):
+        utils.log('Clearing blacklist from flag %u' % (flag,), 3)
+        self._db.execute("DELETE FROM blacklist WHERE flag = ?", (flag,))
+        utils.log('Blacklist cleared', 5)
 
-    def blacklist(self, prefix):
+    def blacklist(self, prefix, flag):
         utils.log('Blacklisting %s' % (prefix,), 4)
         self._db.execute("DELETE FROM peers WHERE prefix = ?", (prefix,))
-        self._blacklist = list(set(self._blacklist + [(prefix,)]))
+        self._db.execute("INSERT OR REPLACE INTO blacklist VALUES (?,?)",
+                          (prefix, flag))
+        utils.log('%s blacklisted' % (prefix,), 5)
+
+    def whitelist(self, prefix):
+        utils.log('Unblacklisting %s' % (prefix,), 4)
+        self._db.execute("DELETE FROM blacklist WHERE prefix = ?", (prefix,))
+        utils.log('%s whitelisted' % (prefix,), 5)
 
     def refresh(self):
         utils.log('Refreshing the peers DB...', 2)
@@ -74,8 +88,8 @@ class PeerManager:
                             (str(len(new_peer_list) - self._db_size),))
         self._db.executemany("""INSERT OR IGNORE INTO peers (prefix, address)
                                 VALUES (?,?)""", new_peer_list)
-        self._db.executemany("DELETE FROM peers WHERE prefix = ?",
-                              self._blacklist)
+        self._db.execute("""DELETE FROM peers WHERE prefix IN
+                            (SELECT prefix FROM blacklist)""")
         utils.log('DB populated', 3)
         utils.log('New peers : %s' % ', '.join(map(str, new_peer_list)), 5)
 
@@ -121,3 +135,4 @@ class PeerManager:
         else:
             utils.log('Unknow message recieved from the openvpn pipe : '
                     + msg, 1)
+

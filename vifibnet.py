@@ -85,7 +85,7 @@ def main():
     # Get arguments
     config = getConfig()
     if not config.pp:
-        config.pp = [['1194', 'udp']]
+        config.pp = [['1194', 'udp'], ['1194', 'tcp-server']]
     manual = bool(config.address)
     network = utils.networkFromCa(config.ca)
     internal_ip, prefix = utils.ipFromCert(network, config.cert)
@@ -137,7 +137,7 @@ def main():
    # Establish connections
     server_process = list(plib.server(internal_ip, len(network) + len(prefix),
         config.connection_count, config.dh, write_pipe, port,
-        proto, config.hello, '--dev', 'vifibnet', *openvpn_args,
+        proto, config.hello, '--dev', 'vifibnet-%s' % proto, *openvpn_args,
         stdout=os.open(os.path.join(config.log,
             'vifibnet.server.%s.log' % (proto,)),
             os.O_WRONLY | os.O_CREAT | os.O_TRUNC),

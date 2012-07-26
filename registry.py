@@ -55,6 +55,9 @@ class main(object):
                 help='Path to certificate key')
         _('--mailhost', required=True,
                 help='SMTP server mail host')
+        _('--bootstrap', nargs=4, action="append",
+                help='''VPN prefix, ip address, port and protocol to send as
+                        bootstrap peers, instead of random ones''')
         self.config = parser.parse_args()
 
         # Database initializing
@@ -180,8 +183,14 @@ class main(object):
         # TODO: Insert a flag column for bootstrap ready servers in peers
         # ( servers which shouldn't go down or change ip and port as opposed to servers owned by particulars )
         # that way, we also ascertain that the server sent is not the new node....
-        prefix, address = self.db.execute("SELECT prefix, address FROM peers ORDER BY random() LIMIT 1").next()
-        print "Sending bootstrap peer (%s, %s)" % (prefix, str(address))
+        if self.config.bootstrap:
+            bootpeer = random.choice(self.config.bootstrap)
+            prefix = bootpeer[0]
+            address = ','.join(bootpeer[1:])
+        else:
+            prefix, address = self.db.execute("""SELECT prefix, address
+                              FROM peers ORDER BY random() LIMIT 1""")
+        print "Sending bootstrap peer (%s, %s)" % (prefix, address)
         return prefix, address
 
     def declare(self, handler, address):

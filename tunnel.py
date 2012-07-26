@@ -7,7 +7,6 @@ smooth = 0.3     # this is used to smooth the traffic sampling. Lower value
 protected = 0.2  # ratio of the tunnels protected against kill because they are
                  # used a lot
 
-
 # Be carfull the refresh interval should let the routes be established
 
 
@@ -35,9 +34,13 @@ class Connection:
                      % (self._prefix, self.process.returncode), 3)
             return False
 
-        self._updateBandwidth()
+        # self._updateBandwidth()
         return True
 
+    # Unused for now. By killing tunnels with significantly lower trafic
+    # in comparison to other tunnels, we hope to connect to nodes with
+    # better bandwith, in order to improve connectivity with destinations
+    # we are really interested in.
     def _updateBandwidth(self):
         try:
             f_rx = open('/sys/class/net/%s/statistics/rx_bytes' %
@@ -81,7 +84,6 @@ class TunnelManager:
         self._network = network
         self._net_len = len(network)
         self._iface_list = iface_list
-        self.__indirect_connect = []
         self.free_interface_set = set(('client1', 'client2', 'client3',
                                        'client4', 'client5', 'client6',
                                        'client7', 'client8', 'client9',
@@ -154,18 +156,16 @@ class TunnelManager:
 
     def _countRoutes(self):
         utils.log('Starting to count the routes on each interface...', 3)
-        self._indirect_connect = []
+        self._peer_db.clear_blacklist(0)
         for iface in self._iface_to_prefix.keys():
             self._connection_dict[self._iface_to_prefix[iface]].routes = 0
-        f = open('/proc/net/ipv6_route', 'r')
-        for line in f:
-            ip, subnet_size, iface = struct.unpack('32s x 2s 106x %ss x'
-                % (len(line) - 142), line)
-            ip = bin(int(ip, 16))[2:].rjust(128, '0')
+        for line in open('/proc/net/ipv6_route'):
+            line = line.split()
+            ip = bin(int(line[0], 16))[2:].rjust(128, '0')
 
             if ip.startswith(self._network):
-                iface = iface.strip()
-                subnet_size = int(subnet_size, 16)
+                iface = line[-1]
+                subnet_size = int(line[1], 16)
                 utils.log('Route on iface %s detected to %s/%s'
                         % (iface, ip, subnet_size), 8)
                 if iface in self._iface_to_prefix.keys():
@@ -174,7 +174,7 @@ class TunnelManager:
                     prefix = ip[self._net_len:subnet_size]
                     utils.log('A route to %s has been discovered on the LAN'
                             % (prefix,), 3)
-                    self._peer_db.blacklist(prefix)
+                    self._peer_db.blacklist(prefix, 0)
 
         utils.log("Routes have been counted", 3)
         for p in self._connection_dict.keys():
@@ -185,3 +185,4 @@ class TunnelManager:
     def killAll(self):
         for prefix in self._connection_dict.keys():
             self._kill(prefix)
+            
