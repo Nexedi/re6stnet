@@ -174,6 +174,20 @@ def main():
             pass
         tunnel_manager.killAll()
         return 0
+    except:
+        try:
+            router.kill()
+        except:
+            pass
+        try:
+            server_process.kill()
+        except:
+            pass
+        try:
+            tunnel_manager.killAll()
+        except:
+            pass
+        raise
 
 if __name__ == "__main__":
     main()

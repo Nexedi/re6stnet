@@ -11,11 +11,6 @@ To be done :
 
 
 To be discussed:
-    G : There is a blacklist system now ( blacklisted prefixes are deleted from
-        the peers database ). Since all nodes whose packets are routed through
-        the local network are blacklisted, I think we should reset the blacklist
-        from time to time....
-
     U : Babel seems to be very long to establish the routes : maybe we should
         tell him thant we are not on a wired network but on a mobile network ?
     G : babel establish routes quickly enough i'd say. There are two new

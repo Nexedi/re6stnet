@@ -2,8 +2,10 @@ import os, random, traceback, time, struct, subprocess, operator, math
 import plib, utils, db
 
 log = None
-smooth = 0.3    # this is used to smooth the traffic sampling. Lower value
-                # mean more smooth
+smooth = 0.3     # this is used to smooth the traffic sampling. Lower value
+                 # mean more smooth
+protected = 0.2  # ratio of the tunnels protected against kill because they are
+                 # used a lot
 
 
 # Be carfull the refresh interval should let the routes be established
@@ -22,7 +24,7 @@ class Connection:
         self.iface = iface
         self.routes = 0
         self._prefix = prefix
-        self._bandwidth = None
+        self.bandwidth = None
         self._last_trafic = None
 
     # TODO : update the stats
@@ -49,14 +51,14 @@ class Connection:
             if bool(self._last_trafic):
                 bw = (trafic - self._last_trafic) / (t -
                         self._last_trafic_update)
-                if bool(self._bandwidth):
-                    self._bandwidth = ((1 - smooth) * self._bandwidth
+                if bool(self.bandwidth):
+                    self.bandwidth = ((1 - smooth) * self.bandwidth
                             + smooth * bw)
                 else:
-                    self._bandwidth = bw
+                    self.bandwidth = bw
 
                 utils.log('New bandwidth calculated on iface %s : %s' %
-                        (self.iface, self._bandwidth), 4)
+                        (self.iface, self.bandwidth), 4)
 
             self._last_trafic_update = t
             self._last_trafic = trafic
@@ -107,9 +109,10 @@ class TunnelManager:
     def _removeSomeTunnels(self):
         # Get the candidates to killing
         candidates = sorted(self._connection_dict, key=lambda p:
+                self._connection_dict[p].bandwidth)
+        candidates = sorted(candidates[0: int(math.ceil((1 - protected)
+                * len(candidates)))], key=lambda p:
                 self._connection_dict[p].routes)
-        print max(0, len(self._connection_dict) - self._client_count + self._refresh_count)  # DEBUG
-        print self._client_count
         for prefix in candidates[0: max(0, len(self._connection_dict) -
                 self._client_count + self._refresh_count)]:
             self._kill(prefix)
