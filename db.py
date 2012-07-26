@@ -5,75 +5,91 @@ import utils
 class PeerManager:
 
     # internal ip = temp arg/attribute
-    def __init__(self, db_dir_path, server, server_port, refresh_time, address,
+    def __init__(self, db_dir_path, registry, key_path, refresh_time, address,
                        internal_ip, prefix, manual, pp , db_size):
         self._refresh_time = refresh_time
         self._address = address
         self._internal_ip = internal_ip
         self._prefix = prefix
-        self._server = server
-        self._server_port = server_port
         self._db_size = db_size
+        self._registry = registry
+        self._key_path = key_path
         self._pp = pp
-        self._blacklist = [(prefix,)]
         self._manual = manual
-
-        self._proxy = xmlrpclib.ServerProxy('http://%s:%u'
-                % (server, server_port))
 
         utils.log('Connectiong to peers database...', 4)
         self._db = sqlite3.connect(os.path.join(db_dir_path, 'peers.db'),
                                    isolation_level=None)
         utils.log('Database opened', 5)
+
         utils.log('Preparing peers database...', 4)
+        self._db.execute("""CREATE TABLE IF NOT EXISTS peers (
+                            prefix TEXT PRIMARY KEY,
+                            address TEXT NOT NULL,
+                            used INTEGER NOT NULL DEFAULT 0,
+                            date INTEGER DEFAULT (strftime('%s', 'now')))""")
+        self._db.execute("UPDATE peers SET used = 0")
+        self._db.execute("CREATE INDEX IF NOT EXISTS _peers_used ON peers(used)")
+        self._db.execute("""CREATE TABLE IF NOT EXISTS blacklist (
+                            prefix TEXT PRIMARY KEY,
+                            flag INTEGER NOT NULL)""")
+        self._db.execute("""CREATE INDEX IF NOT EXISTS
+                            blacklist_flag ON blacklist(flag)""")
+        self._db.execute("INSERT OR REPLACE INTO blacklist VALUES (?,?)",
+                         (prefix, 1))
+        self._db.execute("""CREATE TABLE IF NOT EXISTS config (
+                            name text primary key,
+                            value text)""")
         try:
-            self._db.execute("UPDATE peers SET used = 0")
-            self._db.execute("""CREATE TABLE IF NOT EXISTS blacklist (
-                                prefix TEXT PRIMARY KEY,
-                                flag INTEGER NOT NULL)""")
-            self._db.execute("""CREATE INDEX IF NOT EXISTS
-                                blacklist_flag ON blacklist(flag)""")
-            utils.log('Database prepared', 5)
-        except sqlite3.OperationalError, e:
-            if e.args[0] == 'no such table: peers':
-                raise RuntimeError
-            else:
-                utils.log(e, 1)
-        except sqlite3.Error, e:
-            utils.log(e, 1)
+            a = self._db.execute("SELECT value FROM config WHERE name='registry'").next()
+        except StopIteration:
+            proxy = xmlrpclib.ServerProxy(registry)
+            a = proxy.getPrivateAddress()
+            self._db.execute("INSERT INTO config VALUES ('registry',?)", a)
+        self._proxy = xmlrpclib.ServerProxy(a)
+        utils.log('Database prepared', 5)
 
         self.next_refresh = time.time()
 
+    def _boot(self):
+        utils.log('Getting Boot peer...', 3)
+        try:
+            utils.log("Contacting registry's private address", 5)
+            bootpeer = self._proxy.getBootstrapPeer(self._prefix).data
+        except socket.error, e:
+            utils.log("""Registry's private address unreachable,
+                         trying public address""")
+            proxy = xmlrpclib.ServerProxy(self._registry)
+            bootpeer = proxy.getBootstrapPeer(self._prefix).data
+        utils.log('Boot peer received from server', 4)
+        p = subprocess.Popen(('openssl', 'rsautl', '-decrypt', '-inkey', self._key_path),
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        try:
+            prefix, address = p.communicate(bootpeer).split()
+        except ValueError:
+            # DO something
+            pass
+        self.db.execute("INSERT INTO peers (prefix, address) VALUES (?,?)",
+                (prefix, address))
+        utils.log('Boot peer added', 4)
+
     def clear_blacklist(self, flag):
         utils.log('Clearing blacklist from flag %u' % (flag,), 3)
-        try:
-            with self._db:
-                self._db.execute("DELETE FROM blacklist WHERE flag = ?",
-                                  (flag,))
-                utils.log('Blacklist cleared', 5)
-        except sqlite3.Error, e:
-            utils.log(e, 1)
+        self._db.execute("DELETE FROM blacklist WHERE flag = ?",
+                          (flag,))
+        utils.log('Blacklist cleared', 5)
 
     def blacklist(self, prefix, flag):
         utils.log('Blacklisting %s' % (prefix,), 4)
-        try:
-            with self._db:
-                self._db.execute("DELETE FROM peers WHERE prefix = ?",
-                                (prefix,))
-                self._db.execute("""INSERT OR REPLACE INTO blacklist
-                                    VALUES (?,?)""", (prefix, flag))
-                utils.log('%s blacklisted' % (prefix,), 5)
-        except sqlite3.Error, e:
-            utils.log(e, 1)
+        self._db.execute("DELETE FROM peers WHERE prefix = ?", (prefix,))
+        self._db.execute("INSERT OR REPLACE INTO blacklist VALUES (?,?)",
+                          (prefix, flag))
+        utils.log('%s blacklisted' % (prefix,), 5)
 
     def whitelist(self, prefix):
         utils.log('Unblacklisting %s' % (prefix,), 4)
-        try:
-            with self._db:
-                self._db.execute("DELETE FROM blacklist WHERE prefix = ?", (prefix,))
-                utils.log('%s whitelisted' % (prefix,), 5)
-        except sqlite3.Error, e:
-            utils.log(e, 1)
+        self._db.execute("DELETE FROM blacklist WHERE prefix = ?", (prefix,))
+        utils.log('%s whitelisted' % (prefix,), 5)
 
     def refresh(self):
         utils.log('Refreshing the peers DB...', 2)
@@ -100,59 +116,40 @@ class PeerManager:
         utils.log('Populating the peers DB...', 2)
         new_peer_list = self._proxy.getPeerList(self._db_size,
                 self._internal_ip)
-        try:
-            with self._db:
-                self._db.execute("""DELETE FROM peers WHERE used <= 0 ORDER BY
-                                    used,random() LIMIT MAX(0, ? + (SELECT
-                                    COUNT(*) FROM peers WHERE used <= 0))""",
-                                    (str(len(new_peer_list) - self._db_size),))
-                self._db.executemany("""INSERT OR IGNORE INTO peers (prefix, address)
-                                        VALUES (?,?)""", new_peer_list)
-                self._db.execute("""DELETE FROM peers WHERE prefix IN
-                                    (SELECT prefix FROM blacklist)""")
-                utils.log('DB populated', 3)
-                utils.log('New peers : %s' % ', '.join(map(str, new_peer_list)), 5)
-        except sqlite3.Error, e:
-            utils.log(e, 1)
+        with self._db:
+            self._db.execute("""DELETE FROM peers WHERE used <= 0 ORDER BY used,
+                                RANDOM() LIMIT MAX(0, ? + (SELECT COUNT(*)
+                                FROM peers WHERE used <= 0))""",
+                                (str(len(new_peer_list) - self._db_size),))
+            self._db.executemany("""INSERT OR IGNORE INTO peers (prefix, address)
+                                    VALUES (?,?)""", new_peer_list)
+            self._db.execute("""DELETE FROM peers WHERE prefix IN
+                                (SELECT prefix FROM blacklist)""")
+        utils.log('DB populated', 3)
+        utils.log('New peers : %s' % ', '.join(map(str, new_peer_list)), 5)
 
     def getUnusedPeers(self, peer_count):
-        try:
-            return self._db.execute("""SELECT prefix, address FROM peers WHERE used
-                                       <= 0 ORDER BY used DESC,RANDOM() LIMIT ?""",
-                                       (peer_count,))
-        except sqlite3.Error, e:
-            utils.log(e, 1)
-            return [('0', '')]
+        return self._db.execute("""SELECT prefix, address FROM peers WHERE used
+                                   <= 0 ORDER BY used DESC,RANDOM() LIMIT ?""",
+                                   (peer_count,))
 
     def usePeer(self, prefix):
         utils.log('Updating peers database : using peer ' + str(prefix), 5)
-        try:
-            with self._db:
-                self._db.execute("UPDATE peers SET used = 1 WHERE prefix = ?",
-                        (prefix,))
-                utils.log('DB updated', 5)
-        except sqlite3.Error, e:
-            utils.log(e, 1)
+        self._db.execute("UPDATE peers SET used = 1 WHERE prefix = ?", 
+                (prefix,))
+        utils.log('DB updated', 5)
 
     def unusePeer(self, prefix):
         utils.log('Updating peers database : unusing peer ' + str(prefix), 5)
-        try:
-            with self._db:
-                self._db.execute("UPDATE peers SET used = 0 WHERE prefix = ?",
-                        (prefix,))
-                utils.log('DB updated', 5)
-        except sqlite3.Error, e:
-            utils.log(e, 1)
+        self._db.execute("UPDATE peers SET used = 0 WHERE prefix = ?", 
+                (prefix,))
+        utils.log('DB updated', 5)
 
     def flagPeer(self, prefix):
         utils.log('Updating peers database : flagging peer ' + str(prefix), 5)
-        try:
-            with self._db:
-                self._db.execute("UPDATE peers SET used = -1 WHERE prefix = ?",
-                         (prefix,))
-                utils.log('DB updated', 5)
-        except sqlite3.Error, e:
-            utils.log(e, 1)
+        self._db.execute("UPDATE peers SET used = -1 WHERE prefix = ?",
+                (prefix,))
+        utils.log('DB updated', 5)
 
     def handle_message(self, msg):
         script_type, arg = msg.split()

@@ -185,4 +185,4 @@ class TunnelManager:
     def killAll(self):
         for prefix in self._connection_dict.keys():
             self._kill(prefix)
-            
+
