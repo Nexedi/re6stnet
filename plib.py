@@ -33,12 +33,17 @@ def server(server_ip, ip_length, max_clients, dh_path, pipe_fd, port, proto, hel
 
 def client(server_address, pipe_fd, hello_interval, *args, **kw):
     utils.log('Starting client...', 5)
-    remote= ['--nobind',
-             '--client',
-             '--up', 'ovpn-client',
-             '--route-up', 'ovpn-client ' + str(pipe_fd) ]
-    for ip, port, proto in utils.address_set(server_address):
-        remote += '--remote', ip, port, proto
+    remote = ['--nobind',
+              '--client',
+              '--up', 'ovpn-client',
+              '--route-up', 'ovpn-client ' + str(pipe_fd) ]
+    try:
+        for ip, port, proto in utils.address_list(server_address):
+            remote += '--remote', ip, port, proto
+    except ValueError, e:
+        utils.log(e, 1)
+        utils.log('Error in unpacking address %s for openvpn client'
+                % (server_address,), 1)
     remote += args
     return openvpn(hello_interval, *remote, **kw)
 

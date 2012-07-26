@@ -5,7 +5,8 @@ verbose = 0
 
 def log(message, verbose_level):
     if verbose >= verbose_level:
-        print time.strftime("%d-%m-%Y %H:%M:%S : " + message)
+        print time.strftime("%d-%m-%Y %H:%M:%S :"),
+        print message
 
 def binFromIp(ip):
     ip1, ip2 = struct.unpack('>QQ', socket.inet_pton(socket.AF_INET6, ip))
@@ -37,9 +38,9 @@ def ipFromCert(network, cert_path):
         prefix, prefix_len = subject.CN.split('/')
         return ipFromPrefix(network, prefix, int(prefix_len))
 
-def address_list(address_set):
+def address_str(address_set):
     return ';'.join(map(','.join, address_set))
 
-def address_set(address_list):
+def address_list(address_list):
     return list(tuple(address.split(','))
         for address in address_list.split(';'))
