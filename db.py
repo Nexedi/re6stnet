@@ -1,6 +1,5 @@
-import sqlite3, socket, xmlrpclib, time, os
+import sqlite3, socket, subprocess, xmlrpclib, time, os
 import utils
-
 
 class PeerManager:
 
@@ -41,37 +40,15 @@ class PeerManager:
                             name text primary key,
                             value text)""")
         try:
-            a = self._db.execute("SELECT value FROM config WHERE name='registry'").next()
+            a, = self._db.execute("SELECT value FROM config WHERE name='registry'").next()
         except StopIteration:
             proxy = xmlrpclib.ServerProxy(registry)
             a = proxy.getPrivateAddress()
-            self._db.execute("INSERT INTO config VALUES ('registry',?)", a)
+            self._db.execute("INSERT INTO config VALUES ('registry',?)", (a,))
         self._proxy = xmlrpclib.ServerProxy(a)
         utils.log('Database prepared', 5)
 
         self.next_refresh = time.time()
-
-    def _boot(self):
-        utils.log('Getting Boot peer...', 3)
-        try:
-            utils.log("Contacting registry's private address", 5)
-            bootpeer = self._proxy.getBootstrapPeer(self._prefix).data
-        except socket.error, e:
-            utils.log("""Registry's private address unreachable,
-                         trying public address""")
-            proxy = xmlrpclib.ServerProxy(self._registry)
-            bootpeer = proxy.getBootstrapPeer(self._prefix).data
-        utils.log('Boot peer received from server', 4)
-        p = subprocess.Popen(('openssl', 'rsautl', '-decrypt', '-inkey', self._key_path),
-                stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-        try:
-            prefix, address = p.communicate(bootpeer).split()
-        except ValueError:
-            # DO something
-            pass
-        self.db.execute("INSERT INTO peers (prefix, address) VALUES (?,?)",
-                (prefix, address))
-        utils.log('Boot peer added', 4)
 
     def clear_blacklist(self, flag):
         utils.log('Clearing blacklist from flag %u' % (flag,), 3)
@@ -98,10 +75,12 @@ class PeerManager:
             self._populate()
             utils.log('DB refreshed', 3)
             self.next_refresh = time.time() + self._refresh_time
+            return True
         except socket.error, e:
             utils.log(e, 4)
             utils.log('Connection to server failed, retrying in 30s', 2)
             self.next_refresh = time.time() + 30
+            return False
 
     def _declare(self):
         if self._address != None:
@@ -129,9 +108,32 @@ class PeerManager:
         utils.log('New peers : %s' % ', '.join(map(str, new_peer_list)), 5)
 
     def getUnusedPeers(self, peer_count):
-        return self._db.execute("""SELECT prefix, address FROM peers WHERE used
-                                   <= 0 ORDER BY used DESC,RANDOM() LIMIT ?""",
-                                   (peer_count,))
+        for populate in self.refresh, self._bootstrap, bool:
+            peer_list = self._db.execute("""SELECT prefix, address FROM peers WHERE used
+                                            <= 0 ORDER BY used DESC,RANDOM() LIMIT ?""",
+                                         (peer_count,)).fetchall()
+            if peer_list or populate():
+                return peer_list
+
+    def _bootstrap(self):
+        utils.log('Getting Boot peer...', 3)
+        proxy = xmlrpclib.ServerProxy(self._registry)
+        try:
+            bootpeer = proxy.getBootstrapPeer(self._prefix).data
+            utils.log('Boot peer received from server', 4)
+            p = subprocess.Popen(('openssl', 'rsautl', '-decrypt', '-inkey', self._key_path),
+                    stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+            bootpeer = p.communicate(bootpeer).split()
+            self.db.execute("INSERT INTO peers (prefix, address) VALUES (?,?)", bootpeer)
+            utils.log('Boot peer added', 4)
+            return True
+        except socket.error:
+            pass
+        except sqlite3.IntegrityError, e:
+            import pdb; pdb.set_trace()
+            if e.args[0] != '':
+                raise
+        return False
 
     def usePeer(self, prefix):
         utils.log('Updating peers database : using peer ' + str(prefix), 5)

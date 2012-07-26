@@ -137,7 +137,7 @@ OPTIONS : VIFIBNET.PY
             Default : 0
 
     --registry address
-           Complete publi ( reachable from the internet ) address of the machine
+           Complete public ( reachable from the internet ) address of the machine
            running a registry. Will be used to get the pirvate address of the
            registry and/or bootstrap peers
 

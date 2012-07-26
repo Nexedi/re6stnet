@@ -19,7 +19,7 @@ class ArgParser(ArgumentParser):
 
 def ovpnArgs(optional_args, ca_path, cert_path, key_path):
     # Treat openvpn arguments
-    if optional_args[0] == "--":
+    if optional_args and optional_args[0] == "--":
         del optional_args[0]
     optional_args.append('--ca')
     optional_args.append(ca_path)
@@ -122,7 +122,7 @@ def main():
         except upnpigd.NoUPnPDevice:
             utils.log('No upnp device found', 4)
 
-    peer_db = db.PeerManager(config.state, config.registry,
+    peer_db = db.PeerManager(config.state, config.registry, config.key,
             config.peers_db_refresh, config.address, internal_ip, prefix,
             manual, config.pp, 200)
     tunnel_manager = tunnel.TunnelManager(write_pipe, peer_db, openvpn_args,
