@@ -165,22 +165,22 @@ def main():
                 forwarder.refresh()
     except KeyboardInterrupt:
         try:
-            router.kill()
+            router.terminate()
         except:
             pass
         try:
-            server_process.kill()
+            server_process.terminate()
         except:
             pass
         tunnel_manager.killAll()
         return 0
     except:
         try:
-            router.kill()
+            router.terminate()
         except:
             pass
         try:
-            server_process.kill()
+            server_process.terminate()
         except:
             pass
         try:

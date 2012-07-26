@@ -121,7 +121,7 @@ class TunnelManager:
         utils.log('Killing the connection with %s...' % (prefix,), 2)
         connection = self._connection_dict.pop(prefix)
         try:
-            connection.process.kill()
+            connection.process.terminate()
         except OSError:
             # If the process is already exited
             pass
