@@ -38,9 +38,9 @@ class PeerManager:
             if e.args[0] == 'no such table: peers':
                 raise RuntimeError
             else:
-                utils.log(str(e), 1)
+                utils.log(e, 1)
         except sqlite3.Error, e:
-            utils.log(str(e), 1)
+            utils.log(e, 1)
 
         self.next_refresh = time.time()
 
@@ -52,7 +52,7 @@ class PeerManager:
                                   (flag,))
                 utils.log('Blacklist cleared', 5)
         except sqlite3.Error, e:
-            utils.log(str(e), 1)
+            utils.log(e, 1)
 
     def blacklist(self, prefix, flag):
         utils.log('Blacklisting %s' % (prefix,), 4)
@@ -64,7 +64,7 @@ class PeerManager:
                                     VALUES (?,?)""", (prefix, flag))
                 utils.log('%s blacklisted' % (prefix,), 5)
         except sqlite3.Error, e:
-            utils.log(str(e), 1)
+            utils.log(e, 1)
 
     def whitelist(self, prefix):
         utils.log('Unblacklisting %s' % (prefix,), 4)
@@ -73,7 +73,7 @@ class PeerManager:
                 self._db.execute("DELETE FROM blacklist WHERE prefix = ?", (prefix,))
                 utils.log('%s whitelisted' % (prefix,), 5)
         except sqlite3.Error, e:
-            utils.log(str(e), 1)
+            utils.log(e, 1)
 
     def refresh(self):
         utils.log('Refreshing the peers DB...', 2)
@@ -83,7 +83,7 @@ class PeerManager:
             utils.log('DB refreshed', 3)
             self.next_refresh = time.time() + self._refresh_time
         except socket.error, e:
-            utils.log(str(e), 4)
+            utils.log(e, 4)
             utils.log('Connection to server failed, retrying in 30s', 2)
             self.next_refresh = time.time() + 30
 
@@ -113,7 +113,7 @@ class PeerManager:
                 utils.log('DB populated', 3)
                 utils.log('New peers : %s' % ', '.join(map(str, new_peer_list)), 5)
         except sqlite3.Error, e:
-            utils.log(str(e), 1)
+            utils.log(e, 1)
 
     def getUnusedPeers(self, peer_count):
         try:
@@ -121,7 +121,7 @@ class PeerManager:
                                        <= 0 ORDER BY used DESC,RANDOM() LIMIT ?""",
                                        (peer_count,))
         except sqlite3.Error, e:
-            utils.log(str(e), 1)
+            utils.log(e, 1)
             return [('0', '')]
 
     def usePeer(self, prefix):
@@ -132,7 +132,7 @@ class PeerManager:
                         (prefix,))
                 utils.log('DB updated', 5)
         except sqlite3.Error, e:
-            utils.log(str(e), 1)
+            utils.log(e, 1)
 
     def unusePeer(self, prefix):
         utils.log('Updating peers database : unusing peer ' + str(prefix), 5)
@@ -142,7 +142,7 @@ class PeerManager:
                         (prefix,))
                 utils.log('DB updated', 5)
         except sqlite3.Error, e:
-            utils.log(str(e), 1)
+            utils.log(e, 1)
 
     def flagPeer(self, prefix):
         utils.log('Updating peers database : flagging peer ' + str(prefix), 5)
@@ -152,7 +152,7 @@ class PeerManager:
                          (prefix,))
                 utils.log('DB updated', 5)
         except sqlite3.Error, e:
-            utils.log(str(e), 1)
+            utils.log(e, 1)
 
     def handle_message(self, msg):
         script_type, arg = msg.split()

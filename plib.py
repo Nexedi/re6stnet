@@ -14,7 +14,7 @@ def openvpn(hello_interval, *args, **kw):
         '--group', 'nogroup',
         '--verb', str(verbose),
         ] + list(args)
-    utils.log(str(args), 5)
+    utils.log(args, 5)
     return subprocess.Popen(args, **kw)
 
 def server(server_ip, ip_length, max_clients, dh_path, pipe_fd, port, proto, hello_interval, *args, **kw):
@@ -41,9 +41,8 @@ def client(server_address, pipe_fd, hello_interval, *args, **kw):
         for ip, port, proto in utils.address_list(server_address):
             remote += '--remote', ip, port, proto
     except ValueError, e:
-        utils.log(e, 1)
-        utils.log('Error in unpacking address %s for openvpn client'
-                % (server_address,), 1)
+        utils.log('Error "%s" in unpacking address %s for openvpn client'
+                % (e, server_address,), 1)
     remote += args
     return openvpn(hello_interval, *remote, **kw)
 
@@ -70,6 +69,6 @@ def router(network, internal_ip, interface_list,
     if wireless:
         args.append('-w')
     args = args + interface_list
-    utils.log(str(args), 5)
+    utils.log(args, 5)
     return subprocess.Popen(args, **kw)
 
