@@ -32,7 +32,7 @@ class Forwarder:
         elif proto == 'tcp-server':
             upnp_proto = 'TCP'
         else:
-            utils.log('Unknown protocol : %s' % proto, 1)
+            logging.info('Unknown protocol : %s' % proto)
             raise RuntimeError
 
         # Choose a free port
@@ -46,13 +46,13 @@ class Forwarder:
             # Make the redirection
             if self._u.addportmapping(external_port, 'UDP', self._u.lanaddr,
                     int(local_port), 'Vifib openvpn server', ''):
-                utils.log('Forwarding %s:%s to %s:%s' % (self._external_ip,
-                        external_port, self._u.lanaddr, local_port), 3)
+                logging.debug('Forwarding %s:%s to %s:%s' % (self._external_ip,
+                        external_port, self._u.lanaddr, local_port))
                 self._rules.append((external_port, int(local_port), upnp_proto))
                 return (self._external_ip, str(external_port), proto)
 
     def refresh(self):
-        utils.log('Refreshing port forwarding', 3)
+        logging.debug('Refreshing port forwarding')
         for external_port, local_port, proto in self._rules:
             self._u.addportmapping(external_port, proto, self._u.lanaddr,
                     local_port, 'Vifib openvpn server', '')

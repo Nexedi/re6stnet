@@ -1,7 +1,6 @@
-import os, random, traceback, time, struct, subprocess, operator, math
+import os, random, traceback, time, struct, subprocess, operator, math, logging
 import plib, utils, db
 
-log = None
 smooth = 0.3     # this is used to smooth the traffic sampling. Lower value
                  # mean more smooth
 protected = 0.2  # ratio of the tunnels protected against kill because they are
@@ -30,8 +29,8 @@ class Connection:
     def refresh(self):
         # Check that the connection is alive
         if self.process.poll() != None:
-            utils.log('Connection with %s has failed with return code %s'
-                     % (self._prefix, self.process.returncode), 3)
+            logging.info('Connection with %s has failed with return code %s'
+                     % (self._prefix, self.process.returncode))
             return False
 
         # self._updateBandwidth()
@@ -60,14 +59,14 @@ class Connection:
                 else:
                     self.bandwidth = bw
 
-                utils.log('New bandwidth calculated on iface %s : %s' %
-                        (self.iface, self.bandwidth), 4)
+                logging.debug('New bandwidth calculated on iface %s : %s' %
+                        (self.iface, self.bandwidth))
 
             self._last_trafic_update = t
             self._last_trafic = trafic
-        except IOError:  # This just means that the interface is downs
-            utils.log('Unable to calculate bandwidth on iface %s' %
-                self.iface, 4)
+        except IOError:  # This just means that the interface is down
+            logging.debug('Unable to calculate bandwidth on iface %s' %
+                self.iface)
 
 
 class TunnelManager:
@@ -94,12 +93,12 @@ class TunnelManager:
         self._refresh_count = int(math.ceil(refresh_rate * self._client_count))
 
     def refresh(self):
-        utils.log('Refreshing the tunnels...', 2)
+        logging.info('Refreshing the tunnels...')
         self._cleanDeads()
         self._countRoutes()
         self._removeSomeTunnels()
         self._makeNewTunnels()
-        utils.log('Tunnels refreshed', 2)
+        logging.debug('Tunnels refreshed')
         self.next_refresh = time.time() + self._refresh_time
 
     def _cleanDeads(self):
@@ -120,7 +119,8 @@ class TunnelManager:
             self._kill(prefix)
 
     def _kill(self, prefix):
-        utils.log('Killing the connection with %s...' % (prefix,), 2)
+        logging.info('Killing the connection with %s/%u...'
+                % (hex(int(prefix,2))[2:], len(prefix)))
         connection = self._connection_dict.pop(prefix)
         try:
             connection.process.terminate()
@@ -130,16 +130,18 @@ class TunnelManager:
         self.free_interface_set.add(connection.iface)
         self._peer_db.unusePeer(prefix)
         del self._iface_to_prefix[connection.iface]
-        utils.log('Connection with %s killed' % (prefix,), 2)
+        logging.trace('Connection with %s/%u killed'
+                % (hex(int(prefix,2))[2:], len(prefix)))
 
     def _makeNewTunnels(self):
         i = 0
-        utils.log('Trying to make %i new tunnels...' %
-                (self._client_count - len(self._connection_dict)), 5)
+        logging.trace('Trying to make %i new tunnels...' %
+                (self._client_count - len(self._connection_dict)))
         try:
             for prefix, address in self._peer_db.getUnusedPeers(
                     self._client_count - len(self._connection_dict)):
-                utils.log('Establishing a connection with %s' % prefix, 2)
+                logging.info('Establishing a connection with %s/%u' %
+                        (hex(int(prefix, 2))[2:], len(prefix)))
                 iface = self.free_interface_set.pop()
                 self._connection_dict[prefix] = Connection(address,
                         self._write_pipe, self._hello, iface,
@@ -147,15 +149,15 @@ class TunnelManager:
                 self._iface_to_prefix[iface] = prefix
                 self._peer_db.usePeer(prefix)
                 i += 1
-            utils.log('%u new tunnels established' % (i,), 3)
+            logging.trace('%u new tunnels established' % (i,))
         except KeyError:
-            utils.log("""Can't establish connection with %s
-                    : no available interface""" % prefix, 2)
+            logging.warning("""Can't establish connection with %s
+                              : no available interface""" % prefix)
         except Exception:
             traceback.print_exc()
 
     def _countRoutes(self):
-        utils.log('Starting to count the routes on each interface...', 3)
+        logging.debug('Starting to count the routes on each interface...')
         self._peer_db.clear_blacklist(0)
         for iface in self._iface_to_prefix.keys():
             self._connection_dict[self._iface_to_prefix[iface]].routes = 0
@@ -166,21 +168,21 @@ class TunnelManager:
             if ip.startswith(self._network):
                 iface = line[-1]
                 subnet_size = int(line[1], 16)
-                utils.log('Route on iface %s detected to %s/%s'
-                        % (iface, ip, subnet_size), 8)
+                logging.trace('Route on iface %s detected to %s/%s'
+                        % (iface, ip, subnet_size))
                 if iface in self._iface_to_prefix.keys():
                     self._connection_dict[self._iface_to_prefix[iface]].routes += 1
                 if iface in self._iface_list and self._net_len < subnet_size < 128:
                     prefix = ip[self._net_len:subnet_size]
-                    utils.log('A route to %s has been discovered on the LAN'
-                            % (prefix,), 3)
+                    logging.debug('A route to %s (%s) has been discovered on the LAN'
+                            % (hex(int(prefix), 2)[2:], prefix))
                     self._peer_db.blacklist(prefix, 0)
 
-        utils.log("Routes have been counted", 3)
+        logging.debug("Routes have been counted")
         for p in self._connection_dict.keys():
-            utils.log('Routes on iface %s : %s' % (
+            logging.trace('Routes on iface %s : %s' % (
                 self._connection_dict[p].iface,
-                self._connection_dict[p].routes), 5)
+                self._connection_dict[p].routes))
 
     def killAll(self):
         for prefix in self._connection_dict.keys():

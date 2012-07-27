@@ -1,4 +1,4 @@
-import sqlite3, socket, subprocess, xmlrpclib, time, os
+import logging, sqlite3, socket, subprocess, xmlrpclib, time, os
 import utils
 
 class PeerManager:
@@ -16,12 +16,12 @@ class PeerManager:
         self._pp = pp
         self._manual = manual
 
-        utils.log('Connectiong to peers database...', 4)
+        logging.info('Connecting to peers database...')
         self._db = sqlite3.connect(os.path.join(db_dir_path, 'peers.db'),
                                    isolation_level=None)
-        utils.log('Database opened', 5)
+        logging.debug('Database opened')
 
-        utils.log('Preparing peers database...', 4)
+        logging.info('Preparing peers database...')
         self._db.execute("""CREATE TABLE IF NOT EXISTS peers (
                             prefix TEXT PRIMARY KEY,
                             address TEXT NOT NULL,
@@ -46,53 +46,53 @@ class PeerManager:
             a = proxy.getPrivateAddress()
             self._db.execute("INSERT INTO config VALUES ('registry',?)", (a,))
         self._proxy = xmlrpclib.ServerProxy(a)
-        utils.log('Database prepared', 5)
+        logging.debug('Database prepared')
 
         self.next_refresh = time.time()
 
     def clear_blacklist(self, flag):
-        utils.log('Clearing blacklist from flag %u' % (flag,), 3)
+        logging.info('Clearing blacklist from flag %u' % flag)
         self._db.execute("DELETE FROM blacklist WHERE flag = ?",
                           (flag,))
-        utils.log('Blacklist cleared', 5)
+        logging.info('Blacklist cleared')
 
     def blacklist(self, prefix, flag):
-        utils.log('Blacklisting %s' % (prefix,), 4)
+        logging.ninfo('Blacklisting %s' % prefix)
         self._db.execute("DELETE FROM peers WHERE prefix = ?", (prefix,))
         self._db.execute("INSERT OR REPLACE INTO blacklist VALUES (?,?)",
                           (prefix, flag))
-        utils.log('%s blacklisted' % (prefix,), 5)
+        logging.debug('%s blacklisted' % prefix)
 
     def whitelist(self, prefix):
-        utils.log('Unblacklisting %s' % (prefix,), 4)
+        logging.info('Unblacklisting %s' % prefix)
         self._db.execute("DELETE FROM blacklist WHERE prefix = ?", (prefix,))
-        utils.log('%s whitelisted' % (prefix,), 5)
+        logging.debug('%s whitelisted' % prefix)
 
     def refresh(self):
-        utils.log('Refreshing the peers DB...', 2)
+        logging.info('Refreshing the peers DB...')
         try:
             self._declare()
             self._populate()
-            utils.log('DB refreshed', 3)
+            logging.info('DB refreshed')
             self.next_refresh = time.time() + self._refresh_time
             return True
         except socket.error, e:
-            utils.log(e, 4)
-            utils.log('Connection to server failed, retrying in 30s', 2)
+            logging.debug('socket.error : %s' % e)
+            logging.info('Connection to server failed, retrying in 30s')
             self.next_refresh = time.time() + 30
             return False
 
     def _declare(self):
         if self._address != None:
-            utils.log('Sending connection info to server...', 3)
+            logging.info('Sending connection info to server...')
             self._proxy.declare((self._internal_ip,
                     utils.address_str(self._address)))
-            utils.log('Info sent', 5)
+            logging.debug('Info sent')
         else:
-            utils.log("Warning : couldn't send ip, unknown external config", 4)
+            logging.warning("Warning : couldn't send ip, unknown external config")
 
     def _populate(self):
-        utils.log('Populating the peers DB...', 2)
+        logging.info('Populating the peers DB...')
         new_peer_list = self._proxy.getPeerList(self._db_size,
                 self._internal_ip)
         with self._db:
@@ -104,8 +104,8 @@ class PeerManager:
                                     VALUES (?,?)""", new_peer_list)
             self._db.execute("""DELETE FROM peers WHERE prefix IN
                                 (SELECT prefix FROM blacklist)""")
-        utils.log('DB populated', 3)
-        utils.log('New peers : %s' % ', '.join(map(str, new_peer_list)), 5)
+        logging.info('DB populated')
+        logging.trace('New peers : %s' % (', '.join(map(str, new_peer_list)),))
 
     def getUnusedPeers(self, peer_count):
         for populate in self.refresh, self._bootstrap, bool:
@@ -116,16 +116,16 @@ class PeerManager:
                 return peer_list
 
     def _bootstrap(self):
-        utils.log('Getting Boot peer...', 3)
+        logging.info('Getting Boot peer...')
         proxy = xmlrpclib.ServerProxy(self._registry)
         try:
             bootpeer = proxy.getBootstrapPeer(self._prefix).data
-            utils.log('Boot peer received from server', 4)
+            logging.debug('Boot peer received from server')
             p = subprocess.Popen(('openssl', 'rsautl', '-decrypt', '-inkey', self._key_path),
                     stdin=subprocess.PIPE, stdout=subprocess.PIPE)
             bootpeer = p.communicate(bootpeer).split()
             self.db.execute("INSERT INTO peers (prefix, address) VALUES (?,?)", bootpeer)
-            utils.log('Boot peer added', 4)
+            logging.debug('Boot peer added')
             return True
         except socket.error:
             pass
@@ -136,29 +136,29 @@ class PeerManager:
         return False
 
     def usePeer(self, prefix):
-        utils.log('Updating peers database : using peer ' + str(prefix), 5)
-        self._db.execute("UPDATE peers SET used = 1 WHERE prefix = ?", 
+        logging.trace('Updating peers database : using peer %s' % prefix)
+        self._db.execute("UPDATE peers SET used = 1 WHERE prefix = ?",
                 (prefix,))
-        utils.log('DB updated', 5)
+        logging.debug('DB updated')
 
     def unusePeer(self, prefix):
-        utils.log('Updating peers database : unusing peer ' + str(prefix), 5)
-        self._db.execute("UPDATE peers SET used = 0 WHERE prefix = ?", 
+        logging.trace('Updating peers database : unusing peer %s' % prefix)
+        self._db.execute("UPDATE peers SET used = 0 WHERE prefix = ?",
                 (prefix,))
-        utils.log('DB updated', 5)
+        logging.debug('DB updated')
 
     def flagPeer(self, prefix):
-        utils.log('Updating peers database : flagging peer ' + str(prefix), 5)
+        logging.trace('Updating peers database : flagging peer %s' % prefix)
         self._db.execute("UPDATE peers SET used = -1 WHERE prefix = ?",
                 (prefix,))
-        utils.log('DB updated', 5)
+        logging.debug('DB updated')
 
     def handle_message(self, msg):
         script_type, arg = msg.split()
         if script_type == 'client-connect':
-            utils.log('Incomming connection from %s' % (arg,), 3)
+            logging.info('Incomming connection from %s' % (arg,))
         elif script_type == 'client-disconnect':
-            utils.log('%s has disconnected' % (arg,), 3)
+            logging.info('%s has disconnected' % (arg,))
         elif script_type == 'route-up':
             if not self._manual:
                 external_ip = arg
@@ -166,10 +166,10 @@ class PeerManager:
                                    for port, proto in self._pp)
                 if self._address != new_address:
                     self._address = new_address
-                    utils.log('Received new external ip : %s' 
-                              % (external_ip,), 3)
+                    logging.info('Received new external ip : %s'
+                              % (external_ip,))
                     self._declare()
         else:
-            utils.log('Unknow message recieved from the openvpn pipe : '
-                    + msg, 1)
+            logging.debug('Unknow message recieved from the openvpn pipe : %s'
+                    % msg)
 
