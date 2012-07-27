@@ -25,6 +25,11 @@ OPTIONS : REGISTRY.PY
     port
             The port on which the server will listen
 
+    --private ip
+            Ipv6 address of the vifibnet client running on the machine. This
+            address will be advertised only to nodes having a valid
+            certificate.
+
     --db path
             Path to the server Database file. A new DB file will be created
             and correctly initialized if the file doesn't exists.
@@ -41,6 +46,14 @@ OPTIONS : REGISTRY.PY
     --key path
             Path to the server key file. To generate a key file, see the --ca
             option
+
+    --bootstrap prefix ip port proto
+            Connection informations of a node given to other as a bootstrap
+            node to initiate connection with the network.
+            Prefix should be the prefix number of a node, given in binary and
+            with correct length. For instance the VPN address
+            2001:db8:42:1::/64 ( asusming a network prefix 2001:db8:42::/48 )
+            corresponds to a prefix 1/16 i.e 0000000000000001.
 
     --mailhost mailhost
             Mailhost to be used to send email containing token for registration
@@ -123,13 +136,10 @@ OPTIONS : VIFIBNET.PY
             This parameter is also given to openvpn and babel for their log.
             Default : 0
 
-    --server address
-             Ip address of the peer discovery server. SHOULD be an ipv6 address
-             belonging to the VPN network, as the server only allows requests
-             from inside the VPN (feature not used now for debugging purposes)
-
-    --server-port port
-            Port number on the peer discovery server to which we connect
+    --registry address
+           Complete public ( reachable from the internet ) address of the machine
+           running a registry. Will be used to get the pirvate address of the
+           registry and/or bootstrap peers
 
     --hello duration
             Set hello interval, in seconds, for both wired and wireless

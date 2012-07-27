@@ -1,11 +1,10 @@
 #!/usr/bin/env python
-import argparse, math, random, select, smtplib, sqlite3, string, socket, time, traceback, errno
+import argparse, math, random, select, smtplib, sqlite3, string, socket
+import subprocess, time, threading, traceback, errno
 from SimpleXMLRPCServer import SimpleXMLRPCServer, SimpleXMLRPCRequestHandler
 from email.mime.text import MIMEText
 from OpenSSL import crypto
 import utils
-
-
 
 # To generate server ca and key with serial for 2001:db8:42::/48
 # openssl req -nodes -new -x509 -key ca.key -set_serial 0x120010db80042 -days 365 -out ca.crt
@@ -58,6 +57,8 @@ class main(object):
         _('--bootstrap', nargs=4, action="append",
                 help='''VPN prefix, ip address, port and protocol to send as
                         bootstrap peers, instead of random ones''')
+        _('--private',
+                help='VPN IP of the node on which runs the registry')
         self.config = parser.parse_args()
 
         # Database initializing
@@ -179,10 +180,14 @@ class main(object):
     def getCa(self, handler):
         return crypto.dump_certificate(crypto.FILETYPE_PEM, self.ca)
 
-    def getBootstrapPeer(self, handler):
+    def getPrivateAddress(self, handler):
+        return 'http://[%s]:%u' % (self.config.private, self.config.port)
+
+    def getBootstrapPeer(self, handler, client_prefix):
         # TODO: Insert a flag column for bootstrap ready servers in peers
         # ( servers which shouldn't go down or change ip and port as opposed to servers owned by particulars )
         # that way, we also ascertain that the server sent is not the new node....
+        cert = self.db.execute("SELECT cert FROM vpn WHERE prefix = ?", (client_prefix,))
         if self.config.bootstrap:
             bootpeer = random.choice(self.config.bootstrap)
             prefix = bootpeer[0]
@@ -190,8 +195,16 @@ class main(object):
         else:
             prefix, address = self.db.execute("""SELECT prefix, address
                               FROM peers ORDER BY random() LIMIT 1""")
-        print "Sending bootstrap peer (%s, %s)" % (prefix, address)
-        return prefix, address
+        r, w = os.pipe()
+        try:
+            threading.Thread(target=os.write, args=(w, cert)).start()
+            p = subprocess.Popen(('openssl', 'rsautl', '-encrypt', '-certin', '-inkey', '/proc/self/fd/%u' % r),
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+            print "Sending bootstrap peer (%s, %s)" % (prefix, address)
+            return xmlrpclib.Binary(p.communicate('%s %s' % (prefix, address)))
+        finally:
+            os.close(r)
+            os.close(w)
 
     def declare(self, handler, address):
         print "declaring new node"

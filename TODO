@@ -1,7 +1,3 @@
-URGENT => Name ideas :
-    resnet ( for Resiliable NET ) : i prefere resinet
-    rsnet ( Resiliable Scalable NET )
-
 To be done :
     Use an algorithm to choose which connections to keep and/or establish
     instead of pure randomness
@@ -10,35 +6,5 @@ To be done :
 
     Write docstrings for all class/methods/functions
 
-    Handle corrupt peers DB gracefully
-
-
 To be discussed:
-    U : Babel seems to be very long to establish the routes : maybe we should
-        tell him thant we are not on a wired network but on a mobile network ?
-    G : babel establish routes quickly enough i'd say. There are two new
-        options : hello and wireless, for hello_interval and treating all
-        interfaces as wireless. However, treating an interface as wireless
-        doesn't lessen the hello_interval, it only changes how babel estimates
-        quality link, and cost.
-    U : from babel web page : "When the Babel daemon detects a wired network,
-        it will use a larger interval between hellos".
-        Moreover, it seems that the wireless option only means
-        "hostile environment" which seems best for a resilient network.
-        30 sec of hello interval seams also too much. The default value for
-        babel is 4 sec (from babel man page).
-        According to raphael's stats on the nexedi's server downtime,
-        45% of the problems dont last more than 2 minutes, 55% no more than
-        3 minutes If it takes 2 min to detect a dead connection, then we wont be
-        solving many problems with our overlay network
-    G : ok, so babel hello-interval should be set to a lower value,
-        we should do some tests to pinpoint the best compromise between
-        speed and bandwith usage.
-        Btw, is there a doc ( pdf, image, file ) resuming Raphael's stats
-        on nexedi's server downtime ? it could be useful for the internship
-        rapport
-    G : It takes babel between 3 times and 4 times the hello interval to
-        reestablish connection, if a direct link is cut
-    U : So we have to reduce the hello interval. 2min to detect a dead link is
-        far too much.
-    G : k
+   Project name ? Resinet/resnet/rsnet

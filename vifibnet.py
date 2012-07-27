@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import argparse, errno, os, select, subprocess, time
+import argparse, errno, os, select, subprocess, sqlite3, time
 from argparse import ArgumentParser
 import db, plib, upnpigd, utils, tunnel
 
@@ -17,14 +17,16 @@ class ArgParser(ArgumentParser):
                     yield arg
 
 
-def ovpnArgs(optional_args, ca_path, cert_path):
+def ovpnArgs(optional_args, ca_path, cert_path, key_path):
     # Treat openvpn arguments
-    if optional_args[0] == "--":
+    if optional_args and optional_args[0] == "--":
         del optional_args[0]
     optional_args.append('--ca')
     optional_args.append(ca_path)
     optional_args.append('--cert')
     optional_args.append(cert_path)
+    optional_args.append('--key')
+    optional_args.append(key_path)
     return optional_args
 
 
@@ -46,10 +48,8 @@ def getConfig():
             help='Defines the verbose level')
     _('-i', '--interface', action='append', dest='iface_list', default=[],
             help='Extra interface for LAN discovery')
-    _('--server', required=True,
-            help="VPN address of the discovery peer server")
-    _('--server-port', required=True, type=int,
-            help="VPN port of the discovery peer server")
+    _('--registry', required=True,
+            help="Complete public address of the discovery peer server")
 
     # Routing algorithm options
     _('--hello', type=int, default=15,
@@ -69,6 +69,8 @@ def getConfig():
             help='Path to the certificate authority file')
     _('--cert', required=True,
             help='Path to the certificate file')
+    _('--key', required=True,
+            help='Path to the private key file')
     # args to be removed ?
     _('--connection-count', default=20, type=int,
             help='Number of tunnels')
@@ -89,7 +91,8 @@ def main():
     manual = bool(config.address)
     network = utils.networkFromCa(config.ca)
     internal_ip, prefix = utils.ipFromCert(network, config.cert)
-    openvpn_args = ovpnArgs(config.openvpn_args, config.ca, config.cert)
+    openvpn_args = ovpnArgs(config.openvpn_args, config.ca, config.cert,
+                                                 config.key)
 
     # Set global variables
     tunnel.log = config.log
@@ -119,7 +122,7 @@ def main():
         except upnpigd.NoUPnPDevice:
             utils.log('No upnp device found', 4)
 
-    peer_db = db.PeerManager(config.state, config.server, config.server_port,
+    peer_db = db.PeerManager(config.state, config.registry, config.key,
             config.peers_db_refresh, config.address, internal_ip, prefix,
             manual, config.pp, 200)
     tunnel_manager = tunnel.TunnelManager(write_pipe, peer_db, openvpn_args,
@@ -147,47 +150,39 @@ def main():
 
     # main loop
     try:
-        while True:
-            utils.log('Sleeping ...', 2)
-            nextUpdate = min(tunnel_manager.next_refresh, peer_db.next_refresh)
-            if forwarder != None:
-                nextUpdate = min(nextUpdate, forwarder.next_refresh)
-            nextUpdate = max(0, nextUpdate - time.time())
+        try:
+            while True:
+                utils.log('Sleeping ...', 2)
+                nextUpdate = min(tunnel_manager.next_refresh, peer_db.next_refresh)
+                if forwarder != None:
+                    nextUpdate = min(nextUpdate, forwarder.next_refresh)
+                nextUpdate = max(0, nextUpdate - time.time())
 
-            ready, tmp1, tmp2 = select.select([read_pipe], [], [], nextUpdate)
-            if ready:
-                peer_db.handle_message(read_pipe.readline())
-            if time.time() >= peer_db.next_refresh:
-                peer_db.refresh()
-            if time.time() >= tunnel_manager.next_refresh:
-                tunnel_manager.refresh()
-            if forwarder != None and time.time() > forwarder.next_refresh:
-                forwarder.refresh()
+                ready, tmp1, tmp2 = select.select([read_pipe], [], [], nextUpdate)
+                if ready:
+                    peer_db.handle_message(read_pipe.readline())
+                if time.time() >= peer_db.next_refresh:
+                    peer_db.refresh()
+                if time.time() >= tunnel_manager.next_refresh:
+                    tunnel_manager.refresh()
+                if forwarder != None and time.time() > forwarder.next_refresh:
+                    forwarder.refresh()
+        finally:
+            for p in [router] + server_process:
+                try:
+                    p.terminate()
+                except:
+                    pass
+            try:
+                tunnel_manager.killAll()
+            except:
+                pass
+    except sqlite3.Error:
+        traceback.print_exc()
+        os.rename(db_path, db_path + '.bak')
+        os.execvp(sys.executable, sys.argv)
     except KeyboardInterrupt:
-        try:
-            router.terminate()
-        except:
-            pass
-        try:
-            server_process.terminate()
-        except:
-            pass
-        tunnel_manager.killAll()
         return 0
-    except:
-        try:
-            router.terminate()
-        except:
-            pass
-        try:
-            server_process.terminate()
-        except:
-            pass
-        try:
-            tunnel_manager.killAll()
-        except:
-            pass
-        raise
 
 if __name__ == "__main__":
     main()
