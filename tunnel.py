@@ -71,7 +71,7 @@ class Connection:
 class TunnelManager:
 
     def __init__(self, write_pipe, peer_db, openvpn_args, hello_interval,
-                refresh, connection_count, refresh_rate, iface_list, network):
+                refresh, connection_count, refresh_ratio, iface_list, network):
         self._write_pipe = write_pipe
         self._peer_db = peer_db
         self._connection_dict = {}
@@ -82,11 +82,12 @@ class TunnelManager:
         self._network = network
         self._net_len = len(network)
         self._iface_list = iface_list
-        self.free_interface_set = set('client' + str(i) for i in xrange(1,13))
         self.next_refresh = time.time()
 
-        self._client_count = int(math.ceil(float(connection_count) / 2.0))
-        self._refresh_count = int(math.ceil(refresh_rate * self._client_count))
+        self._client_count = (connection_count + 1) // 2
+        self._refresh_count = int(math.ceil(refresh_ratio * self._client_count))
+        self.free_interface_set = set('client' + str(i)
+            for i in xrange(1, self._client_count + 1))
 
     def refresh(self):
         logging.info('Refreshing the tunnels...')

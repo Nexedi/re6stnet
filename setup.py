@@ -8,10 +8,6 @@ def main():
     _ = parser.add_argument
     _('--ca-only', action='store_true',
             help='To only get CA form server')
-    _('--db-only', action='store_true',
-            help='To only get CA and setup peer db with bootstrap peer')
-    _('--no-boot', action='store_true',
-            help='Enable to skip getting bootstrap peer')
     _('--server', required=True,
             help='Address of the server delivering certifiactes')
     _('--port', required=True, type=int,

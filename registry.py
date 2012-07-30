@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 import argparse, math, random, select, smtplib, sqlite3, string, socket
-import subprocess, time, threading, traceback, errno, logging
+import subprocess, time, threading, traceback, errno, logging, os, xmlrpclib
 from SimpleXMLRPCServer import SimpleXMLRPCServer, SimpleXMLRPCRequestHandler
 from email.mime.text import MIMEText
 from OpenSSL import crypto
@@ -41,7 +41,7 @@ class main(object):
         self.refresh_interval = 600
         self.last_refresh = time.time()
 
-        utils.setupLog(1)
+        utils.setupLog(3)
 
         # Command line parsing
         parser = argparse.ArgumentParser(
@@ -126,7 +126,7 @@ class main(object):
         # Creating and sending email
         s = smtplib.SMTP(self.config.mailhost)
         me = 'postmaster@vifibnet.com'
-        msg = MIMEText('Hello world !\nYour token : %s' % (token,)) # XXX
+        msg = MIMEText('Hello world !\nYour token : %s' % (token,)) # XXX
         msg['Subject'] = '[Vifibnet] Token Request'
         msg['From'] = me
         msg['To'] = email
@@ -197,23 +197,28 @@ class main(object):
                         FROM peers ORDER BY random() LIMIT 1""").next()
 
     def getBootstrapPeer(self, handler, client_prefix):
-        cert = self.db.execute("SELECT cert FROM vpn WHERE prefix = ?", (client_prefix,))
+        cert, = self.db.execute("SELECT cert FROM vpn WHERE prefix = ?",
+                (client_prefix,)).next()
+        logging.trace('Getting bootpeer info...')
         if self.config.bootstrap:
             bootpeer = random.choice(self.config.bootstrap)
             try:
                 prefix, address = self.db.execute("""SELECT prefix, address
-                                FROM peers WHERE prefix = ?""", (bootpeer,))
+                            FROM peers WHERE prefix = ?""", (bootpeer,)).next()
             except StopIteration:
+                logging.info('Bootstrap peer %s unknown, sending random peer'
+                        % hex(int(bootpeer, 2))[2:])
                 prefix, address = self._randomPeer()
         else:
             prefix, address = self._randomPeer()
+        logging.trace('Gotten bootpeer info from db')
         r, w = os.pipe()
         try:
             threading.Thread(target=os.write, args=(w, cert)).start()
             p = subprocess.Popen(('openssl', 'rsautl', '-encrypt', '-certin', '-inkey', '/proc/self/fd/%u' % r),
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-            print "Sending bootstrap peer (%s, %s)" % (prefix, address)
-            return xmlrpclib.Binary(p.communicate('%s %s' % (prefix, address)))
+            logging.info("Sending bootstrap peer (%s, %s)" % (prefix, address))
+            return xmlrpclib.Binary(p.communicate('%s %s' % (prefix, address))[0])
         finally:
             os.close(r)
             os.close(w)

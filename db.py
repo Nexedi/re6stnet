@@ -122,8 +122,8 @@ class PeerManager:
             logging.debug('Boot peer received from server')
             p = subprocess.Popen(('openssl', 'rsautl', '-decrypt', '-inkey', self._key_path),
                     stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-            bootpeer = p.communicate(bootpeer).split()
-            self.db.execute("INSERT INTO peers (prefix, address) VALUES (?,?)", bootpeer)
+            bootpeer = p.communicate(bootpeer)[0].split()
+            self._db.execute("INSERT INTO peers (prefix, address) VALUES (?,?)", bootpeer)
             logging.debug('Boot peer added')
             return True
         except socket.error:
@@ -162,7 +162,7 @@ class PeerManager:
             if not self._manual:
                 external_ip = arg
                 new_address = list([external_ip, port, proto]
-                                   for port, proto in self._pp)
+                                   for port, proto, _ in self._pp)
                 if self._address != new_address:
                     self._address = new_address
                     logging.info('Received new external ip : %s'
