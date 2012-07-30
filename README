@@ -154,6 +154,7 @@ OPTIONS : VIFIBNET.PY
            Complete public ( reachable from the internet ) address of the machine
            running a registry. Will be used to get the pirvate address of the
            registry and/or bootstrap peers
+           Examples : http://ipv4:port, http://[ipv6]:port
 
     --hello duration
             Set hello interval, in seconds, for both wired and wireless

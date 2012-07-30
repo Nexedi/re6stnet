@@ -20,6 +20,8 @@ def main():
             help='Directory where the key and certificate will be stored')
     _('-r', '--req', nargs=2, action='append',
             help='Name and value of certificate request additional arguments')
+    _('--email', help='Your email address')
+    _('--token', help='The token you received')
     config = parser.parse_args()
 
     # Establish connection with server
@@ -33,33 +35,12 @@ def main():
     if config.ca_only:
         sys.exit(0)
 
-    # Create and initialize peers DB
-    db = sqlite3.connect(os.path.join(config.dir, 'peers.db'), isolation_level=None)
-    try:
-        db.execute("""CREATE TABLE peers (
-                   prefix TEXT PRIMARY KEY,
-                   address TEXT NOT NULL,
-                   used INTEGER NOT NULL DEFAULT 0,
-                   date INTEGER DEFAULT (strftime('%s', 'now')))""")
-        db.execute("CREATE INDEX _peers_used ON peers(used)")
-    except sqlite3.OperationalError, e:
-        if e.args[0] == 'table peers already exists':
-            print "Table peers already exists, leaving it as it is"
-        else:
-            print "sqlite3.OperationalError :" + e.args[0]
-            sys.exit(1)
-
-    if not config.no_boot:
-        prefix, address = s.getBootstrapPeer()
-        db.execute("INSERT INTO peers (prefix, address) VALUES (?,?)", (prefix, address))
-
-    if config.db_only:
-        sys.exit(0)
-
     # Get token
-    email = raw_input('Please enter your email address : ')
-    _ = s.requestToken(email)
-    token = raw_input('Please enter your token : ')
+    if not config.token:
+        if not config.email:
+            config.email = raw_input('Please enter your email address : ')
+        _ = s.requestToken(config.email)
+        config.token = raw_input('Please enter your token : ')
 
     # Generate key and cert request
     pkey = crypto.PKey()
@@ -76,7 +57,7 @@ def main():
     req = crypto.dump_certificate_request(crypto.FILETYPE_PEM, req)
 
     # Get certificate
-    cert = s.requestCertificate(token, req)
+    cert = s.requestCertificate(config.token, req)
 
     # Store cert and key
     with open(os.path.join(config.dir, 'cert.key'), 'w') as f:

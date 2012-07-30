@@ -94,13 +94,11 @@ def main():
     internal_ip, prefix = utils.ipFromCert(network, config.cert)
     openvpn_args = ovpnArgs(config.openvpn_args, config.ca, config.cert,
                                                  config.key)
+    config.db_path = os.path.join(config.state, 'peers.db')
 
     # Set logging
-    logging.basicConfig(level=logging.DEBUG,
-            format='%(asctime)s : %(message)s',
-            datefmt='%d-%m-%Y %H:%M:%S')
-    logging.addLevelName(5, 'TRACE')
-    logging.trace = lambda *args, **kw: logging.log(5, *args, **kw)
+    utils.setupLog(config.verbose)
+
     logging.trace("Configuration :\n%s" % config)
 
     # Set global variables
@@ -133,7 +131,7 @@ def main():
         except upnpigd.NoUPnPDevice:
             logging.info('No upnp device found')
 
-    peer_db = db.PeerManager(config.state, config.registry, config.key,
+    peer_db = db.PeerManager(config.db_path, config.registry, config.key,
             config.peers_db_refresh, config.address, internal_ip, prefix,
             manual, config.pp, 200)
     tunnel_manager = tunnel.TunnelManager(write_pipe, peer_db, openvpn_args,
@@ -190,8 +188,7 @@ def main():
                 pass
     except sqlite3.Error:
         traceback.print_exc()
-        db_path = os.path.join(config.state, 'peers.db')
-        os.rename(db_path, db_path + '.bak')
+        os.rename(config.db_path, config.db_path + '.bak')
         os.execvp(sys.executable, sys.argv)
     except KeyboardInterrupt:
         return 0

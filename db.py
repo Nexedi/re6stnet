@@ -4,7 +4,7 @@ import utils
 class PeerManager:
 
     # internal ip = temp arg/attribute
-    def __init__(self, db_dir_path, registry, key_path, refresh_time, address,
+    def __init__(self, db_path, registry, key_path, refresh_time, address,
                        internal_ip, prefix, manual, pp , db_size):
         self._refresh_time = refresh_time
         self._address = address
@@ -17,8 +17,7 @@ class PeerManager:
         self._manual = manual
 
         logging.info('Connecting to peers database...')
-        self._db = sqlite3.connect(os.path.join(db_dir_path, 'peers.db'),
-                                   isolation_level=None)
+        self._db = sqlite3.connect(db_path, isolation_level=None)
         logging.debug('Database opened')
 
         logging.info('Preparing peers database...')

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 import argparse, math, random, select, smtplib, sqlite3, string, socket
-import subprocess, time, threading, traceback, errno
+import subprocess, time, threading, traceback, errno, logging
 from SimpleXMLRPCServer import SimpleXMLRPCServer, SimpleXMLRPCRequestHandler
 from email.mime.text import MIMEText
 from OpenSSL import crypto
@@ -40,6 +40,8 @@ class main(object):
         self.time_out = 86400
         self.refresh_interval = 600
         self.last_refresh = time.time()
+
+        utils.setupLog(1)
 
         # Command line parsing
         parser = argparse.ArgumentParser(
@@ -91,7 +93,7 @@ class main(object):
             self.key = crypto.load_privatekey(crypto.FILETYPE_PEM, f.read())
         # Get vpn network prefix
         self.network = bin(self.ca.get_serial_number())[3:]
-        print "Network prefix : %s/%u" % (self.network, len(self.network))
+        logging.info("Network prefix : %s/%u" % (self.network, len(self.network)))
 
         # Starting server
         server4 = SimpleXMLRPCServer4(('0.0.0.0', self.config.port), requestHandler=RequestHandler, allow_none=True)
@@ -132,16 +134,22 @@ class main(object):
         s.quit()
 
     def _getPrefix(self, prefix_len):
-        assert 0 < prefix_len <= 128 - len(self.network)
-        for prefix, in self.db.execute("""SELECT prefix FROM vpn WHERE length(prefix) <= ? AND cert is null
-                                         ORDER BY length(prefix) DESC""", (prefix_len,)):
-            while len(prefix) < prefix_len:
-                self.db.execute("UPDATE vpn SET prefix = ? WHERE prefix = ?", (prefix + '1', prefix))
-                prefix += '0'
-                self.db.execute("INSERT INTO vpn VALUES (?,null,null)", (prefix,))
+        max_len = 128 - len(self.network)
+        assert 0 < prefix_len <= max_len
+        try:
+            prefix, = self.db.execute("""SELECT prefix FROM vpn WHERE length(prefix) <= ? AND cert is null
+                                         ORDER BY length(prefix) DESC""", (prefix_len,)).next()
+        except StopIteration:
+            logging.error('There are no more free /%s prefix available' % (prefix_len,))
+            raise
+        while len(prefix) < prefix_len:
+            self.db.execute("UPDATE vpn SET prefix = ? WHERE prefix = ?", (prefix + '1', prefix))
+            prefix += '0'
+            self.db.execute("INSERT INTO vpn VALUES (?,null,null)", (prefix,))
+        if len(prefix) < max_len or '1' in prefix:
             return prefix
-        logging.error('There are no more free /%s prefix available' % (prefix_len,))
-        raise RuntimeError
+        self.db.execute("UPDATE vpn SET cert = 'reserved' WHERE prefix = ?", (prefix,))
+        return self._getPrefix(prefix_len)
 
     def requestCertificate(self, handler, token, cert_req):
         try:
