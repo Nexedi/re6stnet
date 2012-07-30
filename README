@@ -1,3 +1,17 @@
+New log system :
+    we use the logging module now. There are three levels for log messages :
+    - info : give basic information about what vifibnet is doing
+    - debug : display internal work of the script (finished action, detailed
+              information about tunnels, etc... )
+    - trace : for intensive debug, display configuration, arguments given to
+              processes, all information pertinent to debug but not required
+              mot of the time
+    Additionally, warning, error and exception can be used.
+    Note : logging.exception prints informations similar to pdb.set_trace()
+           info, which is pretty heavy, so for exception we expect ( for
+           instance, connection problems to the registry ), one can print the
+           exception as warning. ( see db.refresh() ).
+
 Vifibnet is a daemon setting up a resilient virtual private network over the
 internet
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import argparse, errno, os, select, subprocess, sqlite3, time
+import argparse, errno, os, select, subprocess, sqlite3, time, logging
 from argparse import ArgumentParser
 import db, plib, upnpigd, utils, tunnel
 
@@ -38,18 +38,19 @@ def getConfig():
     # General Configuration options
     _('--ip', default=None, dest='address', action='append', nargs=3,
             help='Ip address, port and protocol advertised to other vpn nodes')
+    _('--registry', required=True,
+            help="HTTP URL of the discovery peer server,"
+                 " with public host (default port: 80)")
     _('--peers-db-refresh', default=3600, type=int,
             help='the time (seconds) to wait before refreshing the peers db')
     _('-l', '--log', default='/var/log',
             help='Path to vifibnet logs directory')
     _('-s', '--state', default='/var/lib/vifibnet',
-            help='Path to VPN state directory')
+            help='Path to vifibnet state directory')
     _('-v', '--verbose', default=0, type=int,
             help='Defines the verbose level')
     _('-i', '--interface', action='append', dest='iface_list', default=[],
             help='Extra interface for LAN discovery')
-    _('--registry', required=True,
-            help="Complete public address of the discovery peer server")
 
     # Routing algorithm options
     _('--hello', type=int, default=15,
@@ -62,7 +63,7 @@ def getConfig():
     _('--pp', nargs=2, action='append',
             help='Port and protocol to be used by other peers to connect')
     _('--tunnel-refresh', default=300, type=int,
-            help='the time (seconds) to wait before changing the connections')
+            help='time (seconds) to wait before changing the connections')
     _('--dh', required=True,
             help='Path to dh file')
     _('--ca', required=True,
@@ -74,7 +75,7 @@ def getConfig():
     # args to be removed ?
     _('--connection-count', default=20, type=int,
             help='Number of tunnels')
-    _('--refresh-rate', default=0.05, type=float,
+    _('--refresh-ratio', default=0.05, type=float,
             help='''The ratio of connections to drop when refreshing the
                     connections''')
     # Openvpn options
@@ -94,24 +95,34 @@ def main():
     openvpn_args = ovpnArgs(config.openvpn_args, config.ca, config.cert,
                                                  config.key)
 
+    # Set logging
+    logging.basicConfig(level=logging.DEBUG,
+            format='%(asctime)s : %(message)s',
+            datefmt='%d-%m-%Y %H:%M:%S')
+    logging.addLevelName(5, 'TRACE')
+    logging.trace = lambda *args, **kw: logging.log(5, *args, **kw)
+    logging.trace("Configuration :\n%s" % config)
+
     # Set global variables
     tunnel.log = config.log
-    utils.verbose = plib.verbose = config.verbose
-
-    utils.log("Configuration :\n" + str(config), 5)
+    plib.verbose = config.verbose
 
     # Create and open read_only pipe to get server events
-    utils.log('Creating pipe for server events...', 3)
+    logging.info('Creating pipe for server events...')
     r_pipe, write_pipe = os.pipe()
     read_pipe = os.fdopen(r_pipe)
-    utils.log('Pipe created', 5)
+    logging.debug('Pipe created')
 
     # Init db and tunnels
     forwarder = None
     if manual:
-        utils.log('Detected manual external configuration', 3)
+        logging.info('Detected manual external configuration')
+        for c, s in ('udp', 'udp'), ('tcp-client', 'tcp-server'):
+            if len(list(x for x in config.address if x[2] == c)) \
+             < len(list(x for x in config.pp if x[1] == s)):
+                pass # XXX: warn user about probable misconfiguration
     else:
-        utils.log('Attempting automatic configuration via UPnP...', 4)
+        logging.info('Attempting automatic configuration via UPnP...')
         try:
             forwarder = upnpigd.Forwarder()
             config.address = []
@@ -120,14 +131,14 @@ def main():
                 if ext:
                     config.address.append(ext)
         except upnpigd.NoUPnPDevice:
-            utils.log('No upnp device found', 4)
+            logging.info('No upnp device found')
 
     peer_db = db.PeerManager(config.state, config.registry, config.key,
             config.peers_db_refresh, config.address, internal_ip, prefix,
             manual, config.pp, 200)
     tunnel_manager = tunnel.TunnelManager(write_pipe, peer_db, openvpn_args,
             config.hello, config.tunnel_refresh, config.connection_count,
-            config.refresh_rate, config.iface_list, network)
+            config.refresh_ratio, config.iface_list, network)
 
     # Launch routing protocol. WARNING : you have to be root to start babeld
     interface_list = ['vifibnet'] + list(tunnel_manager.free_interface_set) \
@@ -152,7 +163,7 @@ def main():
     try:
         try:
             while True:
-                utils.log('Sleeping ...', 2)
+                logging.info('Sleeping ...')
                 nextUpdate = min(tunnel_manager.next_refresh, peer_db.next_refresh)
                 if forwarder != None:
                     nextUpdate = min(nextUpdate, forwarder.next_refresh)
@@ -179,6 +190,7 @@ def main():
                 pass
     except sqlite3.Error:
         traceback.print_exc()
+        db_path = os.path.join(config.state, 'peers.db')
         os.rename(db_path, db_path + '.bak')
         os.execvp(sys.executable, sys.argv)
     except KeyboardInterrupt:

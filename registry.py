@@ -54,9 +54,9 @@ class main(object):
                 help='Path to certificate key')
         _('--mailhost', required=True,
                 help='SMTP server mail host')
-        _('--bootstrap', nargs=4, action="append",
-                help='''VPN prefix, ip address, port and protocol to send as
-                        bootstrap peers, instead of random ones''')
+        _('--bootstrap', action="append",
+                help='''VPN prefix of the peers to send as bootstrap peer,
+                        instead of random ones''')
         _('--private',
                 help='VPN IP of the node on which runs the registry')
         self.config = parser.parse_args()
@@ -124,7 +124,7 @@ class main(object):
         # Creating and sending email
         s = smtplib.SMTP(self.config.mailhost)
         me = 'postmaster@vifibnet.com'
-        msg = MIMEText('Hello world !\nYour token : %s' % (token,))
+        msg = MIMEText('Hello world !\nYour token : %s' % (token,)) # XXX
         msg['Subject'] = '[Vifibnet] Token Request'
         msg['From'] = me
         msg['To'] = email
@@ -140,7 +140,8 @@ class main(object):
                 prefix += '0'
                 self.db.execute("INSERT INTO vpn VALUES (?,null,null)", (prefix,))
             return prefix
-        raise RuntimeError  # TODO: raise better exception
+        logging.error('There are no more free /%s prefix available' % (prefix_len,))
+        raise RuntimeError
 
     def requestCertificate(self, handler, token, cert_req):
         try:
@@ -149,7 +150,7 @@ class main(object):
                 try:
                     token, email, prefix_len, _ = self.db.execute("SELECT * FROM tokens WHERE token = ?", (token,)).next()
                 except StopIteration:
-                    # TODO: return nice error message
+                    logging.exception('Bad token (%s) in request' %(token,))
                     raise
                 self.db.execute("DELETE FROM tokens WHERE token = ?", (token,))
 
@@ -183,18 +184,21 @@ class main(object):
     def getPrivateAddress(self, handler):
         return 'http://[%s]:%u' % (self.config.private, self.config.port)
 
+    def _randomPeer(self):
+        return self.db.execute("""SELECT prefix, address
+                        FROM peers ORDER BY random() LIMIT 1""").next()
+
     def getBootstrapPeer(self, handler, client_prefix):
-        # TODO: Insert a flag column for bootstrap ready servers in peers
-        # ( servers which shouldn't go down or change ip and port as opposed to servers owned by particulars )
-        # that way, we also ascertain that the server sent is not the new node....
         cert = self.db.execute("SELECT cert FROM vpn WHERE prefix = ?", (client_prefix,))
         if self.config.bootstrap:
             bootpeer = random.choice(self.config.bootstrap)
-            prefix = bootpeer[0]
-            address = ','.join(bootpeer[1:])
+            try:
+                prefix, address = self.db.execute("""SELECT prefix, address
+                                FROM peers WHERE prefix = ?""", (bootpeer,))
+            except StopIteration:
+                prefix, address = self._randomPeer()
         else:
-            prefix, address = self.db.execute("""SELECT prefix, address
-                              FROM peers ORDER BY random() LIMIT 1""")
+            prefix, address = self._randomPeer()
         r, w = os.pipe()
         try:
             threading.Thread(target=os.write, args=(w, cert)).start()
@@ -217,8 +221,8 @@ class main(object):
             self.db.execute("INSERT OR REPLACE INTO peers (prefix, address) VALUES (?,?)", (prefix, address))
             return True
         else:
-            # TODO: use log + DO NOT PRINT BINARY IP
-            print "Unauthorized connection from %s which does not start with %s" % (client_ip, self.network)
+            logging.warning("Unauthorized connection from %s which does not start with %s"
+                    % (utils.ipFromBin(client_ip), utils.ipFromBin(self.network.ljust(128, '0'))))
             return False
 
     def getPeerList(self, handler, n, client_address):
@@ -232,8 +236,8 @@ class main(object):
             print "sending peers"
             return self.db.execute("SELECT prefix, address FROM peers ORDER BY random() LIMIT ?", (n,)).fetchall()
         else:
-            # TODO: use log + DO NOT PRINT BINARY IP
-            print "Unauthorized connection from %s which does not start with %s" % (client_ip, self.network)
+            logging.warning("Unauthorized connection from %s which does not start with %s"
+                    % (utils.ipFromBin(client_ip), utils.ipFromBin(self.network.ljust(128, '0'))))
             raise RuntimeError
 
 if __name__ == "__main__":

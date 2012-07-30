@@ -1,7 +1,7 @@
-import os, subprocess
+import os, subprocess, logging
 import utils
 
-verbose = None
+verbose = 0
 
 def openvpn(hello_interval, *args, **kw):
     args = ['openvpn',
@@ -14,15 +14,15 @@ def openvpn(hello_interval, *args, **kw):
         '--group', 'nogroup',
         '--verb', str(verbose),
         ] + list(args)
-    utils.log(args, 5)
+    logging.trace('%s' % (args,))
     return subprocess.Popen(args, **kw)
 
 def server(server_ip, ip_length, max_clients, dh_path, pipe_fd, port, proto, hello_interval, *args, **kw):
-    utils.log('Starting server...', 3)
+    logging.debug('Starting server...')
     return openvpn(hello_interval,
         '--tls-server',
         '--mode', 'server',
-        '--up', 'ovpn-server %s/%u' % (server_ip, 64), 
+        '--up', 'ovpn-server %s/%u' % (server_ip, 64),
         '--client-connect', 'ovpn-server ' + str(pipe_fd),
         '--client-disconnect', 'ovpn-server ' + str(pipe_fd),
         '--dh', dh_path,
@@ -32,7 +32,7 @@ def server(server_ip, ip_length, max_clients, dh_path, pipe_fd, port, proto, hel
         *args, **kw)
 
 def client(server_address, pipe_fd, hello_interval, *args, **kw):
-    utils.log('Starting client...', 5)
+    logging.debug('Starting client...')
     remote = ['--nobind',
               '--client',
               '--up', 'ovpn-client',
@@ -41,14 +41,14 @@ def client(server_address, pipe_fd, hello_interval, *args, **kw):
         for ip, port, proto in utils.address_list(server_address):
             remote += '--remote', ip, port, proto
     except ValueError, e:
-        utils.log('Error "%s" in unpacking address %s for openvpn client'
-                % (e, server_address,), 1)
+        logging.warning('Error "%s" in unpacking address %s for openvpn client'
+                % (e, server_address,))
     remote += args
     return openvpn(hello_interval, *remote, **kw)
 
 def router(network, internal_ip, interface_list,
            wireless, hello_interval, state_path, **kw):
-    utils.log('Starting babel...', 3)
+    logging.info('Starting babel...')
     args = ['babeld',
             '-C', 'redistribute local ip %s' % (internal_ip),
             '-C', 'redistribute local deny',
@@ -69,6 +69,6 @@ def router(network, internal_ip, interface_list,
     if wireless:
         args.append('-w')
     args = args + interface_list
-    utils.log(args, 5)
+    logging.trace('%s' % args)
     return subprocess.Popen(args, **kw)
 
