@@ -5,28 +5,30 @@ void simulate(int size, int k, int maxPeer, int seed, const Latency& latency, co
 {
 	FILE* output = fopen(outName, "wt");
     int fno = fileno(output);
-    fprintf(output, "round,avgdistance,unreachable,arity 0..30\n");
+    fprintf(output, "round,alive,unreachable\n");
 
 	mt19937 rng(seed);
 	Graph graph(size, k, maxPeer, rng, latency);
 
-	cout << "\r" << 0 << "/" << 2000;
+	cout << "\r" << 0 << "/" << 300;
     cout.flush();
 
-	for(int i=0; i<2000; i++)
+	for(int i=0; i<300; i++)
 	{
-		double avgDistance, unreachable;
-		double arityDistrib[maxPeer+1];
-		graph.UpdateLowRoutes(avgDistance, unreachable, arityDistrib);
+		for(float a=0.05; a<1; a+=0.05)
+		{
+			Graph copy(graph);
+			copy.KillMachines(a);
+			fprintf(output, "%d,%f,%f\n",i, a , copy.GetUnAvalaibility());
+			fflush(output);
+        	fsync(fno);
+		}
+		
 
-		fprintf(output, "%d,%f,%f", i , avgDistance, unreachable);
-		for(int j=0; j<=maxPeer; j++)
-			fprintf(output, ",%f", arityDistrib[j]);
-		fprintf(output, "\n");
-        fflush(output);
-        fsync(fno);
-    
-    	cout << "\r" << i+1 << "/" << 2000;
+		double avgDistance, unreachable;
+		double arityDistrib[31];
+		graph.UpdateLowRoutes(avgDistance, unreachable, arityDistrib);
+    	cout << "\r" << i+1 << "/" << 300;
         cout.flush();
 	}
 
@@ -39,7 +41,7 @@ int main(int argc, char** argv)
 	mt19937 rng(time(NULL));
 	//Latency latency("latency/pw-1715/pw-1715-latencies", 1715);
 	//latency.Rewrite(20);
-	Latency latency("latency/pw-1715/rewrite", 1556);
+	Latency latency("latency/pw-1715/rewrite", 1555);
 
 	vector<future<void>> threads;
 	

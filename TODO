@@ -6,5 +6,8 @@ To be done :
 
     Write docstrings for all class/methods/functions
 
+    We should replace dead connection much more often than we refresh tunnels otherwise, it brings instability
+    	If we do this, we must protect some tunnels
+    	
 To be discussed:
    Project name ? Resinet/resnet/rsnet

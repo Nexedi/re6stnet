@@ -11,6 +11,20 @@ Graph::Graph(int size, int k, int maxPeers, mt19937& generator,  const Latency& 
 		SaturateNode(i);
 }
 
+Graph::Graph(const Graph& g) :
+	generator(g.generator), size(g.size), k(g.k), maxPeers(g.maxPeers), latency(latency),
+	distrib(g.distrib)
+{
+	adjacency = new unordered_set<int>[size];
+	generated = new unordered_set<int>[size];
+
+	for(int i=0; i<size; i++)
+	{
+		adjacency[i] = unordered_set<int>(g.adjacency[i]);
+		generated[i] = unordered_set<int>(g.generated[i]);
+	}
+}
+
 void Graph::SaturateNode(int node)
 {
 	while(generated[node].size() < k && AddEdge(node)) { }
@@ -86,11 +100,12 @@ void Graph::GetRoutesFrom(int from,  int* nRoutes, int* prevs, int* distances)
     }
 
     // get the BC
+    // The error is here
     while(!order.empty())
     {
         int node = order.top();
         order.pop();
-        if(distances[node] != -1)
+        if(distances[node] != -1 && node != from)
         	nRoutes[prevs[node]] += nRoutes[node];
     }
 }
@@ -138,21 +153,82 @@ void Graph::UpdateLowRoutes(double& avgDistance, double unreachable, double* ari
 
 	for(int i = 0; i<size; i++)
 	{
+		//cout << "["; cout.flush();
+
 		routesResult r = results[i];
 		if(r.toDelete >= 0)
 			RemoveEdge(i, r.toDelete);
 
+		//cout << "#"; cout.flush();
+
 		SaturateNode(i);
+
+		//cout << "]"; cout.flush();
 
 		avgDistance += r.avgDistance*(size-r.unreachable);
 		avgDistanceWeight += size-r.unreachable;
 		unreachable += r.unreachable;
 		arityDistrib[adjacency[i].size()]++;
+
 	}
 
 	avgDistance /= avgDistanceWeight;
 
 	for(int i=0; i<=maxPeers; i++)
 		arityDistrib[i] /= size;
+}
 
+int Graph::CountUnreachableFrom(int node)
+{
+    bool accessibility[size];
+    for(int i=0; i<size; i++)
+        accessibility[i] = false;
+    accessibility[node] = true;
+    int unreachable = size;
+
+    queue<int> toVisit;
+    toVisit.push(node);
+    while(!toVisit.empty())
+    {
+        int n = toVisit.front();
+        for(int i : adjacency[n])
+        {
+            if(!accessibility[i])
+            {
+                toVisit.push(i);
+                accessibility[i] = true;
+            }
+        }
+
+        unreachable--;
+        toVisit.pop();
+    }
+
+    return unreachable;
+}
+
+double Graph::GetUnAvalaibility()
+{
+	double moy = 0;
+	for(int i=0; i<size; i++)
+		moy += CountUnreachableFrom(i);
+	return moy / (size*size);
+}
+
+void Graph::KillMachines(float proportion)
+{
+    size = proportion*size;
+    for(int i=0; i<size; i++)
+    {
+    	vector<int> toBeRemoved;
+    	for(int j : adjacency[i])
+    		if(j >= size)
+    			toBeRemoved.push_back(j);
+
+        for(int j : toBeRemoved)
+        {
+        	generated[i].erase(j);
+        	adjacency[i].erase(j);
+        }
+    }
 }
