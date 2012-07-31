@@ -1,7 +1,7 @@
 #include "main.h"
 
-Graph::Graph(int size, int k, int maxPeers, mt19937& generator,  const Latency& latency) :
-	generator(generator), size(size), k(k), maxPeers(maxPeers), latency(latency),
+Graph::Graph(int size, int k, int maxPeers, mt19937& rng,  const Latency& latency) :
+	generator(mt19937(rng())), size(size), k(k), maxPeers(maxPeers), latency(latency),
 	distrib(uniform_int_distribution<int>(0, size-1))
 {
 	adjacency = new unordered_set<int>[size];
@@ -36,8 +36,9 @@ bool Graph::AddEdge(int from)
 	for(int i=0; i<50; i++)
 	{
 		to = distrib(generator);
-		if(latency.values[from][to] > 0
-			&& to != from
+
+		if(	to != from
+			&& latency.values[from][to] > 0
 			&& adjacency[from].count(to) == 0
 			&& adjacency[to].size() + generated[to].size() <= maxPeers + k)
 		{
@@ -218,6 +219,8 @@ double Graph::GetUnAvalaibility()
 void Graph::KillMachines(float proportion)
 {
     size = proportion*size;
+	distrib = uniform_int_distribution<int>(0, size - 1);
+
     for(int i=0; i<size; i++)
     {
     	vector<int> toBeRemoved;

@@ -7,6 +7,7 @@
 #include <future>
 #include <sstream>
 #include <unistd.h>
+#include <limits>
 
 using namespace std;
 
@@ -17,6 +18,7 @@ public:
 	Latency(const char* filePath, int size);
     void Rewrite(int n);
     ~Latency();
+    double GetAverageDistance();
     int** values;
 
 private:
@@ -40,7 +42,7 @@ private:
     void GetRoutesFrom(int from, int* nRoutes, int* prevs, int* distances);
     int CountUnreachableFrom(int node);
 
-    mt19937& generator;
+    mt19937 generator;
     uniform_int_distribution<int> distrib;
     int maxPeers;
     int k;

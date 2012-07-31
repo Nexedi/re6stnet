@@ -1,17 +1,3 @@
-New log system :
-    we use the logging module now. There are three levels for log messages :
-    - info : give basic information about what vifibnet is doing
-    - debug : display internal work of the script (finished action, detailed
-              information about tunnels, etc... )
-    - trace : for intensive debug, display configuration, arguments given to
-              processes, all information pertinent to debug but not required
-              mot of the time
-    Additionally, warning, error and exception can be used.
-    Note : logging.exception prints informations similar to pdb.set_trace()
-           info, which is pretty heavy, so for exception we expect ( for
-           instance, connection problems to the registry ), one can print the
-           exception as warning. ( see db.refresh() ).
-
 Vifibnet is a daemon setting up a resilient virtual private network over the
 internet
 
@@ -32,7 +18,8 @@ The organisation of the code
 
 Note: On certain version of python (e.g. 2.7.3~rc2-2.1 ) dns lookup is
       performed for each request, and cause a delay in response.
-      To avoid this, one can either upgrade python, or fix their resolv.conf
+      To avoid this, one can either upgrade python, fix their resolv.conf or use
+      the fix at the end of this file.
 
 OPTIONS : REGISTRY.PY
     usage : ./registry port [options...]
@@ -243,7 +230,6 @@ the beggining of registry.py
 --------------------------------------------------------------------------------
 # Fix for librpcxml to avoid doing reverse dns on each request
 # it was causing a 10s delay on each request when no reverse DNS was avalaible
-# for tis IP
 import BaseHTTPServer
 
 
@@ -254,3 +240,17 @@ def not_insane_address_string(self):
 BaseHTTPServer.BaseHTTPRequestHandler.address_string = not_insane_address_string
 
 --------------------------------------------------------------------------------
+
+New log system :
+    we use the logging module now. There are three levels for log messages :
+    - info : give basic information about what vifibnet is doing
+    - debug : display internal work of the script (finished action, detailed
+              information about tunnels, etc... )
+    - trace : for intensive debug, display configuration, arguments given to
+              processes, all information pertinent to debug but not required
+              mot of the time
+    Additionally, warning, error and exception can be used.
+    Note : logging.exception prints informations similar to pdb.set_trace()
+           info, which is pretty heavy, so for exception we expect ( for
+           instance, connection problems to the registry ), one can print the
+           exception as warning. ( see db.refresh() ).
