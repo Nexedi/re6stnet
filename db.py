@@ -4,7 +4,7 @@ import utils
 class PeerManager:
 
     # internal ip = temp arg/attribute
-    def __init__(self, db_dir_path, registry, key_path, refresh_time, address,
+    def __init__(self, db_path, registry, key_path, refresh_time, address,
                        internal_ip, prefix, manual, pp , db_size):
         self._refresh_time = refresh_time
         self._address = address
@@ -17,8 +17,7 @@ class PeerManager:
         self._manual = manual
 
         logging.info('Connecting to peers database...')
-        self._db = sqlite3.connect(os.path.join(db_dir_path, 'peers.db'),
-                                   isolation_level=None)
+        self._db = sqlite3.connect(db_path, isolation_level=None)
         logging.debug('Database opened')
 
         logging.info('Preparing peers database...')
@@ -123,8 +122,8 @@ class PeerManager:
             logging.debug('Boot peer received from server')
             p = subprocess.Popen(('openssl', 'rsautl', '-decrypt', '-inkey', self._key_path),
                     stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-            bootpeer = p.communicate(bootpeer).split()
-            self.db.execute("INSERT INTO peers (prefix, address) VALUES (?,?)", bootpeer)
+            bootpeer = p.communicate(bootpeer)[0].split()
+            self._db.execute("INSERT INTO peers (prefix, address) VALUES (?,?)", bootpeer)
             logging.debug('Boot peer added')
             return True
         except socket.error:
@@ -163,7 +162,7 @@ class PeerManager:
             if not self._manual:
                 external_ip = arg
                 new_address = list([external_ip, port, proto]
-                                   for port, proto in self._pp)
+                                   for port, proto, _ in self._pp)
                 if self._address != new_address:
                     self._address = new_address
                     logging.info('Received new external ip : %s'

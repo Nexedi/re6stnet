@@ -12,7 +12,6 @@ def openvpn(hello_interval, *args, **kw):
         '--user', 'nobody',
         '--ping-exit', str(4 * hello_interval),
         '--group', 'nogroup',
-        '--verb', str(verbose),
         ] + list(args)
     logging.trace('%s' % (args,))
     return subprocess.Popen(args, **kw)

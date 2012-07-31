@@ -89,18 +89,18 @@ def main():
     config = getConfig()
     if not config.pp:
         config.pp = [['1194', 'udp'], ['1194', 'tcp-server']]
+    config.pp = list((port, proto, 'vifibnet-%s' % proto)
+            for port, proto in config.pp)
     manual = bool(config.address)
     network = utils.networkFromCa(config.ca)
     internal_ip, prefix = utils.ipFromCert(network, config.cert)
     openvpn_args = ovpnArgs(config.openvpn_args, config.ca, config.cert,
                                                  config.key)
+    db_path = os.path.join(config.state, 'peers.db')
 
     # Set logging
-    logging.basicConfig(level=logging.DEBUG,
-            format='%(asctime)s : %(message)s',
-            datefmt='%d-%m-%Y %H:%M:%S')
-    logging.addLevelName(5, 'TRACE')
-    logging.trace = lambda *args, **kw: logging.log(5, *args, **kw)
+    utils.setupLog(config.verbose)
+
     logging.trace("Configuration :\n%s" % config)
 
     # Set global variables
@@ -120,20 +120,23 @@ def main():
         for c, s in ('udp', 'udp'), ('tcp-client', 'tcp-server'):
             if len(list(x for x in config.address if x[2] == c)) \
              < len(list(x for x in config.pp if x[1] == s)):
-                pass # XXX: warn user about probable misconfiguration
+                 logging.warning("""Beware: in manual configuration, you
+                         declared less external configurations regarding
+                         protocol %s/%s than you gave internal server
+                         configurations""" % (c, s))
     else:
         logging.info('Attempting automatic configuration via UPnP...')
         try:
             forwarder = upnpigd.Forwarder()
             config.address = []
-            for port, proto in config.pp:
+            for port, proto, _ in config.pp:
                 ext = forwarder.AddRule(port, proto)
                 if ext:
                     config.address.append(ext)
         except upnpigd.NoUPnPDevice:
             logging.info('No upnp device found')
 
-    peer_db = db.PeerManager(config.state, config.registry, config.key,
+    peer_db = db.PeerManager(db_path, config.registry, config.key,
             config.peers_db_refresh, config.address, internal_ip, prefix,
             manual, config.pp, 200)
     tunnel_manager = tunnel.TunnelManager(write_pipe, peer_db, openvpn_args,
@@ -141,22 +144,23 @@ def main():
             config.refresh_ratio, config.iface_list, network)
 
     # Launch routing protocol. WARNING : you have to be root to start babeld
-    interface_list = ['vifibnet'] + list(tunnel_manager.free_interface_set) \
-                     + config.iface_list
+    interface_list = list(tunnel_manager.free_interface_set) \
+                     + config.iface_list + list(iface
+                             for _, _, iface in config.pp)
     router = plib.router(network, internal_ip, interface_list, config.wireless,
-            config.hello, os.path.join(config.state, 'vifibnet.babeld.state'),
-            stdout=os.open(os.path.join(config.log, 'vifibnet.babeld.log'),
+            config.hello, os.path.join(config.state, 'babeld.state'),
+            stdout=os.open(os.path.join(config.log, 'babeld.log'),
             os.O_WRONLY | os.O_CREAT | os.O_TRUNC), stderr=subprocess.STDOUT)
 
    # Establish connections
     server_process = list(plib.server(internal_ip, len(network) + len(prefix),
         config.connection_count, config.dh, write_pipe, port,
-        proto, config.hello, '--dev', 'vifibnet-%s' % proto, *openvpn_args,
+        proto, config.hello, '--dev', iface, *openvpn_args,
         stdout=os.open(os.path.join(config.log,
             'vifibnet.server.%s.log' % (proto,)),
             os.O_WRONLY | os.O_CREAT | os.O_TRUNC),
         stderr=subprocess.STDOUT)
-        for port, proto in config.pp)
+        for port, proto, iface in config.pp)
     tunnel_manager.refresh()
 
     # main loop
@@ -190,7 +194,6 @@ def main():
                 pass
     except sqlite3.Error:
         traceback.print_exc()
-        db_path = os.path.join(config.state, 'peers.db')
         os.rename(db_path, db_path + '.bak')
         os.execvp(sys.executable, sys.argv)
     except KeyboardInterrupt:

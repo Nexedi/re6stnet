@@ -132,15 +132,18 @@ OPTIONS : VIFIBNET.PY
 
     -v, --verbose level
             Defines the verbose level, level should be an integer between 0
-            and 5 ( including ). There is no precise convention for verbode
+            and 3 ( including ). There is no precise convention for verbode
             level for now, except an increased number means more log messages.
-            This parameter is also given to openvpn and babel for their log.
+            This parameter is also given to babel for its log.
+            To adjust verbose level for openvpn, add an openvpn optional
+            arguments at the end of the command line
             Default : 0
 
     --registry address
            Complete public ( reachable from the internet ) address of the machine
            running a registry. Will be used to get the pirvate address of the
            registry and/or bootstrap peers
+           Examples : http://192.0.2.42:80, http://[2001:db8:42::1]:80
 
     --hello duration
             Set hello interval, in seconds, for both wired and wireless

@@ -1,12 +1,14 @@
-import argparse, time, struct, socket
+import argparse, time, struct, socket, logging
 from OpenSSL import crypto
 
-verbose = 0
+logging_levels = logging.WARNING, logging.INFO, logging.DEBUG, 5
 
-def log(message, verbose_level):
-    if verbose >= verbose_level:
-        print time.strftime("%d-%m-%Y %H:%M:%S :"),
-        print message
+def setupLog(log_level):
+    logging.basicConfig(level=logging_levels[log_level],
+            format='%(asctime)s : %(message)s',
+            datefmt='%d-%m-%Y %H:%M:%S')
+    logging.addLevelName(5, 'TRACE')
+    logging.trace = lambda *args, **kw: logging.log(5, *args, **kw)
 
 def binFromIp(ip):
     ip1, ip2 = struct.unpack('>QQ', socket.inet_pton(socket.AF_INET6, ip))
@@ -21,7 +23,7 @@ def ipFromBin(prefix):
 
 def ipFromPrefix(vifibnet, prefix, prefix_len):
     prefix = bin(int(prefix))[2:].rjust(prefix_len, '0')
-    ip_t = (vifibnet + prefix).ljust(128, '0')
+    ip_t = (vifibnet + prefix).ljust(127, '0').ljust(128, '1')
     return ipFromBin(ip_t), prefix
 
 def networkFromCa(ca_path):
