@@ -2,7 +2,9 @@ import os, subprocess, logging
 import utils
 
 verbose = 0
-
+here = os.path.realpath(os.path.dirname(__file__))
+ovpn_server = os.path.join(here, 'ovpn-server')
+ovpn_client = os.path.join(here, 'ovpn-client')
 
 def openvpn(hello_interval, *args, **kw):
     args = ['openvpn',
@@ -23,9 +25,9 @@ def server(server_ip, ip_length, max_clients, dh_path, pipe_fd, port, proto, hel
     return openvpn(hello_interval,
         '--tls-server',
         '--mode', 'server',
-        '--up', 'ovpn-server %s/%u' % (server_ip, 64),
-        '--client-connect', 'ovpn-server ' + str(pipe_fd),
-        '--client-disconnect', 'ovpn-server ' + str(pipe_fd),
+        '--up', '%s %s/%u' % (ovpn_server, server_ip, 64),
+        '--client-connect', ovpn_server + ' ' + str(pipe_fd),
+        '--client-disconnect', ovpn_server + ' ' + str(pipe_fd),
         '--dh', dh_path,
         '--max-clients', str(max_clients),
         '--port', str(port),
@@ -37,8 +39,8 @@ def client(server_address, pipe_fd, hello_interval, *args, **kw):
     logging.debug('Starting client...')
     remote = ['--nobind',
               '--client',
-              '--up', 'ovpn-client',
-              '--route-up', 'ovpn-client ' + str(pipe_fd)]
+              '--up', ovpn_client,
+              '--route-up', ovpn_client + ' ' + str(pipe_fd)]
     try:
         for ip, port, proto in utils.address_list(server_address):
             remote += '--remote', ip, port, proto

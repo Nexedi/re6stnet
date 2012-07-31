@@ -1,0 +1,37 @@
+OPTIONS : RE6ST-REGISTRY
+    usage : ./registry port [options...]
+    port
+            The port on which the server will listen
+
+    --private ip
+            Ipv6 address of the re6stnet client running on the machine. This
+            address will be advertised only to nodes having a valid
+            certificate.
+
+    --db path
+            Path to the server Database file. A new DB file will be created
+            and correctly initialized if the file doesn't exists.
+            One can give ":memory" as path, the database is then temporary
+
+    --ca path
+            Path to the certificate authority file. The certificate authority
+            MUST contain the VPN network prefix in its serial number. To
+            generate correct ca and key files for the 2001:db8:42:: prefix,
+            the following command can be used :
+            openssl req -nodes -new -x509 -key ca.key -set_serial \
+                    0x120010db80042 -days 365 -out ca.crt
+
+    --key path
+            Path to the server key file. To generate a key file, see the --ca
+            option
+
+    --bootstrap prefix ip port proto
+            Connection informations of a node given to other as a bootstrap
+            node to initiate connection with the network.
+            Prefix should be the prefix number of a node, given in binary and
+            with correct length. For instance the VPN address
+            2001:db8:42:1::/64 ( asusming a network prefix 2001:db8:42::/48 )
+            corresponds to a prefix 1/16 i.e 0000000000000001.
+
+    --mailhost mailhost
+            Mailhost to be used to send email containing token for registration
