@@ -3,8 +3,8 @@ To be done :
     instead of pure randomness
         number of routes / tunnel
 
-    ( Write docstrings for all class/methods/functions )
-    	
+    README : move options doc elsewhere, make it look like a real readme
+	
     Use latency in babeld
 
-    Warn babeld about the tunnels wich are about to be deleted. Maybe we could just increase the cost. 
+    Warn babeld about the tunnels wich are about to be deleted. Maybe we could just increase the cost.

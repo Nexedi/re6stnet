@@ -2,26 +2,28 @@ re6stnet is a daemon setting up a resilient virtual private network over the
 internet
 
 HOW TO:
-    re6stnet ( sic ) has three separate components : a setup (setup.py), a
-    server (registry.py) and a client (re6stnet.py.
+    re6stnet has three separate components : a setup (re6stnet-conf), a
+    server (re6stnet-registry) and a client (re6stnet).
     Lambda users only have to launch the setup and then their client.
     The server is meant to be started once on a node which also will be running
     a client instance.
 
 The organisation of the code
-    vifibnet.py         Just contain the main loop and the init
-    plib.py             To launch server/client/routing processes
-    utils.py            Small functions to do some useful job
-    db.py               Function to manage peers
-    tunnel.py           To choose wich connection delete/keep/...
-    upnpigd.py          To open a port
+    re6stnet.py         Client : Init and main loop
+    re6st/plib.py             Launch server/client/routing processes
+    re6st/utils.py            Small functions to do useful jobs
+    re6st/db.py               Manage the peer database
+    re6st/tunnel.py           Manage the tunnels
+    re6st/upnpigd.py          Forward ports
+    re6st-conf.py       Get certificates from server
+    re6st-registry.py   Server : deliver certificates and distribute peers
 
 Note: On certain version of python (e.g. 2.7.3~rc2-2.1 ) dns lookup is
       performed for each request, and cause a delay in response.
       To avoid this, one can either upgrade python, fix their resolv.conf or use
       the fix at the end of this file.
 
-OPTIONS : REGISTRY.PY
+OPTIONS : RE6ST-REGISTRY
     usage : ./registry port [options...]
     port
             The port on which the server will listen
@@ -59,7 +61,7 @@ OPTIONS : REGISTRY.PY
     --mailhost mailhost
             Mailhost to be used to send email containing token for registration
 
-OPTIONS : SETUP.PY
+OPTIONS : RE6ST-SETUP
     usage : ./setup [options...]
     --server address
              Ip address of the machine running the re6stnet server. Both ipv4
@@ -99,7 +101,7 @@ OPTIONS : SETUP.PY
             not have any, an execption will occur, and the script will stop
 
 
-OPTIONS : RES6NET.PY
+OPTIONS : RES6NET
     usage : ./re6stnet.py [options...]
     --ip address port proto
             Specify connection information to be advertised to other nodes.

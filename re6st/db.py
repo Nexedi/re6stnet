@@ -129,8 +129,7 @@ class PeerManager:
         except socket.error:
             pass
         except sqlite3.IntegrityError, e:
-            import pdb; pdb.set_trace()
-            if e.args[0] != '':
+            if e.args[0] != 'column prefix is not unique':
                 raise
         return False
 
