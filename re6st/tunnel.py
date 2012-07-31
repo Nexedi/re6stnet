@@ -1,5 +1,5 @@
-import os, random, traceback, time, struct, subprocess, operator, math, logging
-import plib, utils, db
+import os, traceback, time, subprocess, math, logging
+import plib
 
 smooth = 0.3     # this is used to smooth the traffic sampling. Lower value
                  # mean more smooth

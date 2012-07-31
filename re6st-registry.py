@@ -4,7 +4,7 @@ import subprocess, time, threading, traceback, errno, logging, os, xmlrpclib
 from SimpleXMLRPCServer import SimpleXMLRPCServer, SimpleXMLRPCRequestHandler
 from email.mime.text import MIMEText
 from OpenSSL import crypto
-import utils
+from re6st  import utils
 
 # To generate server ca and key with serial for 2001:db8:42::/48
 # openssl req -nodes -new -x509 -key ca.key -set_serial 0x120010db80042 -days 365 -out ca.crt

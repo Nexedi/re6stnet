@@ -3,6 +3,7 @@ import utils
 
 verbose = 0
 
+
 def openvpn(hello_interval, *args, **kw):
     args = ['openvpn',
         '--dev-type', 'tap',
@@ -15,6 +16,7 @@ def openvpn(hello_interval, *args, **kw):
         ] + list(args)
     logging.trace('%s' % (args,))
     return subprocess.Popen(args, **kw)
+
 
 def server(server_ip, ip_length, max_clients, dh_path, pipe_fd, port, proto, hello_interval, *args, **kw):
     logging.debug('Starting server...')
@@ -30,12 +32,13 @@ def server(server_ip, ip_length, max_clients, dh_path, pipe_fd, port, proto, hel
         '--proto', proto,
         *args, **kw)
 
+
 def client(server_address, pipe_fd, hello_interval, *args, **kw):
     logging.debug('Starting client...')
     remote = ['--nobind',
               '--client',
               '--up', 'ovpn-client',
-              '--route-up', 'ovpn-client ' + str(pipe_fd) ]
+              '--route-up', 'ovpn-client ' + str(pipe_fd)]
     try:
         for ip, port, proto in utils.address_list(server_address):
             remote += '--remote', ip, port, proto
@@ -44,6 +47,7 @@ def client(server_address, pipe_fd, hello_interval, *args, **kw):
                 % (e, server_address,))
     remote += args
     return openvpn(hello_interval, *remote, **kw)
+
 
 def router(network, internal_ip, interface_list,
            wireless, hello_interval, state_path, **kw):
@@ -70,4 +74,3 @@ def router(network, internal_ip, interface_list,
     args = args + interface_list
     logging.trace('%s' % args)
     return subprocess.Popen(args, **kw)
-
