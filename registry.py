@@ -45,7 +45,7 @@ class main(object):
 
         # Command line parsing
         parser = argparse.ArgumentParser(
-                description='Peer discovery http server for vifibnet')
+                description='Peer discovery http server for re6stnet')
         _ = parser.add_argument
         _('port', type=int, help='Port of the host server')
         _('--db', required=True,
@@ -125,9 +125,9 @@ class main(object):
 
         # Creating and sending email
         s = smtplib.SMTP(self.config.mailhost)
-        me = 'postmaster@vifibnet.com'
-        msg = MIMEText('Hello world !\nYour token : %s' % (token,)) # XXX
-        msg['Subject'] = '[Vifibnet] Token Request'
+        me = 'postmaster@re6st.net'
+        msg = MIMEText('Hello world !\nYour token : %s' % (token,))  # XXX
+        msg['Subject'] = '[re6stnet] Token Request'
         msg['From'] = me
         msg['To'] = email
         s.sendmail(me, email, msg.as_string())
@@ -158,7 +158,7 @@ class main(object):
                 try:
                     token, email, prefix_len, _ = self.db.execute("SELECT * FROM tokens WHERE token = ?", (token,)).next()
                 except StopIteration:
-                    logging.exception('Bad token (%s) in request' %(token,))
+                    logging.exception('Bad token (%s) in request' % (token,))
                     raise
                 self.db.execute("DELETE FROM tokens WHERE token = ?", (token,))
 

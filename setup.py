@@ -4,7 +4,7 @@ from OpenSSL import crypto
 
 def main():
     parser = argparse.ArgumentParser(
-            description='Setup script for vifib')
+            description='Setup script for re6stnet')
     _ = parser.add_argument
     _('--ca-only', action='store_true',
             help='To only get CA form server')
@@ -12,7 +12,7 @@ def main():
             help='Address of the server delivering certifiactes')
     _('--port', required=True, type=int,
             help='Port to which connect on the server')
-    _('-d', '--dir', default='/etc/vifib',
+    _('-d', '--dir', default='/etc/re6stnet',
             help='Directory where the key and certificate will be stored')
     _('-r', '--req', nargs=2, action='append',
             help='Name and value of certificate request additional arguments')
@@ -63,7 +63,7 @@ def main():
 
     # Generating dh file
     if not os.access(os.path.join(config.dir, 'dh2048.pem'), os.F_OK):
-       subprocess.call(['openssl', 'dhparam', '-out', os.path.join(config.dir, 'dh2048.pem'), '2048'])
+        subprocess.call(['openssl', 'dhparam', '-out', os.path.join(config.dir, 'dh2048.pem'), '2048'])
 
     print "Certificate setup complete."
 

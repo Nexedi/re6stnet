@@ -44,9 +44,9 @@ def getConfig():
     _('--peers-db-refresh', default=3600, type=int,
             help='the time (seconds) to wait before refreshing the peers db')
     _('-l', '--log', default='/var/log',
-            help='Path to vifibnet logs directory')
-    _('-s', '--state', default='/var/lib/vifibnet',
-            help='Path to vifibnet state directory')
+            help='Path to re6stnet logs directory')
+    _('-s', '--state', default='/var/lib/re6stnet',
+            help='Path to re6stnet state directory')
     _('-v', '--verbose', default=0, type=int,
             help='Defines the verbose level')
     _('-i', '--interface', action='append', dest='iface_list', default=[],
@@ -72,11 +72,10 @@ def getConfig():
             help='Path to the certificate file')
     _('--key', required=True,
             help='Path to the private key file')
-    # args to be removed ?
     _('--connection-count', default=20, type=int,
             help='Number of tunnels')
-    _('--refresh-ratio', default=0.05, type=float,
-            help='''The ratio of connections to drop when refreshing the
+    _('--refresh-count', default=1, type=int,
+            help='''The number of connections to drop when refreshing the
                     connections''')
     # Openvpn options
     _('openvpn_args', nargs=argparse.REMAINDER,
@@ -89,7 +88,7 @@ def main():
     config = getConfig()
     if not config.pp:
         config.pp = [['1194', 'udp'], ['1194', 'tcp-server']]
-    config.pp = list((port, proto, 'vifibnet-%s' % proto)
+    config.pp = list((port, proto, 're6stnet-%s' % proto)
             for port, proto in config.pp)
     manual = bool(config.address)
     network = utils.networkFromCa(config.ca)
@@ -120,10 +119,10 @@ def main():
         for c, s in ('udp', 'udp'), ('tcp-client', 'tcp-server'):
             if len(list(x for x in config.address if x[2] == c)) \
              < len(list(x for x in config.pp if x[1] == s)):
-                 logging.warning("""Beware: in manual configuration, you
-                         declared less external configurations regarding
-                         protocol %s/%s than you gave internal server
-                         configurations""" % (c, s))
+                logging.warning("""Beware: in manual configuration, you
+                        declared less external configurations regarding
+                        protocol %s/%s than you gave internal server
+                        configurations""" % (c, s))
     else:
         logging.info('Attempting automatic configuration via UPnP...')
         try:
@@ -141,7 +140,7 @@ def main():
             manual, config.pp, 200)
     tunnel_manager = tunnel.TunnelManager(write_pipe, peer_db, openvpn_args,
             config.hello, config.tunnel_refresh, config.connection_count,
-            config.refresh_ratio, config.iface_list, network)
+            config.refresh_count, config.iface_list, network)
 
     # Launch routing protocol. WARNING : you have to be root to start babeld
     interface_list = list(tunnel_manager.free_interface_set) \
@@ -157,7 +156,7 @@ def main():
         config.connection_count, config.dh, write_pipe, port,
         proto, config.hello, '--dev', iface, *openvpn_args,
         stdout=os.open(os.path.join(config.log,
-            'vifibnet.server.%s.log' % (proto,)),
+            're6stnet.server.%s.log' % (proto,)),
             os.O_WRONLY | os.O_CREAT | os.O_TRUNC),
         stderr=subprocess.STDOUT)
         for port, proto, iface in config.pp)

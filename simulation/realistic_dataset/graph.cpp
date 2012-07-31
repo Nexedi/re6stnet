@@ -112,7 +112,7 @@ void Graph::GetRoutesFrom(int from,  int* nRoutes, int* prevs, int* distances)
 }
 
 
-void Graph::UpdateLowRoutes(double& avgDistance, double unreachable, double* arityDistrib)
+void Graph::UpdateLowRoutes(double& avgDistance, double unreachable, double* arityDistrib, int refreshCount)
 {
 	routesResult results[size];
 
@@ -154,23 +154,16 @@ void Graph::UpdateLowRoutes(double& avgDistance, double unreachable, double* ari
 
 	for(int i = 0; i<size; i++)
 	{
-		//cout << "["; cout.flush();
-
 		routesResult r = results[i];
 		if(r.toDelete >= 0)
 			RemoveEdge(i, r.toDelete);
 
-		//cout << "#"; cout.flush();
-
 		SaturateNode(i);
-
-		//cout << "]"; cout.flush();
 
 		avgDistance += r.avgDistance*(size-r.unreachable);
 		avgDistanceWeight += size-r.unreachable;
 		unreachable += r.unreachable;
 		arityDistrib[adjacency[i].size()]++;
-
 	}
 
 	avgDistance /= avgDistanceWeight;

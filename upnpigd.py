@@ -1,6 +1,6 @@
 import miniupnpc
+import logging
 import time
-import utils
 
 
 class NoUPnPDevice(Exception):
@@ -45,7 +45,7 @@ class Forwarder:
 
             # Make the redirection
             if self._u.addportmapping(external_port, 'UDP', self._u.lanaddr,
-                    int(local_port), 'Vifib openvpn server', ''):
+                    int(local_port), 're6stnet openvpn server', ''):
                 logging.debug('Forwarding %s:%s to %s:%s' % (self._external_ip,
                         external_port, self._u.lanaddr, local_port))
                 self._rules.append((external_port, int(local_port), upnp_proto))
@@ -55,5 +55,5 @@ class Forwarder:
         logging.debug('Refreshing port forwarding')
         for external_port, local_port, proto in self._rules:
             self._u.addportmapping(external_port, proto, self._u.lanaddr,
-                    local_port, 'Vifib openvpn server', '')
+                    local_port, 're6stnet openvpn server', '')
         self.next_refresh = time.time() + 3600

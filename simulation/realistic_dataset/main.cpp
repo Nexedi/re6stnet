@@ -1,5 +1,6 @@
 // To compile : g++ -std=c++0x latency.cpp graph.cpp main.cpp -lpthread 
 // The best distance : 66.9239 with a full graph
+// other dataset : http://pdos.csail.mit.edu/p2psim/kingdata/
 
 #include "main.h"
 

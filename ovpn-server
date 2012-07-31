@@ -1,5 +1,6 @@
 #!/usr/bin/python -S
-import os, sys
+import os
+import sys
 
 # example of os.environ
 {'X509_0_C': 'FR',
@@ -15,7 +16,7 @@ import os, sys
  'daemon_log_redirect': '0',
  'daemon_pid': '11637',
  'daemon_start_time': '1341568405',
- 'dev': 'vifibnet',
+ 'dev': 're6stnet',
  'link_mtu': '1573',
  'local_port_1': '1194',
  'proto_1': 'udp',
