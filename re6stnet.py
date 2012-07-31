@@ -1,5 +1,6 @@
 #!/usr/bin/env python
-import argparse, errno, os, select, subprocess, sqlite3, time, logging
+import os, sys, select, time
+import argparse, subprocess, sqlite3, logging, traceback
 from argparse import ArgumentParser
 from re6st import plib, utils, db, upnpigd, tunnel
 
@@ -62,8 +63,6 @@ def getConfig():
     # Tunnel options
     _('--pp', nargs=2, action='append',
             help='Port and protocol to be used by other peers to connect')
-    _('--tunnel-refresh', default=300, type=int,
-            help='time (seconds) to wait before changing the connections')
     _('--dh', required=True,
             help='Path to dh file')
     _('--ca', required=True,
@@ -77,6 +76,9 @@ def getConfig():
     _('--refresh-count', default=1, type=int,
             help='''The number of connections to drop when refreshing the
                     connections''')
+    _('--tunnel-refresh', default=300, type=int,
+            help='time (seconds) to wait before changing the connections')
+
     # Openvpn options
     _('openvpn_args', nargs=argparse.REMAINDER,
             help="Common OpenVPN options (e.g. certificates)")

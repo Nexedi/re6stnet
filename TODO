@@ -2,16 +2,9 @@ To be done :
     Use an algorithm to choose which connections to keep and/or establish
     instead of pure randomness
         number of routes / tunnel
-        favorise most used roads
 
     ( Write docstrings for all class/methods/functions )
-
-    We should replace dead connection much more often than we refresh tunnels otherwise, it brings instability
-    	If we do this, we must protect some tunnels
     	
-To be discussed:
-   Project name ?
-           Resinet/res(6)net/rs(6)net
-           ResiliAnt ( ants : find shortest paths, don't die easily
-                            ~ are resilients )
-           rescan6
+    Use latency in babeld
+
+    Warn babeld about the tunnels wich are about to be deleted. Maybe we could just increase the cost. 
