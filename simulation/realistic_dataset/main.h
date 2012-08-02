@@ -34,6 +34,7 @@ public:
     ~Graph() { delete[] adjacency; delete[] generated; };
     int UpdateLowRoutes(double& avgDistance, double unreachable, double* arityDistrib, double* bcArity, int nRefresh, int round);
     double GetUnAvalaibility();
+    void Reboot(double proba);
     void KillMachines(float proportion);
 
 private:

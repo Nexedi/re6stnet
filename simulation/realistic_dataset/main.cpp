@@ -16,12 +16,10 @@ void simulate(int size, int k, int maxPeer, int seed, const Latency& latency, co
 
 	Graph graph(size, k, maxPeer, rng, latency);
 
-	cout << "\r" << 0 << "/" << 300;
+	cout << "\r" << 0 << "/" << 3000;
     cout.flush();
 
-    long long int nUpdates = 0;
-
-	for(int i=0; i<300; i++)
+	for(int i=0; i<3000; i++)
 	{
 		/*for(float a=0.05; a<1; a+=0.05)
 		{
@@ -35,9 +33,10 @@ void simulate(int size, int k, int maxPeer, int seed, const Latency& latency, co
 
 		double avgDistance, unreachable;
 		double arityDistrib[31], bcArity[31];
-		nUpdates += graph.UpdateLowRoutes(avgDistance, unreachable, arityDistrib, bcArity, 1, i);
+		graph.Reboot(1.0/(1036.8 + 1.0));
+		graph.UpdateLowRoutes(avgDistance, unreachable, arityDistrib, bcArity, 1, i);
 
-		fprintf(output, "%d,%f, %lld", i, avgDistance, nUpdates);
+		fprintf(output, "%d,%f", i, avgDistance);
 		for(int j=0; j<=30; j++)
 			fprintf(output, ",%f", arityDistrib[j]);
 		for(int j=0; j<=30; j++)
@@ -46,7 +45,7 @@ void simulate(int size, int k, int maxPeer, int seed, const Latency& latency, co
 		fflush(output);
     	fsync(fno);
 
-    	cout << "\r" << i+1 << "/" << 300;
+    	cout << "\r" << i+1 << "/" << 3000;
         cout.flush();
 	}
 

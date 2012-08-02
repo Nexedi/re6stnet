@@ -172,17 +172,14 @@ int Graph::UpdateLowRoutes(double& avgDistance, double unreachable, double* arit
 	for(int i = 0; i<size; i++)
 	{
 		routesResult r = results[i];
-		if((adjacency[i].size() > 16 &&  adjacency[i].size() < 26) || round % 4 == 0)
-		{
-			nUpdated++;
-			while(!r.toDelete.empty())
-			{
-				RemoveEdge(i, r.toDelete.top());
-				r.toDelete.pop();
-			}
-		}
 
+		while(!r.toDelete.empty())
+		{
+			RemoveEdge(i, r.toDelete.top());
+			r.toDelete.pop();
+		}
 		SaturateNode(i);
+		nUpdated++;
 
 		avgDistance += r.avgDistance*(size-r.unreachable);
 		avgDistanceWeight += size-r.unreachable;
@@ -257,4 +254,19 @@ void Graph::KillMachines(float proportion)
         	adjacency[i].erase(j);
         }
     }
+}
+
+void Graph::Reboot(double proba)
+{
+	uniform_real_distribution<double> d(0.0, 1.0);
+	for(int i=0; i<size; i++)
+		if(d(generator) <= proba)
+		{
+			for(int j : generated[i])
+				RemoveEdge(i, j);
+			for(int j : adjacency[i])
+				RemoveEdge(j, i);
+
+			SaturateNode(i);
+		}
 }
