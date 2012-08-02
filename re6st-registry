@@ -59,7 +59,7 @@ class main(object):
         _('--bootstrap', action="append",
                 help='''VPN prefix of the peers to send as bootstrap peer,
                         instead of random ones''')
-        _('--private',
+        _('--private', required=True,
                 help='VPN IP of the node on which runs the registry')
         self.config = parser.parse_args()
 

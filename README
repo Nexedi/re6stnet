@@ -16,9 +16,10 @@ network, by creating tunnels on the fly, and then routing targeted traffic
 through these tunnels.
 
 re6stnet can be used to :
+
 - guarantee connectedness between computers connected to the
-internet, for which there exists a working route ( in case the direct route
-isn't available ).
+  internet, for which there exists a working route ( in case the direct route
+  isn't available ).
 - create very large networks
 - give ipv6 addresses to machines with only ipv4 available
 
@@ -80,21 +81,21 @@ Later....
 
 .. XXX: write monkey-patch in __init__.py
 
-Note: On certain version of python (e.g. 2.7.3~rc2-2.1 ) dns lookup is
-      performed for each request, and cause a delay in response.
-      To avoid this, one can either upgrade python, fix their resolv.conf or use
-      the fix at the end of this file.
+  Note: On certain version of python (e.g. 2.7.3~rc2-2.1 ) dns lookup is
+        performed for each request, and cause a delay in response.
+        To avoid this, one can either upgrade python, fix their resolv.conf or use
+        the fix at the end of this file.
 
---------------------------------------------------------------------------------
-# Fix for librpcxml to avoid doing reverse dns on each request
-# it was causing a 10s delay on each request when no reverse DNS was avalaible
-import BaseHTTPServer
+  --------------------------------------------------------------------------------
+  # Fix for librpcxml to avoid doing reverse dns on each request
+  # it was causing a 10s delay on each request when no reverse DNS was avalaible
+  import BaseHTTPServer
 
 
-def not_insane_address_string(self):
-    host, port = self.client_address[:2]
-    return '%s (reverse DNS disabled)' % host  # used to call: socket.getfqdn(host)
+  def not_insane_address_string(self):
+      host, port = self.client_address[:2]
+      return '%s (reverse DNS disabled)' % host  # used to call: socket.getfqdn(host)
 
-BaseHTTPServer.BaseHTTPRequestHandler.address_string = not_insane_address_string
+  BaseHTTPServer.BaseHTTPRequestHandler.address_string = not_insane_address_string
 
---------------------------------------------------------------------------------
+  --------------------------------------------------------------------------------

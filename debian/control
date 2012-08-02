@@ -1,0 +1,11 @@
+Source: re6stnet
+Maintainer: Julien Muchembled <jm@nexedi.com>
+Section: net
+Priority: optional
+Build-Depends: python-setuptools (>= 0.6b3), python-all (>= 2.6.6-3), debhelper (>= 7.4.3)
+Standards-Version: 3.9.1
+
+Package: re6stnet
+Architecture: all
+Depends: ${misc:Depends}, ${python:Depends}, openvpn, babeld, openssl
+Description: resilient, scalable, IPv6 network application
