@@ -4,18 +4,26 @@ Latency::Latency(const char* filePath, int size) : size(size)
 {
 	values = new int*[size];
 	for(int i=0; i<size; i++)
+	{
 		values[i] = new int[size];
+		for(int j=0; j<size; j++)
+			values[i][j] = -1;
+	}
 
 
 	FILE* file = NULL;
 	file = fopen(filePath, "r");
-	int a, b, latency;
+	int a, b;
+	double latency;
 
 	while(!feof(file))
 	{
-		fscanf(file, "%d %d %d", &a, &b, &latency);
-		values[b][a] = latency;
-		values[a][b] = latency;
+		fscanf(file, "%d %d %lf", &a, &b, &latency);
+		if(latency < 100)
+			latency = -1;
+
+		values[b-1][a-1] = latency;
+		values[a-1][b-1] = latency;
 	}
 
 	fclose(file);
@@ -88,4 +96,19 @@ double Latency::GetAverageDistance()
 			avg += distances[i][j];
 
 	return avg / (size*size);
+}
+
+double Latency::GetAveragePing()
+{
+	double out = 0;
+	double nPing = 0;
+	for(int i=0; i<size; i++)
+		for(int j=0; j<size; j++)
+			if(values[i][j] > 0)
+			{
+				nPing++;
+				out += values[i][j];
+			}
+
+	return out/nPing;
 }

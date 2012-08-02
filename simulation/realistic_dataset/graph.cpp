@@ -40,7 +40,7 @@ bool Graph::AddEdge(int from)
 		if(	to != from
 			&& latency.values[from][to] > 0
 			&& adjacency[from].count(to) == 0
-			&& adjacency[to].size() + generated[to].size() <= maxPeers + k)
+			&& adjacency[to].size() + k < maxPeers + generated[to].size())
 		{
 			generated[from].insert(to);
 			adjacency[from].insert(to);
@@ -112,22 +112,45 @@ void Graph::GetRoutesFrom(int from,  int* nRoutes, int* prevs, int* distances)
 }
 
 
-void Graph::UpdateLowRoutes(double& avgDistance, double unreachable, double* arityDistrib, int refreshCount)
+int Graph::UpdateLowRoutes(double& avgDistance, double unreachable, double* arityDistrib,
+		double* bcArity, int nRefresh, int round)
 {
+	int nUpdated = 0;
 	routesResult results[size];
+	double bc[size];
+	for(int i=0; i<size; i++)
+		bc[i] = 0;
+
+	avgDistance = 0;
+	double avgDistanceWeight = 0;
+	unreachable = 0;
+	for(int i=0; i<=maxPeers; i++)
+	{
+		bcArity[i] = 0;
+		arityDistrib[i] = 0;
+	}
 
 	for(int i=0; i<size; i++)
 	{
     	// Compute the routes
         int nRoutes[size], prevs[size], distances[size];
         GetRoutesFrom(i, nRoutes, prevs, distances);
+        for(int j=0; j<size; j++)
+        	bc[j] += nRoutes[j];
 
         // Get the values
         routesResult r;
-        r.toDelete = -1;
-		for(int j : generated[i])
-			if(r.toDelete == -1 || nRoutes[r.toDelete] > nRoutes[j])
-				r.toDelete = j;
+        
+        for(int k=0; k<nRefresh; k++)
+        {
+        	int mini = -1;
+			for(int j : generated[i])
+				if(mini == -1 || nRoutes[mini] > nRoutes[j])
+					mini = j;
+
+			if(mini != -1)
+				r.toDelete.push(mini);
+		}
 
 		r.arity = adjacency[i].size();
 
@@ -145,18 +168,19 @@ void Graph::UpdateLowRoutes(double& avgDistance, double unreachable, double* ari
 
 		results[i] = r;
 	}
-
-	avgDistance = 0;
-	double avgDistanceWeight = 0;
-	unreachable = 0;
-	for(int i=0; i<=maxPeers; i++)
-		arityDistrib[i] = 0;
-
+	
 	for(int i = 0; i<size; i++)
 	{
 		routesResult r = results[i];
-		if(r.toDelete >= 0)
-			RemoveEdge(i, r.toDelete);
+		if((adjacency[i].size() > 16 &&  adjacency[i].size() < 26) || round % 4 == 0)
+		{
+			nUpdated++;
+			while(!r.toDelete.empty())
+			{
+				RemoveEdge(i, r.toDelete.top());
+				r.toDelete.pop();
+			}
+		}
 
 		SaturateNode(i);
 
@@ -164,12 +188,18 @@ void Graph::UpdateLowRoutes(double& avgDistance, double unreachable, double* ari
 		avgDistanceWeight += size-r.unreachable;
 		unreachable += r.unreachable;
 		arityDistrib[adjacency[i].size()]++;
+		bcArity[adjacency[i].size()] += bc[i] - 2*size + 1;
 	}
 
 	avgDistance /= avgDistanceWeight;
 
 	for(int i=0; i<=maxPeers; i++)
+	{
+		bcArity[i] = arityDistrib[i]>0 ? bcArity[i] / arityDistrib[i]:0;
 		arityDistrib[i] /= size;
+	}
+
+	return nUpdated;
 }
 
 int Graph::CountUnreachableFrom(int node)

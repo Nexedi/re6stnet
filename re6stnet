@@ -81,7 +81,7 @@ def getConfig():
 
     # Openvpn options
     _('openvpn_args', nargs=argparse.REMAINDER,
-            help="Common OpenVPN options (e.g. certificates)")
+            help="Common OpenVPN options")
     return parser.parse_args()
 
 

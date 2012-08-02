@@ -19,6 +19,7 @@ public:
     void Rewrite(int n);
     ~Latency();
     double GetAverageDistance();
+    double GetAveragePing();
     int** values;
 
 private:
@@ -31,7 +32,7 @@ public:
     Graph(int size, int k, int maxPeers, mt19937& generator, const Latency& latency);
     Graph(const Graph& g);
     ~Graph() { delete[] adjacency; delete[] generated; };
-    void UpdateLowRoutes(double& avgDistance, double unreachable, double* arityDistrib);
+    int UpdateLowRoutes(double& avgDistance, double unreachable, double* arityDistrib, double* bcArity, int nRefresh, int round);
     double GetUnAvalaibility();
     void KillMachines(float proportion);
 
@@ -58,5 +59,5 @@ struct routesResult
     double avgDistance;
     int arity;
     int unreachable;
-    int toDelete;
+    stack<int> toDelete;
 };

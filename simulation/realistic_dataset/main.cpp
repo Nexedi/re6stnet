@@ -1,6 +1,9 @@
 // To compile : g++ -std=c++0x latency.cpp graph.cpp main.cpp -lpthread 
-// The best distance : 66.9239 with a full graph
+// The best distance for latency : 66.9239 with a full graph
 // other dataset : http://pdos.csail.mit.edu/p2psim/kingdata/
+// for latency_2 :
+// Optimal distance : 16085.3
+// Average ping : 75809.4
 
 #include "main.h"
 
@@ -10,35 +13,38 @@ void simulate(int size, int k, int maxPeer, int seed, const Latency& latency, co
 
 	FILE* output = fopen(outName, "wt");
     int fno = fileno(output);
-    fprintf(output, "round,alive,unreachable\n");
 
 	Graph graph(size, k, maxPeer, rng, latency);
 
 	cout << "\r" << 0 << "/" << 300;
     cout.flush();
 
+    long long int nUpdates = 0;
+
 	for(int i=0; i<300; i++)
 	{
-		for(float a=0.05; a<1; a+=0.05)
+		/*for(float a=0.05; a<1; a+=0.05)
 		{
 			Graph copy(graph);
 			copy.KillMachines(a);
 			fprintf(output, "%d,%f,%f\n",i , a , copy.GetUnAvalaibility());
 			fflush(output);
         	fsync(fno);
-		}
+		}*/
 		
 
 		double avgDistance, unreachable;
-		double arityDistrib[31];
-		graph.UpdateLowRoutes(avgDistance, unreachable, arityDistrib);
+		double arityDistrib[31], bcArity[31];
+		nUpdates += graph.UpdateLowRoutes(avgDistance, unreachable, arityDistrib, bcArity, 1, i);
 
-		/*fprintf(output, "%d,%f", i, avgDistance);
+		fprintf(output, "%d,%f, %lld", i, avgDistance, nUpdates);
 		for(int j=0; j<=30; j++)
 			fprintf(output, ",%f", arityDistrib[j]);
+		for(int j=0; j<=30; j++)
+			fprintf(output, ",%f", bcArity[j]);
 		fprintf(output, "\n");
 		fflush(output);
-    	fsync(fno);*/
+    	fsync(fno);
 
     	cout << "\r" << i+1 << "/" << 300;
         cout.flush();
@@ -51,19 +57,21 @@ void simulate(int size, int k, int maxPeer, int seed, const Latency& latency, co
 int main(int argc, char** argv)
 {
 	mt19937 rng(time(NULL));
-	Latency latencyR("latency/pw-1715/pw-1715-latencies", 1715);
-	latencyR.Rewrite(20);
-	Latency latency("latency/pw-1715/rewrite", 1555);
+	//Latency latencyR("latency/pw-1715/pw-1715-latencies", 1715);
+	//latencyR.Rewrite(20);
+	Latency latency("datasets/latency_2_2500", 2500);
 
+	//cout << "Optimal distance : " << latency.GetAverageDistance() << endl;
+	//cout << "Average ping : " << latency.GetAveragePing() << endl;
 	vector<future<void>> threads;
 	
-	for(int i=0; i<20; i++)
+	for(int i=0; i<1; i++)
 	{
 		int seed = rng();
 		char* out = new char[20];
 		sprintf(out, "out_%d.csv", i);
 		threads.push_back(async(launch::async, [seed, out, &latency]()
-        	{ simulate(1555, 10, 30, seed, latency, out); delete[] out; })); 
+        	{ simulate(2500, 10, 30, seed, latency, out); delete[] out; })); 
 	}
 
 	for(int i=0; i<1; i++)
