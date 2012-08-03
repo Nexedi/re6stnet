@@ -174,7 +174,7 @@ Normal node
 
 In most cases, you only have to start the re6stnet daemon for you to join
 the re6st network. Since the number of options to set is currently quite high,
-I advise you to utse a configuration file. Here is an example of such a
+I advise you to use a configuration file. Here is an example of such a
 configuration file::
 
     # Configuration file for re6stnet
@@ -247,7 +247,9 @@ trick :
 ``re6st-conf --server localhost --port 8000``
 
 It will generate in your local directory (you can change it with the -d option)
-four files (ca.crt, cert.crt, cert.key, dh2048.pem).
+four files (ca.crt, cert.crt, cert.key, dh2048.pem). It is recommanded to put
+these files in a different directory than the certificates for the registry,
+although the names shouldn't conflict.
 
 Now here's the tricky part. For your network to work, you need to restart the
 registry (maybe it will be fixed one day...), this time with more information
