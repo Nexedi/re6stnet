@@ -1,10 +1,10 @@
 To be done :
+    Male sure the re6stnet ip address is added on only one interface
+    ( tweak the ovpn-server script ), else duplicate addresses appears in routing
+    tables.
+
     Use an algorithm to choose which connections to keep and/or establish
     instead of pure randomness
         number of routes / tunnel
-
-    README : move options doc elsewhere, make it look like a real readme
-	
-    Use latency in babeld
 
     Warn babeld about the tunnels wich are about to be deleted. Maybe we could just increase the cost.

@@ -23,6 +23,10 @@ class SimpleXMLRPCServer4(SimpleXMLRPCServer):
 
     allow_reuse_address = True
 
+    def address_string(self):
+        # Workaround for http://bugs.python.org/issue6085
+        return self.client_address[0]
+
 
 class SimpleXMLRPCServer6(SimpleXMLRPCServer4):
 
@@ -59,9 +63,14 @@ class main(object):
         _('--bootstrap', action="append",
                 help='''VPN prefix of the peers to send as bootstrap peer,
                         instead of random ones''')
-        _('--private', required=True,
+        _('--private',
                 help='VPN IP of the node on which runs the registry')
         self.config = parser.parse_args()
+
+        if not self.config.private:
+            logging.warning('You have declared no private address'
+                    ', either this is the first start, or you should'
+                    'check you configuration')
 
         # Database initializing
         self.db = sqlite3.connect(self.config.db, isolation_level=None)

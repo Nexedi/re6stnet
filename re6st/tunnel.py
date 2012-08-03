@@ -88,7 +88,7 @@ class TunnelManager:
 
         self._client_count = (connection_count + 1) // 2
         self._refresh_count = refresh_count
-        self.free_interface_set = set('client' + str(i)
+        self.free_interface_set = set('re6stnet' + str(i)
             for i in xrange(1, self._client_count + 1))
 
     def refresh(self):

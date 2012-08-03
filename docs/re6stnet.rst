@@ -12,9 +12,9 @@ Resilient, Scalable, IPv6 Network application
 SYNOPSIS
 ========
 
-``re6stnet`` ``--registry`` `registry-url` ``--dh`` `dh-path`
-             ``--ca`` `ca-path` ``--cert`` `cert-path`
-             ``--key`` `key-path` [`options`...] [``--`` [`openvpn-options`...]]
+``re6stnet`` ``--registry`` `registry-url` ``--dh`` `dh-path` ``--ca`` `ca-path`
+``--cert`` `cert-path` ``--key`` `key-path` [`options`...]
+[``--`` [`openvpn-options`...]]
 
 DESCRIPTION
 ===========
@@ -163,6 +163,116 @@ Openvpn-options
             from the additional openvpn arguments. The list of arguments will
             be passed down to ALL openvpn processes ( including servers )
             exactly as they are given.
+
+HOW TO
+======
+
+Here's an example how to deploy your re6st network.
+
+Normal node
+-----------
+
+In most cases, you only have to start the re6stnet daemon for you to join
+the re6st network. Since the number of options to set is currently quite high,
+I advise you to utse a configuration file. Here is an example of such a
+configuration file::
+
+    # Configuration file for re6stnet
+    # You have to give the complete url of the re6st-registry.
+    # If you have the ip address and the port of the registry, enter the url as
+    # following :
+    # registry http://ipv4:port
+    # registry http://[ipv6]:port
+    registry http://localhost:8000
+
+    # Here are information about your certificates.
+    # These options are mandatory.
+    dh dh2048.pem
+    ca ca.pem
+    cert cert.crt
+    key cert.key
+
+    # You can give the external configuration ( ip, port and protocol )
+    # advertised to other nodes. These information are used by the openvpn
+    # daemon to connect to your servers. If no --ip otion is given, re6stnet
+    # will automatically attempt to forward ports vie UPnP.
+    # You can give as many --ip options you want.
+    # ip 192.0.2.130 1194 udp
+    # ip 192.0.2.130 1194 tcp-client
+
+    # You can specify the directory you want the state files ( peer database,
+    # babel state file ), to be in. The default is :
+    # state /var/lib/re6stnet
+
+    # Verbose level ( default: 0 )
+    # 1 is a good verbose level if you want to see what's happening in re6st.
+    # level 2 and 3 display a whole lot of messages, so it should only be used 
+    # as a debug tool
+    verbose 1
+
+You can then start re6stnet :
+
+``re6stnet @command_file``
+
+
+First Node
+----------
+
+First, generate the ceritifcates for your network with the following command.
+For that, you have to give the address for your network, here we took an
+address starting with the ipv6 example prefix `2001:db8::`, and adding a random
+number to create a /48 network. Once you have decided on your network ip
+address, you have to translate it into hexadecimal, and add a **1** as the
+most significant digit. So the network ip address 2001:db8:42::/48 translate
+into ``0x120010db80042``. Put that number as the serial umber of your
+certificate.
+
+``openssl req -nodes -new -x509 -key ca.key -set_serial 0x120010db80042
+-days 365 -out ca.crt``
+
+With this, you now have a ca.crt and a ca.key file in your current directory.
+Then, you have to start a re6st-registry to acquire an ipv6 address for your
+first node. In order to do that, you need to run the following command.
+You can give any path you like for the --db option, if the file does not
+exists, it will be created. The mailhost will be used to send tokens by mail,
+so you should make sure it works.
+
+``re6st-registry port_number --db db_path --ca path_to_ca.crt
+--key path_to_ca.key --mailhost yourmailhost``
+
+You are now ready to use the re6st configuration tool to generate the
+certificates for the first node of your network, i.e. you. This should do the
+trick :
+
+``re6st-conf --server localhost --port 8000``
+
+It will generate in your local directory (you can change it with the -d option)
+four files (ca.crt, cert.crt, cert.key, dh2048.pem).
+
+Now here's the tricky part. For your network to work, you need to restart the
+registry (maybe it will be fixed one day...), this time with more information
+than the last time. You need to get your hands on the individual prefix of your
+node, and the re6st ipv6 address associated. These should have been printed
+at the end of re6st-conf. If you have missed them, for one reason or another,
+you can get them in the python interpreter::
+
+    >>> from re6st import utils
+    >>> network = utils.networkFromCa('ca.pem')
+    >>> re6st_ip, prefix = utils.ipFromCert(network, 'cert.crt')
+    >>> print re6st_ip
+    2001:0db8:0042:0003:0000:0000:0000:0001
+    >>> print prefix
+    0000000000000011
+
+Now you can restart your re6st-registry with two more options:
+
+``re6st-registry port_number --db db_path --ca path_to_ca.crt
+--key path_to_ca.key --mailhost yourmailhost --private 2001:db8:42:3::1
+--bootstrap 0000000000000011``
+
+Finally, you can start your own re6st node following the instrucxtions in the
+precedent section.
+
 
 SEE ALSO
 ========

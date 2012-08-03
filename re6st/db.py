@@ -27,17 +27,18 @@ class PeerManager:
                             used INTEGER NOT NULL DEFAULT 0,
                             date INTEGER DEFAULT (strftime('%s', 'now')))""")
         self._db.execute("UPDATE peers SET used = 0")
-        self._db.execute("CREATE INDEX IF NOT EXISTS _peers_used ON peers(used)")
-        self._db.execute("""CREATE TABLE IF NOT EXISTS blacklist (
-                            prefix TEXT PRIMARY KEY,
-                            flag INTEGER NOT NULL)""")
-        self._db.execute("""CREATE INDEX IF NOT EXISTS
-                            blacklist_flag ON blacklist(flag)""")
-        self._db.execute("INSERT OR REPLACE INTO blacklist VALUES (?,?)",
-                         (prefix, 1))
+        self._db.execute("CREATE INDEX IF NOT EXISTS
+                          _peers_used ON peers(used)")
         self._db.execute("""CREATE TABLE IF NOT EXISTS config (
                             name text primary key,
                             value text)""")
+        self._db.execute('ATTACH DATABASE ":memory:" AS blacklist')
+        self._db.execute("""CREATE TABLE blacklist.flag (
+                            prefix TEXT PRIMARY KEY,
+                            flag INTEGER NOT NULL)""")
+        self._db.execute("""CREATE INDEX blacklist.blacklist_flag
+                            ON flag(flag)""")
+        self._db.execute("INSERT INTO blacklist.flag VALUES (?,?)", (prefix, 1))
         try:
             a, = self._db.execute("SELECT value FROM config WHERE name='registry'").next()
         except StopIteration:
@@ -51,20 +52,20 @@ class PeerManager:
 
     def clear_blacklist(self, flag):
         logging.info('Clearing blacklist from flag %u' % flag)
-        self._db.execute("DELETE FROM blacklist WHERE flag = ?",
+        self._db.execute("DELETE FROM blacklist.flag WHERE flag = ?",
                           (flag,))
         logging.info('Blacklist cleared')
 
     def blacklist(self, prefix, flag):
         logging.ninfo('Blacklisting %s' % prefix)
         self._db.execute("DELETE FROM peers WHERE prefix = ?", (prefix,))
-        self._db.execute("INSERT OR REPLACE INTO blacklist VALUES (?,?)",
+        self._db.execute("INSERT OR REPLACE INTO blacklist.flag VALUES (?,?)",
                           (prefix, flag))
         logging.debug('%s blacklisted' % prefix)
 
     def whitelist(self, prefix):
         logging.info('Unblacklisting %s' % prefix)
-        self._db.execute("DELETE FROM blacklist WHERE prefix = ?", (prefix,))
+        self._db.execute("DELETE FROM blacklist.flag WHERE prefix = ?", (prefix,))
         logging.debug('%s whitelisted' % prefix)
 
     def refresh(self):
@@ -102,7 +103,7 @@ class PeerManager:
             self._db.executemany("""INSERT OR IGNORE INTO peers (prefix, address)
                                     VALUES (?,?)""", new_peer_list)
             self._db.execute("""DELETE FROM peers WHERE prefix IN
-                                (SELECT prefix FROM blacklist)""")
+                                (SELECT prefix FROM blacklist.flag)""")
         logging.info('DB populated')
         logging.trace('New peers : %s' % (', '.join(map(str, new_peer_list)),))
 
@@ -111,8 +112,11 @@ class PeerManager:
             peer_list = self._db.execute("""SELECT prefix, address FROM peers WHERE used
                                             <= 0 ORDER BY used DESC,RANDOM() LIMIT ?""",
                                          (peer_count,)).fetchall()
-            if peer_list or populate():
+            if peer_list:
                 return peer_list
+            populate()
+        logging.warning('Cannot find any new peers')
+        return []
 
     def _bootstrap(self):
         logging.info('Getting Boot peer...')
@@ -123,9 +127,10 @@ class PeerManager:
             p = subprocess.Popen(('openssl', 'rsautl', '-decrypt', '-inkey', self._key_path),
                     stdin=subprocess.PIPE, stdout=subprocess.PIPE)
             bootpeer = p.communicate(bootpeer)[0].split()
-            self._db.execute("INSERT INTO peers (prefix, address) VALUES (?,?)", bootpeer)
-            logging.debug('Boot peer added')
-            return True
+            if bootpeer[0] != self._prefix:
+                self._db.execute("INSERT INTO peers (prefix, address) VALUES (?,?)", bootpeer)
+                logging.debug('Boot peer added')
+                return True
         except socket.error:
             pass
         except sqlite3.IntegrityError, e:

@@ -13,8 +13,8 @@ SYNOPSIS
 ========
 
 ``re6st-registry`` `port` ``--db`` `db-path` ``--ca`` `ca-path`
-                   ``--key`` `key-path` ``--mailhost`` `mailhost`
-                   ``--private`` `private-ip` [`options`...]
+``--key`` `key-path` ``--mailhost`` `mailhost` ``--private`` `private-ip`
+[`options`...]
 
 DESCRIPTION
 ===========

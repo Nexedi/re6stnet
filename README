@@ -78,24 +78,3 @@ Later....
     re6st/upnpigd.py          Forward ports
     re6st-conf.py       Get certificates from server
     re6st-registry.py   Server : deliver certificates and distribute peers
-
-.. XXX: write monkey-patch in __init__.py
-
-  Note: On certain version of python (e.g. 2.7.3~rc2-2.1 ) dns lookup is
-        performed for each request, and cause a delay in response.
-        To avoid this, one can either upgrade python, fix their resolv.conf or use
-        the fix at the end of this file.
-
-  --------------------------------------------------------------------------------
-  # Fix for librpcxml to avoid doing reverse dns on each request
-  # it was causing a 10s delay on each request when no reverse DNS was avalaible
-  import BaseHTTPServer
-
-
-  def not_insane_address_string(self):
-      host, port = self.client_address[:2]
-      return '%s (reverse DNS disabled)' % host  # used to call: socket.getfqdn(host)
-
-  BaseHTTPServer.BaseHTTPRequestHandler.address_string = not_insane_address_string
-
-  --------------------------------------------------------------------------------

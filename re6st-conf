@@ -19,13 +19,16 @@ def main():
     _('--email', help='Your email address')
     _('--token', help='The token you received')
     config = parser.parse_args()
+    ca_path = os.path.join(config.dir, 'ca.pem')
+    cert_path = os.path.join(config.dir, 'cert.crt')
+    key_path = os.path.join(config.dir, 'cert.key')
 
     # Establish connection with server
     s = xmlrpclib.ServerProxy('http://%s:%u' % (config.server, config.port))
 
     # Get CA
     ca = s.getCa()
-    with open(os.path.join(config.dir, 'ca.pem'), 'w') as f:
+    with open(ca_path, 'w') as f:
         f.write(ca)
 
     if config.ca_only:
@@ -56,9 +59,9 @@ def main():
     cert = s.requestCertificate(config.token, req)
 
     # Store cert and key
-    with open(os.path.join(config.dir, 'cert.key'), 'w') as f:
+    with open(key_path, 'w') as f:
         f.write(key)
-    with open(os.path.join(config.dir, 'cert.crt'), 'w') as f:
+    with open(cert_path, 'w') as f:
         f.write(cert)
 
     # Generating dh file
@@ -66,6 +69,11 @@ def main():
         subprocess.call(['openssl', 'dhparam', '-out', os.path.join(config.dir, 'dh2048.pem'), '2048'])
 
     print "Certificate setup complete."
+
+    network = utils.networkFromCa(ca_path)
+    internal_ip, prefix = utils.ipFromCert(network, cert_path)
+    print "Your re6st ip : %s" % internal_ip
+    print "Your prefix : %s" % prefix
 
 if __name__ == "__main__":
     main()
