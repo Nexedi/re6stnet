@@ -57,6 +57,9 @@ obtained with the re6st-conf tool.
 Options
 -------
 
+Generic options
+~~~~~~~~~~~~~~~
+
 -h, --help  Display a summary help about the options
 
 @file
@@ -73,14 +76,6 @@ Options
             address MUST be a ipv4 address since as of now openvpn does not
             support ipv6 addresses.
             Proto should be either udp or tcp-client
-
--i, ``--interface`` `interface`
-            Give one interface name for each use of the argument. The interface
-            will be used to detect other nodes on the local network.
-
---peers-db-refresh duration
-            Duration in seconds of the peers DB refresh interval.
-            Default : 3600  ( 1 hour )
 
 -l, ``--log`` `directory`
             Path to the directory used for log files. Will create one file
@@ -102,8 +97,15 @@ Options
             level for now, except an increased number means more log messages.
             This parameter is also given to babel for its log.
             To adjust verbose level for openvpn, add an openvpn optional
-            arguments at the end of the command line
+            arguments at the end of the command line.
             Default : 0
+
+Babel options
+~~~~~~~~~~~~~
+
+-i, ``--interface`` `interface`
+            Give one interface name for each use of the argument. The interface
+            will be used to detect other nodes on the local network.
 
 --hello duration
             Set hello interval, in seconds, for both wired and wireless
@@ -119,7 +121,18 @@ Options
 
 -w, --wireless
             Consider all interfaces as being wireless interfaces. Argument
-            directly passed down to the babeld daemon
+            directly passed down to the babeld daemon.
+
+Tunnel & Peers options
+~~~~~~~~~~~~~~~~~~~~~~
+
+--peers-db-refresh duration
+            Duration in seconds of the peers DB refresh interval. At each
+            refresh, a re6st node will declare itself to the re6st-registry,
+            and request a list of peers to connect to. A list of peers is also
+            queried when tying to make a connection and no peers is available
+            in the database.
+            Default : 3600  ( 1 hour )
 
 --pp port proto
             Port and protocol used by the openvpn server(s). Start one openvpn
@@ -133,15 +146,16 @@ Options
 --tunnel-refresh duration
             Interval in seconds between two tunnel refresh. Refreshing tunnels
             mean :
+
             - killing all dead tunnels ( detected via the ping-exit option
-            if openvpn )
+              if openvpn )
             - killing the 'worst' tunnels, so that at least the ratio of
-            tunnels set by the --refresh-rate option have been killed
+              tunnels set by the --refresh-rate option have been killed
             - creating new tunnels to other clients randomly choosen in the
-            peers database, to reach the number of connection specified by
-            the connection-count option ( There can be less tunnels if the
-            peers DB does not contain enough peers )
-            Default : 300
+              peers database, to reach the number of connection specified by
+              the connection-count option ( There can be less tunnels if the
+              peers DB does not contain enough peers )
+              Default : 300
 
 --connection-count number
             The maximum number of openvpn clients to start.

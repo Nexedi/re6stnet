@@ -1,5 +1,18 @@
 To be done :
-    Male sure the re6stnet ip address is added on only one interface
+    Update the USAGE > OPTION > Tunnel & Peers options section of the re6stnet
+    man page ( about how tunnel options are treated ).
+
+    Do a 'real' test, on one ( or more ) real machine(s) preferably :
+       - package re6stnet
+       - install re6stnet
+       - follow the HOW TO section of the man page to setup a network
+       - see if it works....
+
+    Put more information in the token mail ( registry ), such as :
+        - the ip address of the network being built
+        - the creator of the network ( add option in registry ? )
+
+    Make sure the re6stnet ip address is added on only one interface
     ( tweak the ovpn-server script ), else duplicate addresses appears in routing
     tables.
 
@@ -8,3 +21,5 @@ To be done :
         number of routes / tunnel
 
     Warn babeld about the tunnels wich are about to be deleted. Maybe we could just increase the cost.
+
+~~~ => Complete and upgrade the Routing with babel presentation (web page on tiolive.com/nexedi)
