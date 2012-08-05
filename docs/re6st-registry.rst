@@ -62,14 +62,17 @@ port
 Options
 -------
 
-
---bootstrap prefix ip port proto
-            Connection informations of a node given to other as a bootstrap
-            node to initiate connection with the network.
-            Prefix should be the prefix number of a node, given in binary and
-            with correct length. For instance the VPN address
-            2001:db8:42:1::/64 ( asusming a network prefix 2001:db8:42::/48 )
-            corresponds to a prefix 1/16 i.e 0000000000000001.
+--bootstrap prefix
+            Prefix of a node to be given to other as a bootstrap node to
+            initiate connection with the network.A prefix is an id given to
+            each node, which is used to generate the re6st ip address of the
+            node. A prefix is a string representing binary number.
+            By default the registry delivers 16 bits prefix. You can get your
+            prefix from the python interpreter (see re6stnet man page HOW TO)
+            By default the registry delivers 16 bits prefix.
+            Asusming a network prefix ``2001:db8:42::/48``, the re6st ip address
+            ``2001:db8:42:1::1/64`` corresponds to a prefix ``1/16`` i.e
+            ``00000000000000010``.
 
 SEE ALSO
 ========

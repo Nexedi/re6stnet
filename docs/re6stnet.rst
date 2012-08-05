@@ -170,7 +170,7 @@ Tunnel & Peers options
 Openvpn-options
 ---------------
 
--- openvpn_args
+-- `openvpn_args`
             Additional arguments to be passed down to all openvpn processes
             can be given at the end of the command line.
             In that case, insert '--' to delimit re6stnet regular options

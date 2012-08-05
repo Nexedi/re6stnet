@@ -16,10 +16,17 @@ To be done :
     ( tweak the ovpn-server script ), else duplicate addresses appears in routing
     tables.
 
+    Fix bootstrap problem :
+        registry & --private option ( see re6stnet man page HOW TO ).
+        one have to start the registry twice, the first time without
+        the --private option
+
     Use an algorithm to choose which connections to keep and/or establish
     instead of pure randomness
         number of routes / tunnel
 
     Warn babeld about the tunnels wich are about to be deleted. Maybe we could just increase the cost.
+
+    Put a section about how to build the package from the sources in the README
 
 ~~~ => Complete and upgrade the Routing with babel presentation (web page on tiolive.com/nexedi)
