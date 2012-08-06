@@ -51,7 +51,7 @@ class main(object):
         parser = argparse.ArgumentParser(
                 description='Peer discovery http server for re6stnet')
         _ = parser.add_argument
-        _('port', type=int, help='Port of the host server')
+        _('--port', required=True, type=int, help='Port of the host server')
         _('--db', required=True,
                 help='Path to database file')
         _('--ca', required=True,

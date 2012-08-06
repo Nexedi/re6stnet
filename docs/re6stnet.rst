@@ -145,27 +145,13 @@ Tunnel & Peers options
 
 --tunnel-refresh duration
             Interval in seconds between two tunnel refresh. Refreshing tunnels
-            mean :
-
-            - killing all dead tunnels ( detected via the ping-exit option
-              if openvpn )
-            - killing the 'worst' tunnels, so that at least the ratio of
-              tunnels set by the --refresh-rate option have been killed
-            - creating new tunnels to other clients randomly choosen in the
-              peers database, to reach the number of connection specified by
-              the connection-count option ( There can be less tunnels if the
-              peers DB does not contain enough peers )
-              Default : 300
+            mean replace the worst tunnel if the number of tunnels has reach 
+            its maximum number.
+            Default : 300
 
 --connection-count number
-            The maximum number of openvpn clients to start.
+            The average number of connections per peer
             Default : 20
-
---refresh-rate ratio
-            The ratio of connection to kill each time we refresh tunnels.
-            For more information see the --tunnel-refresh option
-            ratio should be a float between 0 and 1 ( included )
-            Default : 0.05
 
 Openvpn-options
 ---------------
@@ -286,7 +272,7 @@ Now you can restart your re6st-registry with two more options:
 --key path_to_ca.key --mailhost yourmailhost --private 2001:db8:42:3::1
 --bootstrap 0000000000000011``
 
-Finally, you can start your own re6st node following the instrucxtions in the
+Finally, you can start your own re6st node following the instructions in the
 precedent section.
 
 

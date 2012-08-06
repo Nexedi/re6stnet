@@ -71,7 +71,7 @@ class Connection:
 class TunnelManager:
 
     def __init__(self, write_pipe, peer_db, openvpn_args, hello_interval,
-                refresh, connection_count, refresh_count, iface_list, network):
+                refresh, connection_count, iface_list, network):
         self._write_pipe = write_pipe
         self._peer_db = peer_db
         self._connection_dict = {}
@@ -87,7 +87,7 @@ class TunnelManager:
         self._next_tunnel_refresh = time.time()
 
         self._client_count = (connection_count + 1) // 2
-        self._refresh_count = refresh_count
+        self._refresh_count = 1
         self.free_interface_set = set('re6stnet' + str(i)
             for i in xrange(1, self._client_count + 1))
 

@@ -11,6 +11,14 @@
 
 using namespace std;
 
+struct routesResult
+{
+    double avgDistance;
+    int arity;
+    int unreachable;
+    int routesToDelete;
+    stack<int> toDelete;
+};
 
 class Latency
 {
@@ -29,13 +37,15 @@ private:
 class Graph
 {
 public:
-    Graph(int size, int k, int maxPeers, mt19937& generator, const Latency& latency);
-    Graph(const Graph& g);
-    ~Graph() { delete[] adjacency; delete[] generated; };
-    int UpdateLowRoutes(double& avgDistance, double unreachable, double* arityDistrib, double* bcArity, int nRefresh, int round);
+    Graph(int size, int k, int maxPeers, mt19937& generator, Latency* latency);
+    Graph(Graph& g);
+    ~Graph() { delete[] adjacency; delete[] generated;};
+    int UpdateLowRoutes(double& avgDistance, double& unreachable, double& nRoutesKilled, double* arityDistrib, double* bcArity, int nRefresh, int round);
     double GetUnAvalaibility();
-    void Reboot(double proba);
+    void Reboot(double proba, int round);
     void KillMachines(float proportion);
+    pair<double, double> UpdateLowRoutesArity(int arityToUpdate);
+    void GetArity(int* arity);
 
 private:
     void SaturateNode(int node);
@@ -43,6 +53,7 @@ private:
     void RemoveEdge(int from, int to);
     void GetRoutesFrom(int from, int* nRoutes, int* prevs, int* distances);
     int CountUnreachableFrom(int node);
+    routesResult GetRouteResult(int node, int nRefresh, double* bc);
 
     mt19937 generator;
     uniform_int_distribution<int> distrib;
@@ -52,13 +63,5 @@ private:
 
     unordered_set<int>* adjacency;
     unordered_set<int>* generated;
-    const Latency& latency;
-};
-
-struct routesResult
-{
-    double avgDistance;
-    int arity;
-    int unreachable;
-    stack<int> toDelete;
+    Latency* latency;
 };

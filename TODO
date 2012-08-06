@@ -1,7 +1,4 @@
 To be done :
-    Update the USAGE > OPTION > Tunnel & Peers options section of the re6stnet
-    man page ( about how tunnel options are treated ).
-
     Do a 'real' test, on one ( or more ) real machine(s) preferably :
        - package re6stnet
        - install re6stnet
@@ -29,4 +26,12 @@ To be done :
 
     Put a section about how to build the package from the sources in the README
 
-~~~ => Complete and upgrade the Routing with babel presentation (web page on tiolive.com/nexedi)
+---------------------------------------------------------------------------------------------
+    We should put a high latency on the servers openvpn interfaces to avoid people staying connected to it.
+
+    Check that blacklisting for peers connected to us works
+    Check that if 2 tunnels are established between 2 peers, one of them is destroyed
+
+    Check peers ID when connectiong to the server
+
+    Choose peer DB size

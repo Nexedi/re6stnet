@@ -1,11 +1,12 @@
-import logging, sqlite3, socket, subprocess, xmlrpclib, time, os
+import logging, sqlite3, socket, subprocess, xmlrpclib, time
 import utils
+
 
 class PeerManager:
 
     # internal ip = temp arg/attribute
     def __init__(self, db_path, registry, key_path, refresh_time, address,
-                       internal_ip, prefix, manual, pp , db_size):
+                       internal_ip, prefix, manual, pp, db_size):
         self._refresh_time = refresh_time
         self._address = address
         self._internal_ip = internal_ip
@@ -27,8 +28,8 @@ class PeerManager:
                             used INTEGER NOT NULL DEFAULT 0,
                             date INTEGER DEFAULT (strftime('%s', 'now')))""")
         self._db.execute("UPDATE peers SET used = 0")
-        self._db.execute("CREATE INDEX IF NOT EXISTS
-                          _peers_used ON peers(used)")
+        self._db.execute("""CREATE INDEX IF NOT EXISTS
+                          _peers_used ON peers(used)""")
         self._db.execute("""CREATE TABLE IF NOT EXISTS config (
                             name text primary key,
                             value text)""")
@@ -159,8 +160,10 @@ class PeerManager:
     def handle_message(self, msg):
         script_type, arg = msg.split()
         if script_type == 'client-connect':
+            self.blacklist(arg, 2)
             logging.info('Incomming connection from %s' % (arg,))
         elif script_type == 'client-disconnect':
+            self.whitelist(arg)
             logging.info('%s has disconnected' % (arg,))
         elif script_type == 'route-up':
             if not self._manual:
@@ -175,4 +178,3 @@ class PeerManager:
         else:
             logging.debug('Unknow message recieved from the openvpn pipe : %s'
                     % msg)
-

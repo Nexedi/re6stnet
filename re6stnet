@@ -73,9 +73,6 @@ def getConfig():
             help='Path to the private key file')
     _('--connection-count', default=20, type=int,
             help='Number of tunnels')
-    _('--refresh-count', default=1, type=int,
-            help='''The number of connections to drop when refreshing the
-                    connections''')
     _('--tunnel-refresh', default=300, type=int,
             help='time (seconds) to wait before changing the connections')
 
@@ -142,7 +139,7 @@ def main():
             manual, config.pp, 200)
     tunnel_manager = tunnel.TunnelManager(write_pipe, peer_db, openvpn_args,
             config.hello, config.tunnel_refresh, config.connection_count,
-            config.refresh_count, config.iface_list, network)
+            config.iface_list, network)
 
     # Launch routing protocol. WARNING : you have to be root to start babeld
     interface_list = list(tunnel_manager.free_interface_set) \
