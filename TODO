@@ -1,5 +1,21 @@
+Bug :
+    Peers stay connected to the bootstrap node so none can enter
+    re6stnet adress should appear on only one interface
+    Bug in the upnp refresh
+
+Check :
+    Check that boostrap nodes work as intended
+
+
 To be done :
-    Do a 'real' test, on one ( or more ) real machine(s) preferably :
+    Choose the metric to add to bootstrap peers
+    Choose peer DB size.
+    Choose the number of peer we ask to the server
+    Compare prefixes when 2 tunnels are established between the 2 same machines
+    Warn babeld about the tunnels wich are about to be deleted. Maybe we could 
+        just increase the cost.
+
+    Do a test, on one ( or more ) real machine(s) preferably :
        - package re6stnet
        - install re6stnet
        - follow the HOW TO section of the man page to setup a network
@@ -18,20 +34,6 @@ To be done :
         one have to start the registry twice, the first time without
         the --private option
 
-    Use an algorithm to choose which connections to keep and/or establish
-    instead of pure randomness
-        number of routes / tunnel
-
-    Warn babeld about the tunnels wich are about to be deleted. Maybe we could just increase the cost.
-
     Put a section about how to build the package from the sources in the README
 
----------------------------------------------------------------------------------------------
-    We should put a high latency on the servers openvpn interfaces to avoid people staying connected to it.
 
-    Check that blacklisting for peers connected to us works
-    Check that if 2 tunnels are established between 2 peers, one of them is destroyed
-
-    Check peers ID when connectiong to the server
-
-    Choose peer DB size

@@ -16,6 +16,7 @@ class PeerManager:
         self._key_path = key_path
         self._pp = pp
         self._manual = manual
+        self.tunnel_manager = None
 
         logging.info('Connecting to peers database...')
         self._db = sqlite3.connect(db_path, isolation_level=None)
@@ -58,7 +59,7 @@ class PeerManager:
         logging.info('Blacklist cleared')
 
     def blacklist(self, prefix, flag):
-        logging.ninfo('Blacklisting %s' % prefix)
+        logging.info('Blacklisting %s' % prefix)
         self._db.execute("DELETE FROM peers WHERE prefix = ?", (prefix,))
         self._db.execute("INSERT OR REPLACE INTO blacklist.flag VALUES (?,?)",
                           (prefix, flag))
@@ -160,10 +161,12 @@ class PeerManager:
     def handle_message(self, msg):
         script_type, arg = msg.split()
         if script_type == 'client-connect':
-            self.blacklist(arg, 2)
             logging.info('Incomming connection from %s' % (arg,))
+            prefix = utils.binFromSubnet(arg)
+            self.tunnel_manager.checkIncommingTunnel(prefix)
+            self.blacklist(prefix, 2)
         elif script_type == 'client-disconnect':
-            self.whitelist(arg)
+            self.whitelist(utils.binFromSubnet(arg))
             logging.info('%s has disconnected' % (arg,))
         elif script_type == 'route-up':
             if not self._manual:
@@ -174,7 +177,12 @@ class PeerManager:
                     self._address = new_address
                     logging.info('Received new external ip : %s'
                               % (external_ip,))
-                    self._declare()
+                    try:
+                        self._declare()
+                    except socket.error, e:
+                        logging.debug('socket.error : %s' % e)
+                        logging.info('''Connection to server failed while
+                            declaring external infos''')
         else:
             logging.debug('Unknow message recieved from the openvpn pipe : %s'
                     % msg)
