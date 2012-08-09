@@ -90,16 +90,14 @@ class PeerManager:
             print self._address
             print utils.address_str(self._address)
             logging.info('Sending connection info to server...')
-            self._proxy.declare((self._internal_ip,
-                    utils.address_str(self._address)))
+            self._proxy.declare(utils.address_str(self._address))
             logging.debug('Info sent')
         else:
             logging.warning("Warning : couldn't send ip, unknown external config")
 
     def _populate(self):
         logging.info('Populating the peers DB...')
-        new_peer_list = self._proxy.getPeerList(self._db_size,
-                self._internal_ip)
+        new_peer_list = self._proxy.getPeerList(self._db_size)
         with self._db:
             self._db.execute("""DELETE FROM peers WHERE used <= 0 ORDER BY used,
                                 RANDOM() LIMIT MAX(0, ? + (SELECT COUNT(*)

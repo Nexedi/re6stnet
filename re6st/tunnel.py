@@ -102,11 +102,6 @@ class TunnelManager:
                     self._client_count - len(self._connection_dict)):
                 logging.info('Establishing a connection with %s/%u' %
                         (hex(int(prefix, 2))[2:], len(prefix)))
-                # DEBUG
-                print self.free_interface_set
-                print self._client_count
-                print self._connection_dict
-                print len(self._connection_dict)
                 iface = self.free_interface_set.pop()
                 self._connection_dict[prefix] = Connection(address,
                         self._write_pipe, self._hello, iface,
