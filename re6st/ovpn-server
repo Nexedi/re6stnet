@@ -42,8 +42,11 @@ script_type = os.environ['script_type']
 if script_type == 'up':
     from subprocess import call
     dev = os.environ['dev']
-    sys.exit(call(('ip', 'link', 'set', dev, 'up'))
-          or call(('ip', 'addr', 'add', sys.argv[1], 'dev', dev)))
+    if sys.argv[1] != 'none':
+        sys.exit(call(('ip', 'link', 'set', dev, 'up'))
+              or call(('ip', 'addr', 'add', sys.argv[1], 'dev', dev)))
+    else:
+        sys.exit(call(('ip', 'link', 'set', dev, 'up')))
 
 if script_type == 'client-connect':
     # Send client its external ip address

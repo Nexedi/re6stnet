@@ -266,13 +266,6 @@ you can get them in the python interpreter::
     >>> print prefix
     0000000000000011
 
-
-from re6st import utils
-network = utils.networkFromCa('clients/server/ca.pem')
-re6st_ip, prefix = utils.ipFromCert(network, 'clients/server/cert.crt')
-print re6st_ip
-print prefix
-
 Now you can restart your re6st-registry with two more options:
 
 ``re6st-registry port_number --db db_path --ca path_to_ca.crt

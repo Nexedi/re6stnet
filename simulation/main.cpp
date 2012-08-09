@@ -14,8 +14,8 @@ Results Simulate(int seed,  int n, int k, int maxPeer, int maxDistanceFrom, floa
     for(int r=0; r<runs; r++)
     {
         Graph graph(n, k, maxPeer, rng);
-        //graph.KillMachines(alivePercent);
-        //results.AddAccessibilitySample(((double)graph.CountUnreachableFrom(0))/((double)n));
+        graph.KillMachines(alivePercent);
+        results.AddAccessibilitySample(((double)graph.CountUnreachableFrom(0))/((double)n));
         //int minCut = graph.GetMinCut();
         //if(results.minKConnexity == -1 || results.minKConnexity > minCut)
         //results.minKConnexity = minCut;
@@ -29,7 +29,7 @@ Results Simulate(int seed,  int n, int k, int maxPeer, int maxDistanceFrom, floa
             results.UpdateDistance(distance, graph.size);
         }*/
 
-        int distance[graph.size];
+        /*int distance[graph.size];
         float routesCount[graph.size];
         int nRefresh = 1;
 
@@ -77,7 +77,7 @@ Results Simulate(int seed,  int n, int k, int maxPeer, int maxDistanceFrom, floa
                 moy += distance[i];
             moy /= graph.size;
             cout << "Avg distance : " << moy << endl;
-        }
+        }*/
     }
 
     results.Finalise();
@@ -90,26 +90,19 @@ int main(int argc, char** argv)
 
     FILE* output = fopen(outName, "wt");
     int fno = fileno(output);
-    fprintf(output, "n,k,a,maxPeer,avgDistance,disconnected,disconnectionProba,"
-            "maxDistance,maxArityDistrib,minCut,accessibility\n");
+    fprintf(output, "n,k,a,accessibility\n");
 
     vector<future<string>> outputStrings;
-    for(int n=2000; n<=2000; n*=2)
-        for(int k=10; k<=10; k+=5)
-            for(float a=1; a<=1; a+=0.05)
+    for(int n=10000; n<=10000; n*=2)
+        for(int k=5; k<=15; k+=5)
+            for(float a=0.05; a<1; a+=0.05)
             {
                 int seed = rng();
                 outputStrings.push_back(async(launch::async, [seed, n, k, a]()
                     {
-                        Results results = Simulate(seed, n, k, 2.5*k, 10000, a, 1);
+                        Results results = Simulate(seed, n, k, 2.5*k, 10000, a, 100);
                         ostringstream out;
-                        out << n << "," << k << "," << a << "," << 3*k << ","
-                            << results.avgDistance << ","
-                            << results.disconnected << ","
-                            << results.disconnectionProba << ","
-                            << results.maxDistanceReached << ","
-                            << results.arityDistrib[3*k] << ","
-                            << results.minKConnexity << ","
+                        out << n << "," << k << "," << a << ","
                             << results.avgAccessibility
                             << endl;
                         return out.str();

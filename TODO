@@ -1,19 +1,12 @@
 Bug :
     Peers stay connected to the bootstrap node so none can enter
-    re6stnet adress should appear on only one interface
-    Bug in the upnp refresh
-
-Check :
-    Check that boostrap nodes work as intended
-
+    possible bug in the upnp refresh 
 
 To be done :
-    Choose the metric to add to bootstrap peers
+    test with python 2.6
     Choose peer DB size.
     Choose the number of peer we ask to the server
-    Compare prefixes when 2 tunnels are established between the 2 same machines
-    Warn babeld about the tunnels wich are about to be deleted. Maybe we could 
-        just increase the cost.
+    Warn babeld about the tunnels wich are about to be deleted. Maybe we could just increase the cost.
 
     Do a test, on one ( or more ) real machine(s) preferably :
        - package re6stnet
@@ -21,13 +14,10 @@ To be done :
        - follow the HOW TO section of the man page to setup a network
        - see if it works....
 
+
     Put more information in the token mail ( registry ), such as :
         - the ip address of the network being built
         - the creator of the network ( add option in registry ? )
-
-    Make sure the re6stnet ip address is added on only one interface
-    ( tweak the ovpn-server script ), else duplicate addresses appears in routing
-    tables.
 
     Fix bootstrap problem :
         registry & --private option ( see re6stnet man page HOW TO ).
@@ -35,5 +25,7 @@ To be done :
         the --private option
 
     Put a section about how to build the package from the sources in the README
+
+    Remove unnecessary information when sending a request to the server
 
 

@@ -44,7 +44,7 @@ class Forwarder:
                     return None
 
             # Make the redirection
-            if self._u.addportmapping(external_port, 'UDP', self._u.lanaddr,
+            if self._u.addportmapping(external_port, upnp_proto, self._u.lanaddr,
                     int(local_port), 're6stnet openvpn server', ''):
                 logging.debug('Forwarding %s:%s to %s:%s' % (self._external_ip,
                         external_port, self._u.lanaddr, local_port))

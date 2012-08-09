@@ -86,6 +86,9 @@ class PeerManager:
 
     def _declare(self):
         if self._address != None:
+            print self._internal_ip
+            print self._address
+            print utils.address_str(self._address)
             logging.info('Sending connection info to server...')
             self._proxy.declare((self._internal_ip,
                     utils.address_str(self._address)))

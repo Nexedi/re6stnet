@@ -25,10 +25,14 @@ def openvpn(hello_interval, *args, **kw):
 
 def server(server_ip, ip_length, max_clients, dh_path, pipe_fd, port, proto, hello_interval, *args, **kw):
     logging.debug('Starting server...')
+    if server_ip != '':
+        script_up = '%s %s/%u' % (ovpn_server, server_ip, 64)
+    else:
+        script_up = '%s none' % ovpn_server
     return openvpn(hello_interval,
         '--tls-server',
         '--mode', 'server',
-        '--up', '%s %s/%u' % (ovpn_server, server_ip, 64),
+        '--up', script_up,
         '--client-connect', ovpn_server + ' ' + str(pipe_fd),
         '--client-disconnect', ovpn_server + ' ' + str(pipe_fd),
         '--dh', dh_path,
@@ -56,7 +60,7 @@ def client(server_address, pipe_fd, hello_interval, *args, **kw):
     return openvpn(hello_interval, *remote, **kw)
 
 
-def router(network, internal_ip, interface_list, isBootstrap,
+def router(network, internal_ip, interface_list,
            wireless, hello_interval, state_path, **kw):
     logging.info('Starting babel...')
     args = ['babeld',
@@ -76,8 +80,6 @@ def router(network, internal_ip, interface_list, isBootstrap,
             '-S', state_path,
             '-s',
             ]
-    #if isBootstrap:
-    #    args.extend(['-C', 'redistribute ip %s::/%u metric 16000' % (utils.ipFromBin(network), len(network))])
     if wireless:
         args.append('-w')
     args = args + interface_list
