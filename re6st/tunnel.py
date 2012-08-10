@@ -54,14 +54,14 @@ class TunnelManager:
             for i in xrange(1, self._client_count + 1))
 
     def refresh(self):
-        logging.info('Refreshing the tunnels...')
+        logging.info('Checking the tunnels...')
         self._cleanDeads()
         if self._next_tunnel_refresh < time.time():
+            logging.info('Refreshing the tunnels...')
             self._countRoutes()
             self._removeSomeTunnels()
             self._next_tunnel_refresh = time.time() + self._refresh_time
         self._makeNewTunnels()
-        logging.debug('Tunnels refreshed')
         self.next_refresh = time.time() + 5
 
     def _cleanDeads(self):
