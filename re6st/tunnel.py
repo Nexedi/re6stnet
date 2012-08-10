@@ -92,16 +92,24 @@ class TunnelManager:
         del self._iface_to_prefix[connection.iface]
         logging.trace('Connection with %s/%u killed'
                 % (hex(int(prefix, 2))[2:], len(prefix)))
+        # DEBUG
+        print self._connection_dict
+        print self.free_interface_set
 
     def _makeNewTunnels(self):
+        tunnel_to_make = self._client_count - len(self._connection_dict)
+        if tunnel_to_make <= 0:
+            return
+
         i = 0
-        logging.trace('Trying to make %i new tunnels...' %
-                (self._client_count - len(self._connection_dict)))
+        logging.trace('Trying to make %i new tunnels...' % tunnel_to_make)
         try:
-            for prefix, address in self._peer_db.getUnusedPeers(
-                    self._client_count - len(self._connection_dict)):
+            for prefix, address in self._peer_db.getUnusedPeers(tunnel_to_make):
                 logging.info('Establishing a connection with %s/%u' %
                         (hex(int(prefix, 2))[2:], len(prefix)))
+                # DEBUG
+                print self._connection_dict
+                print self.free_interface_set
                 iface = self.free_interface_set.pop()
                 self._connection_dict[prefix] = Connection(address,
                         self._write_pipe, self._hello, iface,
@@ -110,6 +118,9 @@ class TunnelManager:
                 self._peer_db.usePeer(prefix)
                 i += 1
             logging.trace('%u new tunnels established' % (i,))
+            # DEBUG
+            print self._connection_dict
+            print self.free_interface_set
         except KeyError:
             logging.warning("""Can't establish connection with %s
                               : no available interface""" % prefix)
@@ -127,6 +138,8 @@ class TunnelManager:
 
             if ip.startswith(self._network):
                 iface = line[-1]
+                # DEBUG
+                print line
                 subnet_size = int(line[1], 16)
                 logging.trace('Route on iface %s detected to %s/%s'
                         % (iface, ip, subnet_size))

@@ -86,9 +86,6 @@ class PeerManager:
 
     def _declare(self):
         if self._address != None:
-            print self._internal_ip
-            print self._address
-            print utils.address_str(self._address)
             logging.info('Sending connection info to server...')
             self._proxy.declare(utils.address_str(self._address))
             logging.debug('Info sent')
@@ -131,6 +128,9 @@ class PeerManager:
                     stdin=subprocess.PIPE, stdout=subprocess.PIPE)
             bootpeer = p.communicate(bootpeer)[0].split()
             if bootpeer[0] != self._prefix:
+                if self._db.execute("""SELECT COUNT(*) FROM blacklist.flag WHERE prefix = ?""" % bootpeer[0]).next() > 0:
+                    logging.info('BootPeer is blacklisted')
+                    return False
                 self._db.execute("INSERT INTO peers (prefix, address) VALUES (?,?)", bootpeer)
                 logging.debug('Boot peer added')
                 return True
