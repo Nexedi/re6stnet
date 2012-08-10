@@ -127,8 +127,10 @@ class PeerManager:
             p = subprocess.Popen(('openssl', 'rsautl', '-decrypt', '-inkey', self._key_path),
                     stdin=subprocess.PIPE, stdout=subprocess.PIPE)
             bootpeer = p.communicate(bootpeer)[0].split()
+            print bootpeer
+            print bootpeer[0]
             if bootpeer[0] != self._prefix:
-                if self._db.execute("""SELECT COUNT(*) FROM blacklist.flag WHERE prefix = ?""" % bootpeer[0]).next() > 0:
+                if int(self._db.execute("""SELECT COUNT(*) FROM blacklist.flag WHERE prefix = ?""", (bootpeer[0],)).next()[0]) > 0:
                     logging.info('BootPeer is blacklisted')
                     return False
                 self._db.execute("INSERT INTO peers (prefix, address) VALUES (?,?)", bootpeer)
