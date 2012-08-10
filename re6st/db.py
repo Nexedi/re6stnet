@@ -139,6 +139,8 @@ class PeerManager:
         except sqlite3.IntegrityError, e:
             if e.args[0] != 'column prefix is not unique':
                 raise
+        except StopIteration:
+            logging.info('No peer available for bootstrap')
         return False
 
     def usePeer(self, prefix):

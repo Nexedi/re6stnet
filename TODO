@@ -1,6 +1,7 @@
 Bug :
     Peers stay connected to the bootstrap node so none can enter
-    possible bug in the upnp refresh 
+    possible bug in the upnp refresh
+    possible freeze in the regisrty
 
 To be done :
     test with python 2.6

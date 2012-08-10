@@ -60,9 +60,6 @@ class main(object):
                 help='Path to certificate key')
         _('--mailhost', required=True,
                 help='SMTP server mail host')
-        _('--bootstrap', action="append",
-                help='''VPN prefix of the peers to send as bootstrap peer,
-                        instead of random ones''')
         _('--private',
                 help='VPN IP of the node on which runs the registry')
         self.config = parser.parse_args()
@@ -201,25 +198,16 @@ class main(object):
     def getPrivateAddress(self, handler):
         return 'http://[%s]:%u' % (self.config.private, self.config.port)
 
-    def _randomPeer(self):
-        return self.db.execute("""SELECT prefix, address
-                        FROM peers ORDER BY random() LIMIT 1""").next()
-
     def getBootstrapPeer(self, handler, client_prefix):
         cert, = self.db.execute("SELECT cert FROM vpn WHERE prefix = ?",
                 (client_prefix,)).next()
         logging.trace('Getting bootpeer info...')
-        if self.config.bootstrap:
-            bootpeer = random.choice(self.config.bootstrap)
-            try:
-                prefix, address = self.db.execute("""SELECT prefix, address
-                            FROM peers WHERE prefix = ?""", (bootpeer,)).next()
-            except StopIteration:
-                logging.info('Bootstrap peer %s unknown, sending random peer'
-                        % hex(int(bootpeer, 2))[2:])
-                prefix, address = self._randomPeer()
-        else:
-            prefix, address = self._randomPeer()
+        try:
+            prefix, address = self.db.execute("""SELECT prefix, address FROM peers
+                WHERE prefix != ? ORDER BY random() LIMIT 1""", (client_prefix,)).next()
+        except StopIteration:
+            logging.info('No peer to send for bootstrap')
+            raise
         logging.trace('Gotten bootpeer info from db')
         r, w = os.pipe()
         try:

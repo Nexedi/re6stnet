@@ -252,25 +252,20 @@ these files in a different directory than the certificates for the registry,
 although the names shouldn't conflict.
 
 Now here's the tricky part. For your network to work, you need to restart the
-registry (maybe it will be fixed one day...), this time with more information
-than the last time. You need to get your hands on the individual prefix of your
-node, and the re6st ipv6 address associated. These should have been printed
-at the end of re6st-conf. If you have missed them, for one reason or another,
-you can get them in the python interpreter::
+registry with more information than the last time. You need to get your hands 
+on the re6st ipv6 address associated with your node. These should have been 
+printed at the end of re6st-conf. If you have missed them, for one reason or
+another, you can get it in the python interpreter::
 
-    >>> from re6st import utils
-    >>> network = utils.networkFromCa('ca.pem')
-    >>> re6st_ip, prefix = utils.ipFromCert(network, 'cert.crt')
-    >>> print re6st_ip
-    2001:0db8:0042:0003:0000:0000:0000:0001
-    >>> print prefix
-    0000000000000011
+    from re6st import utils
+    network = utils.networkFromCa('ca.pem')
+    re6st_ip, _ = utils.ipFromCert(network, 'cert.crt')
+    print re6st_ip
 
 Now you can restart your re6st-registry with two more options:
 
 ``re6st-registry port_number --db db_path --ca path_to_ca.crt
 --key path_to_ca.key --mailhost yourmailhost --private 2001:db8:42:3::1
---bootstrap 0000000000000011``
 
 Finally, you can start your own re6st node following the instructions in the
 precedent section.

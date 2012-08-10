@@ -20,9 +20,9 @@ DESCRIPTION
 ===========
 
 re6st-registry is a server for the re6st network. Its role is to deliver
-vertificates to new nodes, and to maintain the complete table of peers, so it
+certificates to new nodes, and to maintain the complete table of peers, so it
 can send part of it to nodes asking for new peers.
-As of now, only one re6st-registry per re6st network should run. The node
+Only one re6st-registry per re6st network should run. The node
 running the re6st-registry must also have a client ( re6stnet ) running.
 
 USAGE
@@ -31,7 +31,7 @@ USAGE
 The re6st-registry will automatically listen on both ipv4 and ipv6 for incomming
 request.
 
-port
+--port port
             The port on which the server will listen
 
 --db path
@@ -58,21 +58,6 @@ port
             Ipv6 address of the re6stnet client running on the machine. This
             address will be advertised only to nodes having a valid
             certificate.
-
-Options
--------
-
---bootstrap prefix
-            Prefix of a node to be given to other as a bootstrap node to
-            initiate connection with the network.A prefix is an id given to
-            each node, which is used to generate the re6st ip address of the
-            node. A prefix is a string representing binary number.
-            By default the registry delivers 16 bits prefix. You can get your
-            prefix from the python interpreter (see re6stnet man page HOW TO)
-            By default the registry delivers 16 bits prefix.
-            Asusming a network prefix ``2001:db8:42::/48``, the re6st ip address
-            ``2001:db8:42:1::1/64`` corresponds to a prefix ``1/16`` i.e
-            ``00000000000000010``.
 
 SEE ALSO
 ========
