@@ -149,5 +149,11 @@ class TunnelManager:
             self._kill(prefix)
 
     def checkIncommingTunnel(self, prefix):
-        if prefix in self._connection_dict and prefix >= self._prefix:
-            self._kill(prefix)
+        if prefix in self._connection_dict:
+            if prefix >= self._prefix:
+                self._kill(prefix)
+                return True
+            else:
+                return False
+        else:
+            return True
