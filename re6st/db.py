@@ -164,9 +164,9 @@ class PeerManager:
     def handle_message(self, msg):
         script_type, arg = msg.split()
         if script_type == 'client-connect':
-            logging.info('Incomming connection from %s' % (arg,))
+            logging.info('Incoming connection from %s' % (arg,))
             prefix = utils.binFromSubnet(arg)
-            if self.tunnel_manager.checkIncommingTunnel(prefix):
+            if self.tunnel_manager.checkIncomingTunnel(prefix):
                 self.blacklist(prefix, 2)
         elif script_type == 'client-disconnect':
             self.whitelist(utils.binFromSubnet(arg))

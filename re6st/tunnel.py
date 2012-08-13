@@ -150,12 +150,9 @@ class TunnelManager:
         for prefix in self._connection_dict.keys():
             self._kill(prefix)
 
-    def checkIncommingTunnel(self, prefix):
+    def checkIncomingTunnel(self, prefix):
         if prefix in self._connection_dict:
-            if prefix >= self._prefix:
-                self._kill(prefix)
-                return True
-            else:
+            if prefix < self._prefix:
                 return False
-        else:
-            return True
+            self._kill(prefix)
+        return True
