@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import os, sys, select, time
+import os, sys, select, time, socket
 import argparse, subprocess, sqlite3, logging, traceback
 from argparse import ArgumentParser
 from re6st import plib, utils, db, upnpigd, tunnel
@@ -144,6 +144,11 @@ def main():
             config.iface_list, network, prefix, 2, config.encrypt)
     peer_db.tunnel_manager = tunnel_manager
 
+    # Create the socket to listen on
+    sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+    sock.bind(('::', 326))
+    socket_file = sock.makefile()
+
     # Launch routing protocol. WARNING : you have to be root to start babeld
     interface_list = list(tunnel_manager.free_interface_set) \
                      + config.iface_list + list(iface
@@ -175,10 +180,7 @@ def main():
                 if forwarder != None:
                     nextUpdate = min(nextUpdate, forwarder.next_refresh)
                 nextUpdate = max(0, nextUpdate - time.time())
-                select_list = [read_pipe]
-                if peer_db.socket_file:
-                    select_list.append(peer_db.socket_file)
-                ready, tmp1, tmp2 = select.select(select_list, [], [], nextUpdate)
+                ready, tmp1, tmp2 = select.select([read_pipe, socket_file], [], [], nextUpdate)
                 if read_pipe in ready:
                     peer_db.handle_message(read_pipe.readline())
                 if time.time() >= peer_db.next_refresh:
@@ -187,8 +189,8 @@ def main():
                     tunnel_manager.refresh()
                 if forwarder != None and time.time() > forwarder.next_refresh:
                     forwarder.refresh()
-                if peer_db.socket_file in ready:
-                    peer_db.readSocket()
+                if socket_file in ready:
+                    peer_db.readSocket(socket_file.readline())
         finally:
             for p in [router] + server_process:
                 try:

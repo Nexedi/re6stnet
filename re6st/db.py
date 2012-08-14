@@ -8,7 +8,7 @@ class PeerManager:
     def __init__(self, db_path, registry, key_path, refresh_time, address,
                        internal_ip, prefix, manual, pp, db_size):
         self._refresh_time = refresh_time
-        self._address = address
+        self.address = address
         self._internal_ip = internal_ip
         self._prefix = prefix
         self._db_size = db_size
@@ -17,8 +17,6 @@ class PeerManager:
         self._pp = pp
         self._manual = manual
         self.tunnel_manager = None
-        self._sock = None
-        self.socket_file = None
 
         logging.info('Connecting to peers database...')
         self._db = sqlite3.connect(db_path, isolation_level=None)
@@ -87,9 +85,9 @@ class PeerManager:
             return False
 
     def _declare(self):
-        if self._address != None:
+        if self.address != None:
             logging.info('Sending connection info to server...')
-            self._proxy.declare(utils.address_str(self._address))
+            self._proxy.declare(utils.address_str(self.address))
             logging.debug('Info sent')
         else:
             logging.warning("Warning : couldn't send ip, unknown external config")
@@ -129,20 +127,14 @@ class PeerManager:
             p = subprocess.Popen(('openssl', 'rsautl', '-decrypt', '-inkey', self._key_path),
                     stdin=subprocess.PIPE, stdout=subprocess.PIPE)
             bootpeer = p.communicate(bootpeer)[0].split()
-            if bootpeer[0] != self._prefix:
-                if int(self._db.execute("""SELECT COUNT(*) FROM blacklist.flag WHERE prefix = ?""", (bootpeer[0],)).next()[0]) > 0:
-                    logging.info('BootPeer is blacklisted')
-                    return False
-                self._db.execute("INSERT INTO peers (prefix, address) VALUES (?,?)", bootpeer)
-                logging.debug('Boot peer added')
-                return True
+            return self._addPeer(bootpeer)
         except socket.error:
             pass
         except sqlite3.IntegrityError, e:
             if e.args[0] != 'column prefix is not unique':
                 raise
-        except StopIteration:
-            logging.info('No peer available for bootstrap')
+        except:
+            logging.info('Unable to bootstrap')
         return False
 
     def usePeer(self, prefix):
@@ -178,8 +170,8 @@ class PeerManager:
                 external_ip = arg
                 new_address = list([external_ip, port, proto]
                                    for port, proto, _ in self._pp)
-                if self._address != new_address:
-                    self._address = new_address
+                if self.address != new_address:
+                    self.address = new_address
                     logging.info('Received new external ip : %s'
                               % (external_ip,))
                     try:
@@ -188,18 +180,22 @@ class PeerManager:
                         logging.debug('socket.error : %s' % e)
                         logging.info('''Connection to server failed while
                             declaring external infos''')
-        elif script_type == 'up':
-            if int(arg) != 0:
-                logging.info('Server creation failed, terminating')
-                raise RuntimeError
-            logging.debug('Creating the socket for peer advertising')
-            time.sleep(5)
-            self._sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
-            self._sock.bind((self._internal_ip, 326))
-            self._socket_file = self._sock.makefile()
         else:
             logging.debug('Unknow message recieved from the openvpn pipe : %s'
                     % msg)
 
-    def readSocket(self):
-        print 'reading socket'
+    def readSocket(self, msg):
+        peer = msg.split(' ')
+        if len(peer) != 2:
+            logging.debug('Invalid package recieved : %s' % msg)
+            return
+        self._addPeer(peer)
+
+    def _addPeer(self, peer):
+        logging.debug('Adding peer %s' % peer)
+        if int(self._db.execute("""SELECT COUNT(*) FROM blacklist.flag WHERE prefix = ?""", (peer[0],)).next()[0]) > 0:
+            logging.info('Peer is blacklisted')
+            return False
+        self._db.execute("INSERT INTO peers (prefix, address) VALUES (?,?)", peer)
+        logging.debug('Peer added')
+        return True

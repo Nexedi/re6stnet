@@ -1,5 +1,5 @@
 import os, traceback, time, subprocess, logging
-import random
+import socket
 import plib
 
 # Be carfull the refresh interval should let the routes be established
@@ -163,6 +163,13 @@ class TunnelManager:
         return True
 
     def _notifyPeer(self, peerIp):
-        ip = '%s:%s:%s:%s:%s:%s:%s:%s' % (peerIp[0:3], peerIp[4:7], peerIp[8:11],
-            peerIp[12:15], peerIp[16:19], peerIp[20:23], peerIp[24:27], peerIp[28:32])
-        print ip
+        try:
+            if self._peer_db.address:
+                ip = '%s:%s:%s:%s:%s:%s:%s:%s' % (peerIp[0:4], peerIp[4:8], peerIp[8:12],
+                    peerIp[12:16], peerIp[16:20], peerIp[20:24], peerIp[24:28], peerIp[28:32])
+                logging.debug('Notifying peer %s' % ip)
+                sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+                sock.sendto('%s %s\n' % (self._prefix, self._peer_db.address), (ip, 326))
+        except socket.error, e:
+            logging.debug('Unable to notify %s' % ip)
+            logging.debug('socket.error : %s' % e)
