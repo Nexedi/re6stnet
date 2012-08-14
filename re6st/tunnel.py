@@ -142,6 +142,7 @@ class TunnelManager:
                     logging.debug('A route to %s has been discovered on the LAN'
                             % (hex(int(prefix), 2)[2:]))
                     self._peer_db.blacklist(prefix, 0)
+                self._notifyPeer(line[0])
 
         logging.debug("Routes have been counted")
         for p in self._connection_dict.keys():
@@ -153,15 +154,15 @@ class TunnelManager:
         for prefix in self._connection_dict.keys():
             self._kill(prefix)
 
-    def checkIncommingTunnel(self, prefix):
+    def checkIncomingTunnel(self, prefix):
         if prefix in self._connection_dict:
-            if prefix >= self._prefix:
-                self._kill(prefix)
-                return True
-            else:
+            if prefix < self._prefix:
                 return False
-        else:
-            return True
+            else:
+                self._kill(prefix)
+        return True
 
-    def notifyPeer(self, peerIp):
-        pass
+    def _notifyPeer(self, peerIp):
+        ip = '%s:%s:%s:%s:%s:%s:%s:%s' % (peerIp[0:3], peerIp[4:7], peerIp[8:11],
+            peerIp[12:15], peerIp[16:19], peerIp[20:23], peerIp[24:27], peerIp[28:32])
+        print ip

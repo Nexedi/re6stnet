@@ -17,6 +17,8 @@ class PeerManager:
         self._pp = pp
         self._manual = manual
         self.tunnel_manager = None
+        self._sock = None
+        self.socket_file = None
 
         logging.info('Connecting to peers database...')
         self._db = sqlite3.connect(db_path, isolation_level=None)
@@ -164,9 +166,9 @@ class PeerManager:
     def handle_message(self, msg):
         script_type, arg = msg.split()
         if script_type == 'client-connect':
-            logging.info('Incomming connection from %s' % (arg,))
+            logging.info('Incoming connection from %s' % (arg,))
             prefix = utils.binFromSubnet(arg)
-            if self.tunnel_manager.checkIncommingTunnel(prefix):
+            if self.tunnel_manager.checkIncomingTunnel(prefix):
                 self.blacklist(prefix, 2)
         elif script_type == 'client-disconnect':
             self.whitelist(utils.binFromSubnet(arg))
@@ -186,6 +188,18 @@ class PeerManager:
                         logging.debug('socket.error : %s' % e)
                         logging.info('''Connection to server failed while
                             declaring external infos''')
+        elif script_type == 'up':
+            if int(arg) != 0:
+                logging.info('Server creation failed, terminating')
+                raise RuntimeError
+            logging.debug('Creating the socket for peer advertising')
+            time.sleep(5)
+            self._sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+            self._sock.bind((self._internal_ip, 326))
+            self._socket_file = self._sock.makefile()
         else:
             logging.debug('Unknow message recieved from the openvpn pipe : %s'
                     % msg)
+
+    def readSocket(self):
+        print 'reading socket'

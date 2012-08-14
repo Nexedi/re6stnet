@@ -28,9 +28,9 @@ def openvpn(hello_interval, encrypt, *args, **kw):
 def server(server_ip, ip_length, max_clients, dh_path, pipe_fd, port, proto, hello_interval, encrypt, *args, **kw):
     logging.debug('Starting server...')
     if server_ip != '':
-        script_up = '%s %s/%u' % (ovpn_server, server_ip, 64)
+        script_up = '%s %s %s/%u' % (ovpn_server, pipe_fd, server_ip, 64)
     else:
-        script_up = '%s none' % ovpn_server
+        script_up = '%s %s none' % (ovpn_server, pipe_fd)
     return openvpn(hello_interval, encrypt,
         '--tls-server',
         '--mode', 'server',

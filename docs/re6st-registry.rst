@@ -28,7 +28,7 @@ running the re6st-registry must also have a client ( re6stnet ) running.
 USAGE
 =====
 
-The re6st-registry will automatically listen on both ipv4 and ipv6 for incomming
+The re6st-registry will automatically listen on both ipv4 and ipv6 for incoming
 request.
 
 --port port

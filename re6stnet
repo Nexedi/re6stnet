@@ -154,14 +154,17 @@ def main():
             os.O_WRONLY | os.O_CREAT | os.O_TRUNC), stderr=subprocess.STDOUT)
 
    # Establish connections
-    server_process = list(plib.server(internal_ip, len(network) + len(prefix),
+    server_process = []
+    server_ip = internal_ip
+    for port, proto, iface in config.pp:
+        server_process.append(plib.server(server_ip, len(network) + len(prefix),
         config.connection_count, config.dh, write_pipe, port,
         proto, config.hello, config.encrypt, '--dev', iface, *openvpn_args,
         stdout=os.open(os.path.join(config.log,
             're6stnet.server.%s.log' % (proto,)),
             os.O_WRONLY | os.O_CREAT | os.O_TRUNC),
-        stderr=subprocess.STDOUT)
-        for port, proto, iface in config.pp)
+        stderr=subprocess.STDOUT))
+        server_ip = ''
 
     # main loop
     try:
@@ -172,9 +175,11 @@ def main():
                 if forwarder != None:
                     nextUpdate = min(nextUpdate, forwarder.next_refresh)
                 nextUpdate = max(0, nextUpdate - time.time())
-
-                ready, tmp1, tmp2 = select.select([read_pipe], [], [], nextUpdate)
-                if ready:
+                select_list = [read_pipe]
+                if peer_db.socket_file:
+                    select_list.append(peer_db.socket_file)
+                ready, tmp1, tmp2 = select.select(select_list, [], [], nextUpdate)
+                if read_pipe in ready:
                     peer_db.handle_message(read_pipe.readline())
                 if time.time() >= peer_db.next_refresh:
                     peer_db.refresh()
@@ -182,6 +187,8 @@ def main():
                     tunnel_manager.refresh()
                 if forwarder != None and time.time() > forwarder.next_refresh:
                     forwarder.refresh()
+                if peer_db.socket_file in ready:
+                    peer_db.readSocket()
         finally:
             for p in [router] + server_process:
                 try:
