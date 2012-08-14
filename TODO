@@ -6,6 +6,11 @@ To be done :
     find out who to have an automatic recovery without declare
     Test the package
 
+    PB : at the beggining a node tries to find 10 other nodes so ask for 10 bootsrap nodes
+    This slow the beginning !!
+
+    When a node arrive it is in nobody DB => very slow beginning. It should advertise itself more
+
     check the ips attributed
     remove decalre
     how do we make sure that none inject some false packets ?

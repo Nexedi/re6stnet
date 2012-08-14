@@ -75,16 +75,15 @@ class PeerManager:
         try:
             self._declare()
             self.next_refresh = time.time() + self._refresh_time
-            return True
         except socket.error, e:
             logging.info('Connection to server failed, re-bootstraping')
         try:
             self._bootstrap()
+            self.next_refresh = time.time() + self._refresh_time
         except socket.error, e:
             logging.debug('socket.error : %s' % e)
             logging.info('Connection to server failed, retrying in 30s')
             self.next_refresh = time.time() + 30
-            return False
 
     def _declare(self):
         if self.address != None:
@@ -120,8 +119,8 @@ class PeerManager:
         except sqlite3.IntegrityError, e:
             if e.args[0] != 'column prefix is not unique':
                 raise
-        except:
-            logging.info('Unable to bootstrap')
+        #except Exception, e:
+        #    logging.info('Unable to bootstrap : %s' % e)
         return False
 
     def usePeer(self, prefix):
@@ -185,7 +184,7 @@ class PeerManager:
             return False
         self._db.execute("""DELETE FROM peers WHERE used <= 0 ORDER BY used,
             RANDOM() LIMIT MAX(0, (SELECT COUNT(*) FROM peers
-            WHERE used <= 0) - ?)""", str(self._db_size))
-        self._db.execute("INSERT INTO peers (prefix, address) VALUES (?,?)", peer)
+            WHERE used <= 0) - ?)""", (str(self._db_size),))
+        self._db.execute("INSERT OR REPLACE INTO peers (prefix, address) VALUES (?,?)", peer)
         logging.debug('Peer added')
         return True

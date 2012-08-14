@@ -1,6 +1,7 @@
 import os, traceback, time, subprocess, logging
 import socket
 import plib
+import utils
 
 # Be carfull the refresh interval should let the routes be established
 
@@ -169,7 +170,7 @@ class TunnelManager:
                     peerIp[12:16], peerIp[16:20], peerIp[20:24], peerIp[24:28], peerIp[28:32])
                 logging.debug('Notifying peer %s' % ip)
                 sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
-                sock.sendto('%s %s\n' % (self._prefix, self._peer_db.address), (ip, 326))
+                sock.sendto('%s %s\n' % (self._prefix, utils.address_str(self._peer_db.address)), (ip, 326))
         except socket.error, e:
             logging.debug('Unable to notify %s' % ip)
             logging.debug('socket.error : %s' % e)
