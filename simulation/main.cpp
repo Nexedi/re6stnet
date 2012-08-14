@@ -6,7 +6,7 @@
 
 const char* outName = "out.csv";
 
-Results Simulate(int seed,  int n, int k, int maxPeer, int maxDistanceFrom, float alivePercent, int runs)
+Results Simulate(int seed,  int n, int k, int maxPeer, float alivePercent, int runs)
 {
     Results results(maxPeer, 20);
     mt19937 rng(seed);
@@ -14,20 +14,20 @@ Results Simulate(int seed,  int n, int k, int maxPeer, int maxDistanceFrom, floa
     for(int r=0; r<runs; r++)
     {
         Graph graph(n, k, maxPeer, rng);
-        graph.KillMachines(alivePercent);
-        results.AddAccessibilitySample(((double)graph.CountUnreachableFrom(0))/((double)n));
+        //graph.KillMachines(alivePercent);
+        //results.AddAccessibilitySample(((double)graph.CountUnreachableFrom(0))/((double)n));
         //int minCut = graph.GetMinCut();
         //if(results.minKConnexity == -1 || results.minKConnexity > minCut)
         //results.minKConnexity = minCut;
         //results.UpdateArity(graph);
 
         // Compute the shortest path
-        /*for(int i=0; i<min(graph.size, maxDistanceFrom); i++)
+        for(int i=0; i<graph.size; i++)
         {
             int distance[graph.size];
             graph.GetDistancesFrom(i, distance);
             results.UpdateDistance(distance, graph.size);
-        }*/
+        }
 
         /*int distance[graph.size];
         float routesCount[graph.size];
@@ -90,20 +90,20 @@ int main(int argc, char** argv)
 
     FILE* output = fopen(outName, "wt");
     int fno = fileno(output);
-    fprintf(output, "n,k,a,accessibility\n");
+    fprintf(output, "n,k,a,distance\n");
 
     vector<future<string>> outputStrings;
-    for(int n=10000; n<=10000; n*=2)
-        for(int k=5; k<=15; k+=5)
-            for(float a=0.05; a<1; a+=0.05)
+    for(int n=10; n<=100000; n*=2)
+        for(int k=5; k<=50; k+=5)
+            for(float a=1; a<=1; a+=0.05)
             {
                 int seed = rng();
                 outputStrings.push_back(async(launch::async, [seed, n, k, a]()
                     {
-                        Results results = Simulate(seed, n, k, 2.5*k, 10000, a, 100);
+                        Results results = Simulate(seed, n, k, 3*k, a, 1);
                         ostringstream out;
                         out << n << "," << k << "," << a << ","
-                            << results.avgAccessibility
+                            << results.avgDistance
                             << endl;
                         return out.str();
                     }));

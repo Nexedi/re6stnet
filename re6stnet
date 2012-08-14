@@ -61,6 +61,8 @@ def getConfig():
                     for the routing protocol''')
 
     # Tunnel options
+    _('--encrypt', action='store_true',
+            help='specify that tunnels should be encrypted')
     _('--pp', nargs=2, action='append',
             help='Port and protocol to be used by other peers to connect')
     _('--dh', required=True,
@@ -139,7 +141,7 @@ def main():
             manual, config.pp, 200)
     tunnel_manager = tunnel.TunnelManager(write_pipe, peer_db, openvpn_args,
             config.hello, config.tunnel_refresh, config.connection_count,
-            config.iface_list, network, prefix)
+            config.iface_list, network, prefix, 2, config.encrypt)
     peer_db.tunnel_manager = tunnel_manager
 
     # Launch routing protocol. WARNING : you have to be root to start babeld
@@ -154,7 +156,7 @@ def main():
    # Establish connections
     server_process = list(plib.server(internal_ip, len(network) + len(prefix),
         config.connection_count, config.dh, write_pipe, port,
-        proto, config.hello, '--dev', iface, *openvpn_args,
+        proto, config.hello, config.encrypt, '--dev', iface, *openvpn_args,
         stdout=os.open(os.path.join(config.log,
             're6stnet.server.%s.log' % (proto,)),
             os.O_WRONLY | os.O_CREAT | os.O_TRUNC),

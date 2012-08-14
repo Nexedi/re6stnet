@@ -1,14 +1,10 @@
 Bug :
     possible bug in the upnp refresh, when refreshing after a too long time
-    sometime reading /proc/net/ipv6_table bug
-
+    
 To be done :
-    test with python 2.6
     Choose peer DB size.
     Choose the number of peer we ask to the server
-    Warn babeld about the tunnels wich are about to be deleted. Maybe we could just increase the cost.
     Test the package
-    Package miniupnpc
 
 ---------------------------------------------------------------------------------
 
@@ -23,5 +19,7 @@ To be done :
 
     Put a section about how to build the package from the sources in the README
 
-
+http://pdos.csail.mit.edu/p2psim/kingdata/
+http://www.eecs.harvard.edu/~syrah/nc/king/lats.n8.gz
+http://www.cs.cornell.edu/People/egs/meridian/data.php 
 

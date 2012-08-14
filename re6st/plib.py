@@ -9,7 +9,7 @@ ovpn_server = os.path.join(here, 'ovpn-server')
 ovpn_client = os.path.join(here, 'ovpn-client')
 
 
-def openvpn(hello_interval, *args, **kw):
+def openvpn(hello_interval, encrypt, *args, **kw):
     args = ['openvpn',
         '--dev-type', 'tap',
         '--persist-tun',
@@ -19,17 +19,19 @@ def openvpn(hello_interval, *args, **kw):
         '--ping-exit', str(4 * hello_interval),
         '--group', 'nogroup',
         ] + list(args)
+    if not encrypt:
+        args.extend(['--cipher', 'none'])
     logging.trace('%s' % (args,))
     return subprocess.Popen(args, **kw)
 
 
-def server(server_ip, ip_length, max_clients, dh_path, pipe_fd, port, proto, hello_interval, *args, **kw):
+def server(server_ip, ip_length, max_clients, dh_path, pipe_fd, port, proto, hello_interval, encrypt, *args, **kw):
     logging.debug('Starting server...')
     if server_ip != '':
         script_up = '%s %s/%u' % (ovpn_server, server_ip, 64)
     else:
         script_up = '%s none' % ovpn_server
-    return openvpn(hello_interval,
+    return openvpn(hello_interval, encrypt,
         '--tls-server',
         '--mode', 'server',
         '--up', script_up,
@@ -42,7 +44,7 @@ def server(server_ip, ip_length, max_clients, dh_path, pipe_fd, port, proto, hel
         *args, **kw)
 
 
-def client(server_address, pipe_fd, hello_interval, *args, **kw):
+def client(server_address, pipe_fd, hello_interval, encrypt, *args, **kw):
     logging.debug('Starting client...')
     remote = ['--nobind',
               '--client',
@@ -57,7 +59,7 @@ def client(server_address, pipe_fd, hello_interval, *args, **kw):
         logging.warning('Error "%s" in unpacking address %s for openvpn client'
                 % (e, server_address,))
     remote += args
-    return openvpn(hello_interval, *remote, **kw)
+    return openvpn(hello_interval, encrypt, *remote, **kw)
 
 
 def router(network, internal_ip, interface_list,

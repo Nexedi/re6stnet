@@ -1,4 +1,5 @@
-import os, traceback, time, subprocess, math, logging
+import os, traceback, time, subprocess, logging
+import random
 import plib
 
 # Be carfull the refresh interval should let the routes be established
@@ -8,9 +9,9 @@ log = None
 
 class Connection:
 
-    def __init__(self, address, write_pipe, hello, iface, prefix,
+    def __init__(self, address, write_pipe, hello, iface, prefix, encrypt,
             ovpn_args):
-        self.process = plib.client(address, write_pipe, hello, '--dev', iface,
+        self.process = plib.client(address, write_pipe, hello, encrypt, '--dev', iface,
                 *ovpn_args, stdout=os.open(os.path.join(log,
                 're6stnet.client.%s.log' % (prefix,)),
                 os.O_WRONLY | os.O_CREAT | os.O_TRUNC),
@@ -32,7 +33,8 @@ class Connection:
 class TunnelManager:
 
     def __init__(self, write_pipe, peer_db, openvpn_args, hello_interval,
-                refresh, connection_count, iface_list, network, prefix):
+                refresh, connection_count, iface_list, network, prefix, nSend,
+                encrypt):
         self._write_pipe = write_pipe
         self._peer_db = peer_db
         self._connection_dict = {}
@@ -44,6 +46,8 @@ class TunnelManager:
         self._net_len = len(network)
         self._iface_list = iface_list
         self._prefix = prefix
+        self._nSend = nSend
+        self._encrypt = encrypt
 
         self.next_refresh = time.time()
         self._next_tunnel_refresh = time.time()
@@ -97,7 +101,6 @@ class TunnelManager:
         tunnel_to_make = self._client_count - len(self._connection_dict)
         if tunnel_to_make <= 0:
             return
-
         i = 0
         logging.trace('Trying to make %i new tunnels...' % tunnel_to_make)
         try:
@@ -107,7 +110,7 @@ class TunnelManager:
                 iface = self.free_interface_set.pop()
                 self._connection_dict[prefix] = Connection(address,
                         self._write_pipe, self._hello, iface,
-                        prefix, self._ovpn_args)
+                        prefix, self._encrypt, self._ovpn_args)
                 self._iface_to_prefix[iface] = prefix
                 self._peer_db.usePeer(prefix)
                 i += 1
@@ -159,3 +162,6 @@ class TunnelManager:
                 return False
         else:
             return True
+
+    def notifyPeer(self, peerIp):
+        pass

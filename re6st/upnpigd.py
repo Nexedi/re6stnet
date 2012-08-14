@@ -52,9 +52,8 @@ class Forwarder:
                 return (self._external_ip, str(external_port), proto)
 
     def refresh(self):
-        print self._rules
         logging.debug('Refreshing port forwarding')
         for external_port, local_port, proto in self._rules:
             self._u.addportmapping(external_port, proto, self._u.lanaddr,
                     local_port, 're6stnet openvpn server', '')
-        self.next_refresh = time.time() + 100
+        self.next_refresh = time.time() + 500
