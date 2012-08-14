@@ -185,6 +185,6 @@ class PeerManager:
         self._db.execute("""DELETE FROM peers WHERE used <= 0 ORDER BY used,
             RANDOM() LIMIT MAX(0, (SELECT COUNT(*) FROM peers
             WHERE used <= 0) - ?)""", (str(self._db_size),))
-        self._db.execute("INSERT OR REPLACE INTO peers (prefix, address) VALUES (?,?)", peer)
+        self._db.execute("INSERT OR IGNORE INTO peers (prefix, address) VALUES (?,?)", peer)
         logging.debug('Peer added')
         return True
