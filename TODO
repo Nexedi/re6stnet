@@ -2,14 +2,12 @@ Bug :
     possible bug in the upnp refresh, when refreshing after a too long time
     
 To be done :
-    Choose peer DB size.
-    Choose the number of peer we ask to the server
+    Choose the db size and who peers are deleted
+    find out who to have an automatic recovery without declare
     Test the package
 
-    remove some peers if their is too much in addpeer
     check the ips attributed
-    remove populate
-    remove unused methodes from the registry
+    remove decalre
     how do we make sure that none inject some false packets ?
     how do we make sur that noone is declaring too much false nodes ?
 

@@ -234,21 +234,5 @@ class main(object):
                     % (utils.ipFromBin(client_ip), utils.ipFromBin(self.network.ljust(128, '0'))))
             return False
 
-    def getPeerList(self, handler, n):
-        assert 0 < n < 1000
-        client_address, _, _, _ = handler.client_address
-        client_ip = utils.binFromIp(client_address)
-        if client_ip.startswith(self.network):
-            if time.time() > self.last_refresh + self.refresh_interval:
-                print "refreshing peers for dead ones"
-                self.db.execute("DELETE FROM peers WHERE ( date + ? ) <= CAST (strftime('%s', 'now') AS INTEGER)", (self.time_out,))
-                self.last_refesh = time.time()
-            print "sending peers"
-            return self.db.execute("SELECT prefix, address FROM peers ORDER BY random() LIMIT ?", (n,)).fetchall()
-        else:
-            logging.warning("Unauthorized connection from %s which does not start with %s"
-                    % (utils.ipFromBin(client_ip), utils.ipFromBin(self.network.ljust(128, '0'))))
-            raise RuntimeError
-
 if __name__ == "__main__":
     main()

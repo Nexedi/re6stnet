@@ -74,10 +74,12 @@ class PeerManager:
         logging.info('Refreshing the peers DB...')
         try:
             self._declare()
-            self._populate()
-            logging.info('DB refreshed')
             self.next_refresh = time.time() + self._refresh_time
             return True
+        except socket.error, e:
+            logging.info('Connection to server failed, re-bootstraping')
+        try:
+            self._bootstrap()
         except socket.error, e:
             logging.debug('socket.error : %s' % e)
             logging.info('Connection to server failed, retrying in 30s')
@@ -92,23 +94,8 @@ class PeerManager:
         else:
             logging.warning("Warning : couldn't send ip, unknown external config")
 
-    def _populate(self):
-        logging.info('Populating the peers DB...')
-        new_peer_list = self._proxy.getPeerList(self._db_size)
-        with self._db:
-            self._db.execute("""DELETE FROM peers WHERE used <= 0 ORDER BY used,
-                                RANDOM() LIMIT MAX(0, ? + (SELECT COUNT(*)
-                                FROM peers WHERE used <= 0))""",
-                                (str(len(new_peer_list) - self._db_size),))
-            self._db.executemany("""INSERT OR IGNORE INTO peers (prefix, address)
-                                    VALUES (?,?)""", new_peer_list)
-            self._db.execute("""DELETE FROM peers WHERE prefix IN
-                                (SELECT prefix FROM blacklist.flag)""")
-        logging.info('DB populated')
-        logging.trace('New peers : %s' % (', '.join(map(str, new_peer_list)),))
-
     def getUnusedPeers(self, peer_count):
-        for populate in self.refresh, self._bootstrap, bool:
+        for populate in self._bootstrap, bool:
             peer_list = self._db.execute("""SELECT prefix, address FROM peers WHERE used
                                             <= 0 ORDER BY used DESC,RANDOM() LIMIT ?""",
                                          (peer_count,)).fetchall()
@@ -196,6 +183,9 @@ class PeerManager:
         if int(self._db.execute("""SELECT COUNT(*) FROM blacklist.flag WHERE prefix = ?""", (peer[0],)).next()[0]) > 0:
             logging.info('Peer is blacklisted')
             return False
+        self._db.execute("""DELETE FROM peers WHERE used <= 0 ORDER BY used,
+            RANDOM() LIMIT MAX(0, (SELECT COUNT(*) FROM peers
+            WHERE used <= 0) - ?)""", str(self._db_size))
         self._db.execute("INSERT INTO peers (prefix, address) VALUES (?,?)", peer)
         logging.debug('Peer added')
         return True
