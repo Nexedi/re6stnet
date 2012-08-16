@@ -110,6 +110,56 @@ void Graph::GetRoutesFrom(int from,  int* nRoutes, int* prevs, int* distances)
     }
 }
 
+void Graph::GetRoutesFromHop(int from,  int* nRoutes, int* prevs, int* distances)
+{
+	// init vars
+    stack<int> order;
+
+    for(int i=0; i<size; i++)
+    {
+        distances[i] = -1;
+        nRoutes[i] = 1;
+    }
+    distances[from] = 0;
+
+    priority_queue<pair<int, int>> remainingNodes;
+    remainingNodes.push(pair<int, int>(-0, from));
+
+    // Get the order
+    while(!remainingNodes.empty())
+    {
+    	pair<int, int> p = remainingNodes.top();
+        int node = p.second;
+        int d = -p.first;
+        remainingNodes.pop();
+
+        if(d == distances[node])
+        {
+	        order.push(node);
+	        for(int neighbor : adjacency[node])
+	        {
+	        	int neighborDist = d + 1;
+
+	            if(distances[neighbor] == -1 || distances[neighbor] > neighborDist)
+	            {
+	                distances[neighbor] = neighborDist;
+	                prevs[neighbor] = node;
+	                remainingNodes.push(pair<int, int>(-neighborDist, neighbor));
+	            }
+	        }
+	    }
+    }
+
+    // get the BC
+    while(!order.empty())
+    {
+        int node = order.top();
+        order.pop();
+        if(distances[node] != -1 && node != from)
+        	nRoutes[prevs[node]] += nRoutes[node];
+    }
+}
+
 routesResult Graph::GetRouteResult(int node, int nRefresh, double* bc)
 {
 	int nRoutes[size], prevs[size], distances[size];

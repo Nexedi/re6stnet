@@ -135,7 +135,7 @@ class TunnelManager:
                 iface = line[-1]
                 subnet_size = int(line[1], 16)
                 logging.trace('Route on iface %s detected to %s/%s'
-                        % (iface, ip, subnet_size))
+                        % (iface, line[0], subnet_size))
                 if iface in self._iface_to_prefix.keys():
                     self._connection_dict[self._iface_to_prefix[iface]].routes += 1
                 if iface in self._iface_list and self._net_len < subnet_size < 128:
@@ -168,7 +168,7 @@ class TunnelManager:
             if self._peer_db.address:
                 ip = '%s:%s:%s:%s:%s:%s:%s:%s' % (peerIp[0:4], peerIp[4:8], peerIp[8:12],
                     peerIp[12:16], peerIp[16:20], peerIp[20:24], peerIp[24:28], peerIp[28:32])
-                logging.debug('Notifying peer %s' % ip)
+                logging.trace('Notifying peer %s' % ip)
                 sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
                 sock.sendto('%s %s\n' % (self._prefix, utils.address_str(self._peer_db.address)), (ip, 326))
         except socket.error, e:

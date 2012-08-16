@@ -46,6 +46,7 @@ public:
     void KillMachines(float proportion);
     pair<double, double> UpdateLowRoutesArity(int arityToUpdate);
     void GetArity(int* arity);
+    void GetRoutesFromHop(int from,  int* nRoutes, int* prevs, int* distances)
 
 private:
     void SaturateNode(int node);

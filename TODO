@@ -2,14 +2,15 @@ Bug :
     possible bug in the upnp refresh, when refreshing after a too long time
     
 To be done :
-    Choose the db size and who peers are deleted
+    Choose the db size and how peers are deleted
     find out who to have an automatic recovery without declare
     Test the package
 
-    PB : at the beggining a node tries to find 10 other nodes so ask for 10 bootsrap nodes
-    This slow the beginning !!
+    at the beggining a node tries to find 10 other nodes so ask for 10 bootsrap nodes
+    This slow the beginning and might overload the server
+    If their is too many nodes flaged as bad, the node never ask for some bootstrap peer
 
-    When a node arrive it is in nobody DB => very slow beginning. It should advertise itself more
+    When a node arrive it is in nobody DB => very slow beginning. It should advertise itself more.
 
     check the ips attributed
     remove decalre

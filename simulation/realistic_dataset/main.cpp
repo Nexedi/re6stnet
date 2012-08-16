@@ -89,6 +89,8 @@ void testOptimized(int size, int k, int maxPeer, int seed, Latency* latency, con
 		fflush(output);
     	fsync(fno);
 
+    	graph.Reboot(1.0/(2500 + 1.0), i);
+
     	cout << "\r" << i+1 << "/" << 3000;
     	cout.flush();
 	}
@@ -121,9 +123,7 @@ void Optimize(int size, int k, int maxPeer, int seed, Latency* latency, const ch
 	double nRoutesKilled = 0;
 	int arityDistrib[maxPeer+1];
 
-	//graph.Reboot(1.0/(100 + 1.0), i);
-
-    for(int i=0; i<3000; i++)
+    for(int i=0; i<1000; i++)
 	{
 		vector<future<pair<double, double>>> threads;
 		for(int a=0; a<range; a++)
@@ -172,6 +172,8 @@ void Optimize(int size, int k, int maxPeer, int seed, Latency* latency, const ch
 		fflush(output);
     	fsync(fno);
 
+    	graph->Reboot(1.0/(2500 + 1.0), i);
+
     	cout << "\r" << i+1 << "/" << 3000;cout.flush();
 	}
 
@@ -191,7 +193,7 @@ int main(int argc, char** argv)
 
 	vector<future<void>> threads;
 	
-	for(int i=0; i<1; i++)
+	/*for(int i=0; i<1; i++)
 	{
 		int seed = rng();
 		char* out = new char[100];
@@ -201,9 +203,9 @@ int main(int argc, char** argv)
 	}
 
 	for(int i=0; i<4; i++)
-        threads[i].get();
+        threads[i].get();*/
 
-	//Optimize(2500, 10, 30, rng(), latency, "out.csv");
+	Optimize(2500, 10, 30, rng(), latency, "out.csv");
 
 	delete latency;
     return 0;

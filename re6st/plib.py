@@ -62,12 +62,14 @@ def client(server_address, pipe_fd, hello_interval, encrypt, *args, **kw):
     return openvpn(hello_interval, encrypt, *remote, **kw)
 
 
-def router(network, internal_ip, interface_list,
+def router(network, subnet, subnet_size, interface_list,
            wireless, hello_interval, state_path, **kw):
     logging.info('Starting babel...')
     args = ['babeld',
-            '-C', 'redistribute local ip %s' % (internal_ip),
+            '-C',  'redistribute local ip %s/%s le %s' % (subnet, subnet_size, subnet_size),
             '-C', 'redistribute local deny',
+            '-C', 'redistribute ip %s/%s le %s' % (subnet, subnet_size, subnet_size),
+            '-C', 'redistribute deny',
             # Route VIFIB ip adresses
             '-C', 'in ip %s::/%u' % (utils.ipFromBin(network), len(network)),
                   # Route only addresse in the 'local' network,
