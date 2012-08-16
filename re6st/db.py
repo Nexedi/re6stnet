@@ -171,7 +171,7 @@ class PeerManager:
                     % msg)
 
     def readSocket(self, msg):
-        peer = msg.replace('\n', '').split(' ').replace('\n', '')
+        peer = msg.replace('\n', '').split(' ')
         if len(peer) != 2:
             logging.debug('Invalid package recieved : %s' % msg)
             return
