@@ -4,11 +4,6 @@ Bug :
 To be done :
     Test the package
 
-    check the ips attributed
-    remove decalre
-    how do we make sure that none inject some false packets ?
-    how do we make sur that noone is declaring too much false nodes ?
-
 ---------------------------------------------------------------------------------
 
     Put more information in the token mail ( registry ), such as :

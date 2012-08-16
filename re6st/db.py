@@ -23,8 +23,8 @@ class PeerManager:
         self.tunnel_manager = None
 
         self.sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
-        self.sock.bind((self._internal_ip, 326))
-        self.socket_file = self._sock.makefile()
+        self.sock.bind(('::', 326))
+        self.socket_file = self.sock.makefile()
 
         logging.info('Connecting to peers database...')
         self._db = sqlite3.connect(db_path, isolation_level=None)
