@@ -1,6 +1,5 @@
 import os, traceback, time, subprocess, logging
 import socket
-import sets
 import random
 import plib
 import utils
@@ -127,7 +126,7 @@ class TunnelManager:
     def _countRoutes(self):
         logging.debug('Starting to count the routes on each interface...')
         self._peer_db.clear_blacklist(0)
-        possiblePeers = sets.Set([])
+        possiblePeers = set()
         for iface in self._iface_to_prefix.keys():
             self._connection_dict[self._iface_to_prefix[iface]].routes = 0
         for line in open('/proc/net/ipv6_route'):
@@ -180,8 +179,7 @@ class TunnelManager:
                 ip = '%s:%s:%s:%s:%s:%s:%s:%s' % (peerIp[0:4], peerIp[4:8], peerIp[8:12],
                     peerIp[12:16], peerIp[16:20], peerIp[20:24], peerIp[24:28], peerIp[28:32])
                 logging.trace('Notifying peer %s' % ip)
-                sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
-                sock.sendto('%s %s\n' % (self._prefix, utils.address_str(self._peer_db.address)), (ip, 326))
+                self.peer_db.sock.sendto('%s %s\n' % (self._prefix, utils.address_str(self._peer_db.address)), (ip, 326))
         except socket.error, e:
             logging.debug('Unable to notify %s' % ip)
             logging.debug('socket.error : %s' % e)

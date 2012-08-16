@@ -22,6 +22,10 @@ class PeerManager:
         self._manual = manual
         self.tunnel_manager = None
 
+        self.sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+        self.sock.bind((self._internal_ip, 326))
+        self.socket_file = self._sock.makefile()
+
         logging.info('Connecting to peers database...')
         self._db = sqlite3.connect(db_path, isolation_level=None)
         logging.debug('Database opened')
@@ -165,7 +169,8 @@ class PeerManager:
             logging.debug('Unknow message recieved from the openvpn pipe : %s'
                     % msg)
 
-    def readSocket(self, msg):
+    def readSocket(self):
+        msg = self.socket_file.readline()
         peer = msg.replace('\n', '').split(' ')
         if len(peer) != 2:
             logging.debug('Invalid package recieved : %s' % msg)
