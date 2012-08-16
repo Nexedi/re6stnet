@@ -1,5 +1,7 @@
 import os, traceback, time, subprocess, logging
 import socket
+import sets
+import random
 import plib
 import utils
 
@@ -125,13 +127,15 @@ class TunnelManager:
     def _countRoutes(self):
         logging.debug('Starting to count the routes on each interface...')
         self._peer_db.clear_blacklist(0)
+        possiblePeers = sets.Set([])
         for iface in self._iface_to_prefix.keys():
             self._connection_dict[self._iface_to_prefix[iface]].routes = 0
         for line in open('/proc/net/ipv6_route'):
             line = line.split()
             ip = bin(int(line[0], 16))[2:].rjust(128, '0')
 
-            if ip.startswith(self._network):
+            if (ip.startswith(self._network) and
+                    not ip.startswith(self._network + self._prefix)):
                 iface = line[-1]
                 subnet_size = int(line[1], 16)
                 logging.trace('Route on iface %s detected to %s/%s'
@@ -143,7 +147,10 @@ class TunnelManager:
                     logging.debug('A route to %s has been discovered on the LAN'
                             % (hex(int(prefix), 2)[2:]))
                     self._peer_db.blacklist(prefix, 0)
-                self._notifyPeer(line[0])
+                possiblePeers.add(line[0])
+
+        for ip in random.sample(possiblePeers, min(3, len(possiblePeers))):
+            self._notifyPeer(ip)
 
         logging.debug("Routes have been counted")
         for p in self._connection_dict.keys():
