@@ -51,6 +51,7 @@ class TunnelManager:
         self._prefix = prefix
         self._nSend = nSend
         self._encrypt = encrypt
+        self._fast_start_done = False
 
         self.next_refresh = time.time()
         self._next_tunnel_refresh = time.time()
@@ -75,7 +76,6 @@ class TunnelManager:
         for prefix in self._connection_dict.keys():
             if not self._connection_dict[prefix].refresh():
                 self._kill(prefix)
-                self._peer_db.flagPeer(prefix)
 
     def _removeSomeTunnels(self):
         # Get the candidates to killing
@@ -149,7 +149,11 @@ class TunnelManager:
                     self._peer_db.blacklist(prefix, 0)
                 possiblePeers.add(line[0])
 
-        for ip in random.sample(possiblePeers, min(3, len(possiblePeers))):
+        if not self._fast_start_done and len(possiblePeers) > 4:
+            nSend = min(self._peer_db.db_size, len(possiblePeers))
+        else:
+            nSend = min(4, len(possiblePeers))
+        for ip in random.sample(possiblePeers, nSend):
             self._notifyPeer(ip)
 
         logging.debug("Routes have been counted")

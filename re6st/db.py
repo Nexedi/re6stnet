@@ -1,6 +1,10 @@
 import logging, sqlite3, socket, subprocess, xmlrpclib, time
 import utils
 
+# used = 0 : fresh node
+# used = 1 : previously used peer
+# used = 2 : curently in use
+
 
 class PeerManager:
 
@@ -11,7 +15,7 @@ class PeerManager:
         self.address = address
         self._internal_ip = internal_ip
         self._prefix = prefix
-        self._db_size = db_size
+        self.db_size = db_size
         self._registry = registry
         self._key_path = key_path
         self._pp = pp
@@ -28,7 +32,7 @@ class PeerManager:
                             address TEXT NOT NULL,
                             used INTEGER NOT NULL DEFAULT 0,
                             date INTEGER DEFAULT (strftime('%s', 'now')))""")
-        self._db.execute("UPDATE peers SET used = 0")
+        self._db.execute("UPDATE peers SET used = 1 WHERE used = 2")
         self._db.execute("""CREATE INDEX IF NOT EXISTS
                           _peers_used ON peers(used)""")
         self._db.execute("""CREATE TABLE IF NOT EXISTS config (
@@ -73,30 +77,28 @@ class PeerManager:
     def refresh(self):
         logging.info('Refreshing the peers DB...')
         try:
+            self.next_refresh = time.time() + 30
             self._declare()
-            self.next_refresh = time.time() + self._refresh_time
         except socket.error, e:
-            logging.info('Connection to server failed, re-bootstraping')
+            logging.info('Connection to server failed, re-bootstraping and retrying in 30s')
         try:
             self._bootstrap()
-            self.next_refresh = time.time() + self._refresh_time
         except socket.error, e:
             logging.debug('socket.error : %s' % e)
-            logging.info('Connection to server failed, retrying in 30s')
-            self.next_refresh = time.time() + 30
 
     def _declare(self):
         if self.address != None:
             logging.info('Sending connection info to server...')
             self._proxy.declare(utils.address_str(self.address))
+            self.next_refresh = time.time() + self._refresh_time
             logging.debug('Info sent')
         else:
-            logging.warning("Warning : couldn't send ip, unknown external config")
+            logging.warning("Warning : couldn't send ip, unknown external config. retrying in 30s")
 
     def getUnusedPeers(self, peer_count):
         for populate in self._bootstrap, bool:
             peer_list = self._db.execute("""SELECT prefix, address FROM peers WHERE used
-                                            <= 0 ORDER BY used DESC,RANDOM() LIMIT ?""",
+                                            <> 2 ORDER BY used ASC, RANDOM() LIMIT ?""",
                                          (peer_count,)).fetchall()
             if peer_list:
                 return peer_list
@@ -125,19 +127,13 @@ class PeerManager:
 
     def usePeer(self, prefix):
         logging.trace('Updating peers database : using peer %s' % prefix)
-        self._db.execute("UPDATE peers SET used = 1 WHERE prefix = ?",
+        self._db.execute("UPDATE peers SET used = 2 WHERE prefix = ?",
                 (prefix,))
         logging.debug('DB updated')
 
     def unusePeer(self, prefix):
         logging.trace('Updating peers database : unusing peer %s' % prefix)
-        self._db.execute("UPDATE peers SET used = 0 WHERE prefix = ?",
-                (prefix,))
-        logging.debug('DB updated')
-
-    def flagPeer(self, prefix):
-        logging.trace('Updating peers database : flagging peer %s' % prefix)
-        self._db.execute("UPDATE peers SET used = -1 WHERE prefix = ?",
+        self._db.execute("UPDATE peers SET used = 1 WHERE prefix = ?",
                 (prefix,))
         logging.debug('DB updated')
 
@@ -164,8 +160,7 @@ class PeerManager:
                         self._declare()
                     except socket.error, e:
                         logging.debug('socket.error : %s' % e)
-                        logging.info('''Connection to server failed while
-                            declaring external infos''')
+                        logging.info("""Connection to server failed while declaring external infos""")
         else:
             logging.debug('Unknow message recieved from the openvpn pipe : %s'
                     % msg)
@@ -182,9 +177,10 @@ class PeerManager:
         if int(self._db.execute("""SELECT COUNT(*) FROM blacklist.flag WHERE prefix = ?""", (peer[0],)).next()[0]) > 0:
             logging.info('Peer is blacklisted')
             return False
-        self._db.execute("""DELETE FROM peers WHERE used <= 0 ORDER BY used,
-            RANDOM() LIMIT MAX(0, (SELECT COUNT(*) FROM peers
-            WHERE used <= 0) - ?)""", (str(self._db_size),))
+        self._db.execute("""DELETE FROM peers WHERE used <> 2 ORDER BY used DESC, date DESC
+            LIMIT MAX(0, (SELECT COUNT(*) FROM peers
+            WHERE used <> 2) - ?)""", (str(self.db_size),))
+        self._db.execute("UPDATE peers SET address = ?, used = 0, date = strftime('%s','now') WHERE used = 1 and prefix = ?", (peer[1], peer[0],))
         self._db.execute("INSERT OR IGNORE INTO peers (prefix, address) VALUES (?,?)", peer)
         logging.debug('Peer added')
         return True
