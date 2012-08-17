@@ -1,5 +1,4 @@
 // To compile : g++ -std=c++0x latency.cpp graph.cpp main.cpp -lpthread 
-// The best distance for latency : 66.9239 with a full graph
 // other dataset : http://pdos.csail.mit.edu/p2psim/kingdata/
 // for latency_2 :
 // Optimal distance : 16085.3
@@ -14,6 +13,9 @@ void simulate(int size, int k, int maxPeer, int seed, Latency* latency, const ch
 	FILE* output = fopen(outName, "wt");
     int fno = fileno(output);
     double nRoutesKilled = 0;
+    int arityLatDistrib[maxPeer+1][10];
+    double avgDistance, unreachable;
+	double arityDistrib[31], bcArity[31];
 
 	Graph graph(size, k, maxPeer, rng, latency);
 
@@ -32,16 +34,23 @@ void simulate(int size, int k, int maxPeer, int seed, Latency* latency, const ch
 		}*/
 		
 
-		double avgDistance, unreachable;
-		double arityDistrib[31], bcArity[31];
-		graph.Reboot(1.0/(100 + 1.0), i);
+		
+		//graph.Reboot(1.0/(100 + 1.0), i);
 		graph.UpdateLowRoutes(avgDistance, unreachable, nRoutesKilled, arityDistrib, bcArity, 1, i);
+		graph.GetArityLat(arityLatDistrib);
 
-		fprintf(output, "%d,%f,%f", i, avgDistance, nRoutesKilled);
-		for(int j=0; j<=30; j++)
+		fprintf(output, "%d,%f,%f,A", i, avgDistance, nRoutesKilled);
+		for(int j=k; j<=30; j++)
 			fprintf(output, ",%f", arityDistrib[j]);
-		for(int j=0; j<=30; j++)
+		fprintf(output, ",B");
+		for(int j=k; j<=30; j++)
 			fprintf(output, ",%f", bcArity[j]);
+		for(int j=0; j<10; j++)
+		{
+			fprintf(output, ",L%d", j);
+			for(int a=k; a<=maxPeer; a++)
+				fprintf(output, ",%d", arityLatDistrib[a][j]);
+		}
 		fprintf(output, "\n");
 		fflush(output);
     	fsync(fno);
@@ -181,11 +190,29 @@ void Optimize(int size, int k, int maxPeer, int seed, Latency* latency, const ch
 	cout << endl;
 }
 
+string computeDist(int size, int k, int maxPeer, int seed, Latency* latency)
+{
+	mt19937 rng(seed);
+	Graph graph(size, k, maxPeer, rng, latency);
+
+	double avgDistLatency = 0;
+	int nRoutes[size], prevs[size], distances[size];
+	for(int i=0; i<size; i++)
+	{
+		graph.GetRoutesFrom(i,  nRoutes, prevs, distances);
+		for(int j=0; j<size; j++)
+			avgDistLatency += distances[j];
+	}
+
+	ostringstream out;
+    out << avgDistLatency / (size*size) << ","
+    	<< graph.GetAvgDistanceHop() << endl;
+    return out.str();
+}
+
 int main(int argc, char** argv)
 {
 	mt19937 rng(time(NULL));
-	//Latency latencyR("latency/pw-1715/pw-1715-latencies", 1715);
-	//latencyR.Rewrite(20);
 	Latency* latency = new Latency("datasets/latency_2_2500", 2500);
 
 	//cout << "Optimal distance : " << latency->GetAverageDistance() << endl;
@@ -193,19 +220,19 @@ int main(int argc, char** argv)
 
 	vector<future<void>> threads;
 	
-	/*for(int i=0; i<1; i++)
+	for(int i=0; i<1; i++)
 	{
 		int seed = rng();
 		char* out = new char[100];
-		sprintf(out, "test_optimized_%d.csv", i);
+		sprintf(out, "out_%d.csv", i);
 		threads.push_back(async(launch::async, [seed, out, latency]()
-        	{ testOptimized(2500, 10, 30, seed, latency, out); delete[] out; })); 
+        	{ simulate(2500, 10, 30, seed, latency, out); delete[] out; })); 
 	}
 
 	for(int i=0; i<4; i++)
-        threads[i].get();*/
+        threads[i].get();
 
-	Optimize(2500, 10, 30, rng(), latency, "out.csv");
+	//Optimize(2500, 10, 30, rng(), latency, "out.csv");
 
 	delete latency;
     return 0;

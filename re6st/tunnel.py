@@ -151,7 +151,7 @@ class TunnelManager:
         if not self._fast_start_done and len(possiblePeers) > 4:
             nSend = min(self._peer_db.db_size, len(possiblePeers))
         else:
-            nSend = min(4, len(possiblePeers))
+            nSend = min(2, len(possiblePeers))
         for ip in random.sample(possiblePeers, nSend):
             self._notifyPeer(ip)
 
@@ -179,7 +179,7 @@ class TunnelManager:
                 ip = '%s:%s:%s:%s:%s:%s:%s:%s' % (peerIp[0:4], peerIp[4:8], peerIp[8:12],
                     peerIp[12:16], peerIp[16:20], peerIp[20:24], peerIp[24:28], peerIp[28:32])
                 logging.trace('Notifying peer %s' % ip)
-                self.peer_db.sock.sendto('%s %s\n' % (self._prefix, utils.address_str(self._peer_db.address)), (ip, 326))
+                self._peer_db.sock.sendto('%s %s\n' % (self._prefix, utils.address_str(self._peer_db.address)), (ip, 326))
         except socket.error, e:
             logging.debug('Unable to notify %s' % ip)
             logging.debug('socket.error : %s' % e)

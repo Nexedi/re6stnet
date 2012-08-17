@@ -3,6 +3,7 @@
 Latency::Latency(const char* filePath, int size) : size(size)
 {
 	values = new int*[size];
+	avgLatencyToOthers = new double[size];
 	for(int i=0; i<size; i++)
 	{
 		values[i] = new int[size];
@@ -24,6 +25,14 @@ Latency::Latency(const char* filePath, int size) : size(size)
 
 		values[b-1][a-1] = latency;
 		values[a-1][b-1] = latency;
+	}
+
+	for(int i=0; i<size; i++)
+	{
+		avgLatencyToOthers[i] = 0;
+		for(int j=0;j<size; j++)
+			avgLatencyToOthers[i] += values[i][j];
+		avgLatencyToOthers[i] /= size;
 	}
 
 	fclose(file);

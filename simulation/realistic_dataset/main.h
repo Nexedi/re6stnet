@@ -29,6 +29,7 @@ public:
     double GetAverageDistance();
     double GetAveragePing();
     int** values;
+    double* avgLatencyToOthers;
 
 private:
 	int size;
@@ -46,13 +47,14 @@ public:
     void KillMachines(float proportion);
     pair<double, double> UpdateLowRoutesArity(int arityToUpdate);
     void GetArity(int* arity);
-    void GetRoutesFromHop(int from,  int* nRoutes, int* prevs, int* distances)
-
+    void GetRoutesFrom(int from, int* nRoutes, int* prevs, int* distances);
+    double GetAvgDistanceHop();
+    void GetArityLat(int arity[][10]);
+    
 private:
     void SaturateNode(int node);
 	bool AddEdge(int from);
     void RemoveEdge(int from, int to);
-    void GetRoutesFrom(int from, int* nRoutes, int* prevs, int* distances);
     int CountUnreachableFrom(int node);
     routesResult GetRouteResult(int node, int nRefresh, double* bc);
 

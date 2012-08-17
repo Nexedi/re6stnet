@@ -110,56 +110,6 @@ void Graph::GetRoutesFrom(int from,  int* nRoutes, int* prevs, int* distances)
     }
 }
 
-void Graph::GetRoutesFromHop(int from,  int* nRoutes, int* prevs, int* distances)
-{
-	// init vars
-    stack<int> order;
-
-    for(int i=0; i<size; i++)
-    {
-        distances[i] = -1;
-        nRoutes[i] = 1;
-    }
-    distances[from] = 0;
-
-    priority_queue<pair<int, int>> remainingNodes;
-    remainingNodes.push(pair<int, int>(-0, from));
-
-    // Get the order
-    while(!remainingNodes.empty())
-    {
-    	pair<int, int> p = remainingNodes.top();
-        int node = p.second;
-        int d = -p.first;
-        remainingNodes.pop();
-
-        if(d == distances[node])
-        {
-	        order.push(node);
-	        for(int neighbor : adjacency[node])
-	        {
-	        	int neighborDist = d + 1;
-
-	            if(distances[neighbor] == -1 || distances[neighbor] > neighborDist)
-	            {
-	                distances[neighbor] = neighborDist;
-	                prevs[neighbor] = node;
-	                remainingNodes.push(pair<int, int>(-neighborDist, neighbor));
-	            }
-	        }
-	    }
-    }
-
-    // get the BC
-    while(!order.empty())
-    {
-        int node = order.top();
-        order.pop();
-        if(distances[node] != -1 && node != from)
-        	nRoutes[prevs[node]] += nRoutes[node];
-    }
-}
-
 routesResult Graph::GetRouteResult(int node, int nRefresh, double* bc)
 {
 	int nRoutes[size], prevs[size], distances[size];
@@ -414,4 +364,47 @@ void Graph::GetArity(int* arity)
 
 	for(int i=0; i<size; i++)
 		arity[adjacency[i].size()]++;
+}
+
+void Graph::GetArityLat(int arity[][10])
+{
+	for(int i=0; i<10; i++)
+		for(int a=0; a<=maxPeers; a++)
+			arity[a][i] = 0;
+
+	for(int i=0; i<size; i++)
+		arity[adjacency[i].size()][max(min((int)(latency->avgLatencyToOthers[i] - 45000)/5000, 9), 0)]++;
+}
+
+double Graph::GetAvgDistanceHop()
+{
+	double avgDist = 0;
+	int distances[size];
+
+	for(int from=0; from<size; from++)
+	{
+	    for(int i=0; i<size; i++)
+	        distances[i] = -1;
+	    distances[from] = 0;
+
+	    queue<int> remainingNodes;
+	    remainingNodes.push(from);
+
+	    // Get the order
+	    while(!remainingNodes.empty())
+	    {
+	    	int node = remainingNodes.front();
+	        remainingNodes.pop();
+	        avgDist += distances[node];
+
+	        for(int neighbor : adjacency[node])
+	        	if(distances[neighbor] == -1)
+	        	{
+	        		distances[neighbor] = distances[node] + latency->values[neighbor][node];
+	        		remainingNodes.push(neighbor);
+	        	}
+		}
+	}
+
+	return avgDist/(size*size);
 }
