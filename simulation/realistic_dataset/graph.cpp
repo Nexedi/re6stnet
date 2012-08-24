@@ -1,14 +1,19 @@
 #include "main.h"
 
-Graph::Graph(int size, int k, int maxPeers, mt19937& rng,  Latency* latency) :
+Graph::Graph(int size, int k, int maxPeers, mt19937& rng,  Latency* latency, double minKillProba, double maxKillProba) :
 	generator(mt19937(rng())), size(size), k(k), maxPeers(maxPeers), latency(latency),
 	distrib(uniform_int_distribution<int>(0, size-1))
 {
 	adjacency = new unordered_set<int>[size];
 	generated = new unordered_set<int>[size];
+	killProba = new double[size];
+	uniform_real_distribution<double> kill_distrib(minKillProba, maxKillProba);
 
 	for(int i=0; i<size; i++)
+	{
 		SaturateNode(i);
+		killProba[i] = kill_distrib(generator);
+	}
 }
 
 Graph::Graph(Graph& g) :
@@ -328,11 +333,11 @@ void Graph::KillMachines(float proportion)
     }
 }
 
-void Graph::Reboot(double proba, int round)
+void Graph::Reboot()
 {
 	uniform_real_distribution<double> d(0.0, 1.0);
 	for(int i=0; i<size; i++)
-		if(d(generator) <= proba)
+		if(d(generator) <= killProba[i])
 		{
 			stack<int> toSaturate;
 
@@ -374,6 +379,18 @@ void Graph::GetArityLat(int arity[][10])
 
 	for(int i=0; i<size; i++)
 		arity[adjacency[i].size()][max(min((int)(latency->avgLatencyToOthers[i] - 45000)/5000, 9), 0)]++;
+}
+
+void Graph::GetArityKill(int arity[][10])
+{
+	for(int i=0; i<10; i++)
+		for(int a=0; a<=maxPeers; a++)
+			arity[a][i] = 0;
+
+	for(int i=0; i<size; i++)
+	{
+		arity[adjacency[i].size()][max(min((int)(killProba[i]*200.0), 9), 0)]++;
+	}
 }
 
 double Graph::GetAvgDistanceHop()

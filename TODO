@@ -1,6 +1,3 @@
-Bug :
-    possible bug in the upnp refresh, when refreshing after a too long time
-    
 To be done :
     Test the package
 

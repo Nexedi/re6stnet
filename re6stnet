@@ -42,7 +42,7 @@ def getConfig():
     _('--registry', required=True,
             help="HTTP URL of the discovery peer server,"
                  " with public host (default port: 80)")
-    _('--peers-db-refresh', default=3600, type=int,
+    _('--peers-db-refresh', default=43200, type=int,
             help='the time (seconds) to wait before refreshing the peers db')
     _('-l', '--log', default='/var/log',
             help='Path to re6stnet logs directory')

@@ -38,18 +38,19 @@ private:
 class Graph
 {
 public:
-    Graph(int size, int k, int maxPeers, mt19937& generator, Latency* latency);
+    Graph(int size, int k, int maxPeers, mt19937& generator, Latency* latency, double minKillProba, double maxKillProba);
     Graph(Graph& g);
-    ~Graph() { delete[] adjacency; delete[] generated;};
+    ~Graph() { delete[] adjacency; delete[] generated;  delete[] killProba;};
     int UpdateLowRoutes(double& avgDistance, double& unreachable, double& nRoutesKilled, double* arityDistrib, double* bcArity, int nRefresh, int round);
     double GetUnAvalaibility();
-    void Reboot(double proba, int round);
+    void Reboot();
     void KillMachines(float proportion);
     pair<double, double> UpdateLowRoutesArity(int arityToUpdate);
     void GetArity(int* arity);
     void GetRoutesFrom(int from, int* nRoutes, int* prevs, int* distances);
     double GetAvgDistanceHop();
     void GetArityLat(int arity[][10]);
+    void GetArityKill(int arity[][10]);
     
 private:
     void SaturateNode(int node);
@@ -67,4 +68,5 @@ private:
     unordered_set<int>* adjacency;
     unordered_set<int>* generated;
     Latency* latency;
+    double* killProba;
 };

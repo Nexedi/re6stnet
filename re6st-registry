@@ -41,7 +41,7 @@ class main(object):
 
     def __init__(self):
         self.cert_duration = 365 * 86400
-        self.time_out = 86400
+        self.time_out = 45000
         self.refresh_interval = 600
         self.last_refresh = time.time()
 

@@ -27,6 +27,8 @@ Latency::Latency(const char* filePath, int size) : size(size)
 		values[a-1][b-1] = latency;
 	}
 
+	fclose(file);
+
 	for(int i=0; i<size; i++)
 	{
 		avgLatencyToOthers[i] = 0;
@@ -35,7 +37,6 @@ Latency::Latency(const char* filePath, int size) : size(size)
 		avgLatencyToOthers[i] /= size;
 	}
 
-	fclose(file);
 }
 
 void Latency::Rewrite(int n)
@@ -76,6 +77,7 @@ Latency::~Latency()
 	for(int i=0; i<size; i++)
 		delete[] values[i];
 	delete[] values;
+	delete[] avgLatencyToOthers;
 }
 
 double Latency::GetAverageDistance()

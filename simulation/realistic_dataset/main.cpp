@@ -13,44 +13,47 @@ void simulate(int size, int k, int maxPeer, int seed, Latency* latency, const ch
 	FILE* output = fopen(outName, "wt");
     int fno = fileno(output);
     double nRoutesKilled = 0;
-    int arityLatDistrib[maxPeer+1][10];
+    //int arityKillDistrib[maxPeer+1][10];
     double avgDistance, unreachable;
 	double arityDistrib[31], bcArity[31];
 
-	Graph graph(size, k, maxPeer, rng, latency);
+	Graph graph(size, k, maxPeer, rng, latency, 0, 0.05);
 
 	cout << "\r" << 0 << "/" << 3000;
     cout.flush();
 
 	for(int i=0; i<3000; i++)
 	{
-		/*for(float a=0.05; a<1; a+=0.05)
+		/*if(i>=100)
 		{
-			Graph copy(graph);
-			copy.KillMachines(a);
-			fprintf(output, "%d,%f,%f\n",i , a , copy.GetUnAvalaibility());
-			fflush(output);
-        	fsync(fno);
+			for(float a=0.05; a<1; a+=0.05)
+			{
+				Graph copy(graph);
+				copy.KillMachines(a);
+				fprintf(output, "%d,%f,%f\n",i , a , copy.GetUnAvalaibility());
+				fflush(output);
+	        	fsync(fno);
+			}
 		}*/
 		
 
 		
-		//graph.Reboot(1.0/(100 + 1.0), i);
+		//graph.Reboot();
 		graph.UpdateLowRoutes(avgDistance, unreachable, nRoutesKilled, arityDistrib, bcArity, 1, i);
-		graph.GetArityLat(arityLatDistrib);
+		//graph.GetArityKill(arityKillDistrib);
 
-		fprintf(output, "%d,%f,%f,A", i, avgDistance, nRoutesKilled);
+		fprintf(output, "%d,%f,%f", i, avgDistance, nRoutesKilled);
 		for(int j=k; j<=30; j++)
 			fprintf(output, ",%f", arityDistrib[j]);
-		fprintf(output, ",B");
+		/*fprintf(output, ",B");
 		for(int j=k; j<=30; j++)
 			fprintf(output, ",%f", bcArity[j]);
 		for(int j=0; j<10; j++)
 		{
-			fprintf(output, ",L%d", j);
+			fprintf(output, ",K%d", j);
 			for(int a=k; a<=maxPeer; a++)
-				fprintf(output, ",%d", arityLatDistrib[a][j]);
-		}
+				fprintf(output, ",%d", arityKillDistrib[a][j]);
+		}*/
 		fprintf(output, "\n");
 		fflush(output);
     	fsync(fno);
@@ -74,7 +77,7 @@ void testOptimized(int size, int k, int maxPeer, int seed, Latency* latency, con
     FILE* input = fopen("update_order", "r");
 
 	mt19937 rng(seed);
-	Graph graph(size, k, maxPeer, rng, latency);
+	Graph graph(size, k, maxPeer, rng, latency, 0, 0.1);
 
 	double nRoutesKilled = 0;
 	int arityDistrib[maxPeer+1];
@@ -98,7 +101,7 @@ void testOptimized(int size, int k, int maxPeer, int seed, Latency* latency, con
 		fflush(output);
     	fsync(fno);
 
-    	graph.Reboot(1.0/(2500 + 1.0), i);
+    	graph.Reboot();
 
     	cout << "\r" << i+1 << "/" << 3000;
     	cout.flush();
@@ -118,7 +121,7 @@ void Optimize(int size, int k, int maxPeer, int seed, Latency* latency, const ch
     int fno = fileno(output);
 
 	mt19937 rng(seed);
-	Graph* graph = new Graph(size, k, maxPeer, rng, latency);
+	Graph* graph = new Graph(size, k, maxPeer, rng, latency, 0, 0.1);
 	int range = maxPeer - k + 1;
 
 	int updates[range];
@@ -181,7 +184,7 @@ void Optimize(int size, int k, int maxPeer, int seed, Latency* latency, const ch
 		fflush(output);
     	fsync(fno);
 
-    	graph->Reboot(1.0/(2500 + 1.0), i);
+    	graph->Reboot();
 
     	cout << "\r" << i+1 << "/" << 3000;cout.flush();
 	}
@@ -193,7 +196,7 @@ void Optimize(int size, int k, int maxPeer, int seed, Latency* latency, const ch
 string computeDist(int size, int k, int maxPeer, int seed, Latency* latency)
 {
 	mt19937 rng(seed);
-	Graph graph(size, k, maxPeer, rng, latency);
+	Graph graph(size, k, maxPeer, rng, latency, 0, 0.1);
 
 	double avgDistLatency = 0;
 	int nRoutes[size], prevs[size], distances[size];
@@ -215,12 +218,12 @@ int main(int argc, char** argv)
 	mt19937 rng(time(NULL));
 	Latency* latency = new Latency("datasets/latency_2_2500", 2500);
 
-	//cout << "Optimal distance : " << latency->GetAverageDistance() << endl;
-	//cout << "Average ping : " << latency->GetAveragePing() << endl;
+	cout << "Optimal distance : " << latency->GetAverageDistance() << endl;
+	cout << "Average ping : " << latency->GetAveragePing() << endl;
 
 	vector<future<void>> threads;
 	
-	for(int i=0; i<1; i++)
+	for(int i=0; i<4; i++)
 	{
 		int seed = rng();
 		char* out = new char[100];
