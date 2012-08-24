@@ -1,16 +1,30 @@
-To be done :
-    Test the package
+- Test the package
 
----------------------------------------------------------------------------------
+- Put more information in the token mail (registry), such as:
 
-    Put more information in the token mail ( registry ), such as :
-        - the ip address of the network being built
-        - the creator of the network ( add option in registry ? )
+  - the ip address of the network being built
+  - the creator of the network ( add option in registry ? )
 
-    Fix bootstrap problem :
-        registry & --private option ( see re6stnet man page HOW TO ).
-        one have to start the registry twice, the first time without
-        the --private option
+- Fix bootstrap problem:
 
-    Put a section about how to build the package from the sources in the README
+  registry & --private option ( see re6stnet man page HOW TO ).
+  one have to start the registry twice, the first time without
+  the --private option
 
+- Put a section about how to build the package from the sources in the README
+
+- review protocol to discover pair:
+
+  A node that that wants to establish a new tunnel just have to look at the
+  routing table and pick a random destination node, actually its re6nst subnet.
+  If its address is unknown (not in local cache), re6st queries it by sending a
+  UDP packet to the subnet (anycast, i.e. IP suffix is 0): the reply is also an
+  UDP packet containing the address string to establish a tunnel. Then, the
+  tunnel can be established.
+
+  For bootstrapping, no destination is known so one has to query the registry
+  as already implemented. The way the registry discovers node addresses should
+  be changed so that nodes don't need to declare themselves anymore.
+  The registry should look at the local peer DB cache.
+
+  This new protocol should produce less network trafic than the current one.
