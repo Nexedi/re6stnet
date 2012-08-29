@@ -1,0 +1,239 @@
+#!/usr/bin/python
+import math, nemu, os, signal, socket, subprocess, sys, time
+from collections import defaultdict
+IPTABLES = 'iptables'
+SCREEN = 'screen'
+VERBOSE = 3
+
+#                       registry
+#                           |.2
+#                           |10.0.0
+#                           |.1
+#        ---------------Internet---------------
+#        |.1                |.1               |.1
+#        |10.1.0            |10.2.0           |
+#        |.2                |.2               |
+#    gateway1           gateway2           s3:10.0.1
+#        |.1                |.1            |.2     |.3
+#    s1:10.1.1          s2:10.2.1          m5      m6
+#    |.2     |.3        |.2     |.3
+#    m1      m2         m3      m4
+#
+
+registry = 'registry/registry.db'
+if not os.path.exists(registry):
+    import sqlite3
+    sql = open('registry/registry.sql').read()
+    db = sqlite3.connect(registry)
+    db.executescript(sql)
+    db.close()
+
+def disable_signal_on_children(sig):
+    pid = os.getpid()
+    sigint = signal.signal(sig, lambda *x: os.getpid() == pid and sigint(*x))
+disable_signal_on_children(signal.SIGINT)
+
+# create nodes
+for name in """internet=I registry=R
+                          gateway1=g1 machine1=1 machine2=2
+                          gateway2=g2 machine3=3 machine4=4
+                          machine5=5 machine6=6
+            """.split():
+    name, short = name.split('=')
+    globals()[name] = node = nemu.Node()
+    node.name = name
+    node.short = short
+    node._screen = node.Popen((SCREEN, '-DmS', name))
+    node.screen = (lambda name: lambda *cmd:
+        subprocess.call([SCREEN, '-r', name, '-X', 'eval'] + map(
+            "screen sh -c '%s; exec $SHELL'".__mod__, cmd)))(name)
+
+# create switch
+switch1 = nemu.Switch()
+switch2 = nemu.Switch()
+switch3 = nemu.Switch()
+
+#create interfaces
+re_if_0, in_if_0 = nemu.P2PInterface.create_pair(registry, internet)
+in_if_1, g1_if_0 = nemu.P2PInterface.create_pair(internet, gateway1)
+in_if_2, g2_if_0 = nemu.P2PInterface.create_pair(internet, gateway2)
+
+g1_if_0_name = g1_if_0.name
+gateway1.Popen((IPTABLES, '-t', 'nat', '-A', 'POSTROUTING', '-o', g1_if_0_name, '-j', 'MASQUERADE')).wait()
+gateway1.Popen((IPTABLES, '-t', 'nat', '-N', 'MINIUPNPD')).wait()
+gateway1.Popen((IPTABLES, '-t', 'nat', '-A', 'PREROUTING', '-i', g1_if_0_name, '-j', 'MINIUPNPD')).wait()
+gateway1.Popen((IPTABLES, '-N', 'MINIUPNPD')).wait()
+
+in_if_3 = nemu.NodeInterface(internet)
+g1_if_1 = nemu.NodeInterface(gateway1)
+g2_if_1 = nemu.NodeInterface(gateway2)
+m1_if_0 = nemu.NodeInterface(machine1)
+m2_if_0 = nemu.NodeInterface(machine2)
+m3_if_0 = nemu.NodeInterface(machine3)
+m4_if_0 = nemu.NodeInterface(machine4)
+m5_if_0 = nemu.NodeInterface(machine5)
+m6_if_0 = nemu.NodeInterface(machine6)
+
+# connect to switch
+switch1.connect(g1_if_1)
+switch1.connect(m1_if_0)
+switch1.connect(m2_if_0)
+
+switch2.connect(g2_if_1)
+switch2.connect(m3_if_0)
+switch2.connect(m4_if_0)
+
+switch3.connect(in_if_3)
+switch3.connect(m5_if_0)
+switch3.connect(m6_if_0)
+
+# setting everything up
+switch1.up = switch2.up = switch3.up = True
+re_if_0.up = in_if_0.up = in_if_1.up = g1_if_0.up = in_if_2.up = g2_if_0.up = True
+in_if_3.up = g1_if_1.up = g2_if_1.up = m1_if_0.up = m2_if_0.up = m3_if_0.up = m4_if_0.up = m5_if_0.up = m6_if_0.up = True
+
+# Add IPv4 addresses
+re_if_0.add_v4_address(address='10.0.0.2', prefix_len=24)
+in_if_0.add_v4_address(address='10.0.0.1', prefix_len=24)
+in_if_1.add_v4_address(address='10.1.0.1', prefix_len=24)
+in_if_2.add_v4_address(address='10.2.0.1', prefix_len=24)
+in_if_3.add_v4_address(address='10.0.1.1', prefix_len=24)
+g1_if_0.add_v4_address(address='10.1.0.2', prefix_len=24)
+g1_if_1.add_v4_address(address='10.1.1.1', prefix_len=24)
+g2_if_0.add_v4_address(address='10.2.0.2', prefix_len=24)
+g2_if_1.add_v4_address(address='10.2.1.1', prefix_len=24)
+m1_if_0.add_v4_address(address='10.1.1.2', prefix_len=24)
+m2_if_0.add_v4_address(address='10.1.1.3', prefix_len=24)
+m3_if_0.add_v4_address(address='10.2.1.2', prefix_len=24)
+m4_if_0.add_v4_address(address='10.2.1.3', prefix_len=24)
+m5_if_0.add_v4_address(address='10.0.1.2', prefix_len=24)
+m6_if_0.add_v4_address(address='10.0.1.3', prefix_len=24)
+
+# setup routes
+registry.add_route(prefix='10.0.0.0', prefix_len=8, nexthop='10.0.0.1')
+#internet.add_route(prefix='10.1.0.0', prefix_len=16, nexthop='10.1.0.2')
+internet.add_route(prefix='10.2.0.0', prefix_len=16, nexthop='10.2.0.2')
+gateway1.add_route(prefix='10.0.0.0', prefix_len=8, nexthop='10.1.0.1')
+gateway2.add_route(prefix='10.0.0.0', prefix_len=8, nexthop='10.2.0.1')
+machine1.add_route(nexthop='10.1.1.1')
+machine2.add_route(nexthop='10.1.1.1')
+machine3.add_route(prefix='10.0.0.0', prefix_len=8, nexthop='10.2.1.1')
+machine4.add_route(prefix='10.0.0.0', prefix_len=8, nexthop='10.2.1.1')
+machine5.add_route(prefix='10.0.0.0', prefix_len=8, nexthop='10.0.1.1')
+machine6.add_route(prefix='10.0.0.0', prefix_len=8, nexthop='10.0.1.1')
+
+# Test connectivity first. Run process, hide output and check
+# return code
+null = file(os.devnull, "r+")
+for ip in '10.1.1.2', '10.1.1.3', '10.2.1.2', '10.2.1.3':
+    if machine1.Popen(('ping', '-c1', ip), stdout=null).wait():
+        print 'Failed to ping %s' % ip
+        break
+else:
+    print "Connectivity IPv4 OK!"
+
+registry.screen('../re6stnet @registry/re6stnet.conf --ip 10.0.0.2 -v%u' % VERBOSE,
+                '../re6st-registry @registry/re6st-registry.conf')
+gateway1.screen('miniupnpd -d -f miniupnpd.conf -P miniupnpd.pid -a 10.1.1.1'
+                ' -i %s' % g1_if_0_name)
+machine1.screen('../re6stnet @m1/re6stnet.conf -v%u' % VERBOSE)
+machine2.screen('../re6stnet @m2/re6stnet.conf -v%u' % VERBOSE)
+machine3.screen('../re6stnet @m3/re6stnet.conf -v%u -i%s' % (VERBOSE, m3_if_0.name))
+machine4.screen('../re6stnet @m4/re6stnet.conf -v%u -i%s' % (VERBOSE, m4_if_0.name))
+machine5.screen('../re6stnet @m5/re6stnet.conf -v%u' % VERBOSE)
+machine6.screen('../re6stnet @m6/re6stnet.conf -v%u' % VERBOSE)
+
+nodes = registry, machine1, machine2, machine3, machine4, machine5, machine6
+_ll = {}
+def node_by_ll(addr):
+    try:
+        return _ll[addr]
+    except KeyError:
+        for n in nodes:
+            for i in n.get_interfaces():
+                t = isinstance(i, nemu.interface.ImportedNodeInterface)
+                try:
+                    a = i.get_addresses()
+                except KeyError:
+                    break
+                for a in a:
+                    p = a['prefix_len']
+                    a = a['address']
+                    if a.startswith('2001:db8:'):
+                        assert not p % 8
+                        a = socket.inet_ntop(socket.AF_INET6,
+                            socket.inet_pton(socket.AF_INET6,
+                            a)[:p/8].ljust(16, '\0'))
+                    elif not a.startswith('fe80::'):
+                        continue
+                    _ll[a] = n, t
+    return _ll[addr]
+
+def babel_svg(z=4):
+    graph = {}
+    for n in nodes:
+        g = graph[n] = defaultdict(list)
+        for r in n.get_routes():
+            if r.prefix and r.prefix.startswith('2001:db8:'):
+                try:
+                    g[node_by_ll(r.nexthop)].append(node_by_ll(r.prefix)[0])
+                except KeyError:
+                    pass
+    gv = ["digraph { splines = true; edge[color=grey, labelangle=0, arrowhead=dot];"]
+    N = len(nodes)
+    a = 2 * math.pi / N
+    edges = set()
+    for i, n in enumerate(nodes):
+        gv.append('%s[pos="%s,%s!"];'
+            % (n.name, z * math.cos(a * i), z * math.sin(a * i)))
+        l = []
+        for p, r in graph[n].iteritems():
+            j = abs(nodes.index(p[0]) - i)
+            l.append((min(j, N - j), p, r))
+        for j, (l, (p, t), r) in enumerate(sorted(l)):
+            l = []
+            for r in sorted(r.short for r in r):
+                if r == p.short:
+                    r = '<font color="grey">%s</font>' % r
+                l.append(r)
+            if (n.name, p.name) in edges:
+                r = 'penwidth=0'
+            else:
+                edges.add((p.name, n.name))
+                r = 'style=solid' if t else 'style=dashed'
+            gv.append('%s -> %s [labeldistance=%u, headlabel=<%s>, %s];'
+                % (p.name, n.name, 1.5 * math.sqrt(j) + 2, ','.join(l), r))
+    gv.append('}\n')
+    return subprocess.Popen(('neato', '-Tsvg'),
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+        ).communicate('\n'.join(gv))[0]
+
+if len(sys.argv) > 1:
+    import SimpleHTTPServer, SocketServer
+
+    class Handler(SimpleHTTPServer.SimpleHTTPRequestHandler):
+        def do_GET(self):
+            if self.path == '/':
+                mt = 'text/html'
+                x = babel_svg()
+                body = """<html>
+<head><meta http-equiv="refresh" content="10"/></head>
+<body>
+%s
+</body>
+</html>""" % x[x.find('<svg'):]
+            else:
+                self.send_error(404)
+                return
+            self.send_response(200)
+            self.send_header('Content-Length', len(body))
+            self.send_header('Content-type', mt + '; charset=utf-8')
+            self.end_headers()
+            self.wfile.write(body)
+
+    class TCPServer(SocketServer.TCPServer):
+        allow_reuse_address = True
+
+    TCPServer(('', int(sys.argv[1])), Handler).serve_forever()
+
+import pdb; pdb.set_trace()
