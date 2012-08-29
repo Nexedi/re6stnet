@@ -72,10 +72,10 @@ Generic options
             file ( since it is an optioin, it must be alone on the line ).
 
 --ip address port proto
-            Specify connection information to be advertised to other nodes.
-            address MUST be a ipv4 address since as of now openvpn does not
-            support ipv6 addresses.
-            Proto should be either udp or tcp-client
+            IP address advertised to other nodes. Special values:
+            - upnp: force autoconfiguration via UPnP
+            - any: ask peers our IP
+            Default: ask peers if UPnP fails
 
 -l, ``--log`` `directory`
             Path to the directory used for log files. Will create one file
@@ -102,6 +102,12 @@ Generic options
 
 Babel options
 ~~~~~~~~~~~~~
+
+--babel-pidfile
+            Specify a file to write our process id to (option -I of Babel).
+
+--babel-verb
+            Babel verbosity (option -d of Babel).
 
 -i, ``--interface`` `interface`
             Give one interface name for each use of the argument. The interface
@@ -135,13 +141,11 @@ Tunnel & Peers options
             Default : 3600  ( 1 hour )
 
 --pp port proto
-            Port and protocol used by the openvpn server(s). Start one openvpn
-            server for each couple port/protocol specified.
-            Additionally, if no external configuration is given in the command
-            line, re6stnet will attempt to forward a port with upnp for each
-            couple port/proto given.
-            Protocols should be either udp or tcp-server.
-            Default : (1194, udp), (1194, tcp-server)
+            Port and protocol to be announced to other peers, ordered by
+            preference. For each protocol, start one openvpn server on the
+            first given port.
+            Protocols: udp, tcp
+            Default : --pp 1194 udp --pp 1194 tcp
 
 --tunnel-refresh duration
             Interval in seconds between two tunnel refresh. Refreshing tunnels

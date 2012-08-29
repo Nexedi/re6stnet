@@ -1,22 +1,7 @@
 #!/usr/bin/env python
-import os, sys, select, time, socket
-import argparse, subprocess, sqlite3, logging, traceback
-from argparse import ArgumentParser
-from re6st import plib, utils, db, upnpigd, tunnel
-
-
-class ArgParser(ArgumentParser):
-
-    def convert_arg_line_to_args(self, arg_line):
-        arg_line = arg_line.split('#')[0].rstrip()
-        if arg_line:
-            if arg_line.startswith('@'):
-                yield arg_line
-                return
-            for arg in ('--' + arg_line.lstrip('--')).split():
-                if arg.strip():
-                    yield arg
-
+import atexit, os, sys, select, socket, time
+import argparse, signal, subprocess, sqlite3, logging, traceback
+from re6st import plib, utils, db, tunnel
 
 def ovpnArgs(optional_args, ca_path, cert_path, key_path):
     # Treat openvpn arguments
@@ -32,13 +17,13 @@ def ovpnArgs(optional_args, ca_path, cert_path, key_path):
 
 
 def getConfig():
-    parser = ArgParser(fromfile_prefix_chars='@',
+    parser = utils.ArgParser(fromfile_prefix_chars='@',
             description='Resilient virtual private network application')
     _ = parser.add_argument
 
     # General Configuration options
-    _('--ip', default=None, dest='address', action='append', nargs=3,
-            help='Ip address, port and protocol advertised to other vpn nodes')
+    _('--ip',
+            help='IP address advertised to other nodes')
     _('--registry', required=True,
             help="HTTP URL of the discovery peer server,"
                  " with public host (default port: 80)")
@@ -49,11 +34,15 @@ def getConfig():
     _('-s', '--state', default='/var/lib/re6stnet',
             help='Path to re6stnet state directory')
     _('-v', '--verbose', default=0, type=int,
-            help='Defines the verbose level')
+            help='Log level of re6st itself')
     _('-i', '--interface', action='append', dest='iface_list', default=[],
             help='Extra interface for LAN discovery')
 
     # Routing algorithm options
+    _('--babel-pidfile',
+            help='Specify a file to write our process id to')
+    _('--babel-verb', default=0,
+            help='Babel verbosity')
     _('--hello', type=int, default=15,
             help='Hello interval for babel, in seconds')
     _('-w', '--wireless', action='store_true',
@@ -87,11 +76,6 @@ def getConfig():
 def main():
     # Get arguments
     config = getConfig()
-    if not config.pp:
-        config.pp = [['1194', 'udp'], ['1194', 'tcp-server']]
-    config.pp = list((port, proto, 're6stnet-%s' % proto)
-            for port, proto in config.pp)
-    manual = bool(config.address)
     network = utils.networkFromCa(config.ca)
     internal_ip, prefix = utils.ipFromCert(network, config.cert)
     openvpn_args = ovpnArgs(config.openvpn_args, config.ca, config.cert,
@@ -104,76 +88,76 @@ def main():
     logging.trace("Configuration :\n%s" % config)
 
     # Set global variables
-    tunnel.log = config.log
-    plib.verbose = config.verbose
+    plib.log = tunnel.log = config.log
 
     # Create and open read_only pipe to get server events
     logging.info('Creating pipe for server events...')
     r_pipe, write_pipe = os.pipe()
     read_pipe = os.fdopen(r_pipe)
-    logging.debug('Pipe created')
+
+    signal.signal(signal.SIGHUP, lambda *args: sys.exit(-1))
 
     # Init db and tunnels
-    forwarder = None
-    if manual:
-        logging.info('Detected manual external configuration')
-        for c, s in ('udp', 'udp'), ('tcp-client', 'tcp-server'):
-            if len(list(x for x in config.address if x[2] == c)) \
-             < len(list(x for x in config.pp if x[1] == s)):
-                logging.warning("""Beware: in manual configuration, you
-                        declared less external configurations regarding
-                        protocol %s/%s than you gave internal server
-                        configurations""" % (c, s))
+    address = []
+    if config.pp:
+        pp = [(int(port), proto) for port, proto in config.pp]
     else:
+        pp = (1194, 'udp'), (1194, 'tcp')
+    ip_changed = lambda ip: [(ip, str(port), proto) for port, proto in pp]
+    forwarder = None
+    if config.ip == 'upnp' or not config.ip:
         logging.info('Attempting automatic configuration via UPnP...')
         try:
-            forwarder = upnpigd.Forwarder()
-            config.address = []
-            for port, proto, _ in config.pp:
-                ext = forwarder.AddRule(port, proto)
-                if ext:
-                    config.address.append(ext)
-        except upnpigd.NoUPnPDevice:
-            logging.info('No upnp device found')
+            from re6st.upnpigd import Forwarder
+            forwarder = Forwarder()
+        except Exception, e:
+            if config.ip:
+                raise
+            logging.info("%s: assume we are not NATed", e)
+        else:
+            atexit.register(forwarder.clear)
+            for port, proto in pp:
+                ip, port = forwarder.addRule(port, proto)
+                address.append((ip, str(port), proto))
+    elif config.ip != 'any':
+        address = ip_changed(config.ip)
+    if address:
+        ip_changed = None
 
     peer_db = db.PeerManager(db_path, config.registry, config.key,
-            config.peers_db_refresh, config.address, internal_ip, prefix,
-            manual, config.pp, 200)
+            config.peers_db_refresh, address, internal_ip, prefix,
+            ip_changed, 200)
     tunnel_manager = tunnel.TunnelManager(write_pipe, peer_db, openvpn_args,
             config.hello, config.tunnel_refresh, config.connection_count,
             config.iface_list, network, prefix, 2, config.encrypt)
     peer_db.tunnel_manager = tunnel_manager
 
     # Launch routing protocol. WARNING : you have to be root to start babeld
+    server_tunnels = {}
+    for x in pp:
+        server_tunnels.setdefault('re6stnet-' + x[1], x)
     interface_list = list(tunnel_manager.free_interface_set) \
-                     + config.iface_list + list(iface
-                             for _, _, iface in config.pp)
+                     + config.iface_list + server_tunnels.keys()
     subnet = utils.ipFromBin((network + prefix).ljust(128, '0'))
-    router = plib.router(network, subnet, len(prefix) + len(network), interface_list,
-            config.wireless, config.hello, os.path.join(config.state, 'babeld.state'),
-            stdout=os.open(os.path.join(config.log, 'babeld.log'),
-            os.O_WRONLY | os.O_CREAT | os.O_TRUNC), stderr=subprocess.STDOUT)
-
-   # Establish connections
-    server_process = []
-    server_ip = internal_ip
-    for port, proto, iface in config.pp:
-        server_process.append(plib.server(server_ip, len(network) + len(prefix),
-        config.connection_count, config.dh, write_pipe, port,
-        proto, config.hello, config.encrypt, '--dev', iface, *openvpn_args,
-        stdout=os.open(os.path.join(config.log,
-            're6stnet.server.%s.log' % (proto,)),
-            os.O_WRONLY | os.O_CREAT | os.O_TRUNC),
-        stderr=subprocess.STDOUT))
-        server_ip = ''
+    router = plib.router(network, subnet, len(prefix) + len(network),
+        interface_list, config.wireless, config.hello, config.babel_verb,
+        config.babel_pidfile, os.path.join(config.state, 'babeld.state'),
+        stdout=os.open(os.path.join(config.log, 'babeld.log'),
+        os.O_WRONLY | os.O_CREAT | os.O_APPEND), stderr=subprocess.STDOUT)
 
     # main loop
     try:
         try:
+            server_process = []
+            for iface, (port, proto) in server_tunnels.iteritems():
+                server_process.append(plib.server(iface,
+                    internal_ip if proto == pp[0][1] else None,
+                    len(network) + len(prefix),
+                    config.connection_count, config.dh, write_pipe, port,
+                    proto, config.hello, config.encrypt, *openvpn_args))
             while True:
-                logging.info('Sleeping ...')
                 nextUpdate = min(tunnel_manager.next_refresh, peer_db.next_refresh)
-                if forwarder != None:
+                if forwarder:
                     nextUpdate = min(nextUpdate, forwarder.next_refresh)
                 nextUpdate = max(0, nextUpdate - time.time())
                 select_list = [read_pipe]
@@ -186,14 +170,15 @@ def main():
                     peer_db.refresh()
                 if time.time() >= tunnel_manager.next_refresh:
                     tunnel_manager.refresh()
-                if forwarder != None and time.time() > forwarder.next_refresh:
+                if forwarder and time.time() > forwarder.next_refresh:
                     forwarder.refresh()
                 if peer_db.socket_file in ready:
                     peer_db.readSocket()
         finally:
-            for p in [router] + server_process:
+            router.terminate()
+            for p in server_process:
                 try:
-                    p.terminate()
+                    p.kill()
                 except:
                     pass
             try:
@@ -203,7 +188,10 @@ def main():
     except sqlite3.Error:
         traceback.print_exc()
         os.rename(db_path, db_path + '.bak')
-        os.execvp(sys.executable, sys.argv)
+        try:
+            sys.exitfunc()
+        finally:
+            os.execvp(sys.executable, sys.argv)
     except KeyboardInterrupt:
         return 0
 

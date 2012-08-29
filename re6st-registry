@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import argparse, random, select, smtplib, sqlite3, string, socket
+import random, select, smtplib, sqlite3, string, socket
 import subprocess, time, threading, traceback, errno, logging, os, xmlrpclib
 from SimpleXMLRPCServer import SimpleXMLRPCServer, SimpleXMLRPCRequestHandler
 from email.mime.text import MIMEText
@@ -15,17 +15,17 @@ SOL_IPV6 = 41
 
 class RequestHandler(SimpleXMLRPCRequestHandler):
 
-    def _dispatch(self, method, params):
-        return self.server._dispatch(method, (self,) + params)
+    def address_string(self):
+        # Workaround for http://bugs.python.org/issue6085
+        return self.client_address[0]
 
+    def _dispatch(self, method, params):
+        logging.debug('%s%r', method, params)
+        return self.server._dispatch(method, (self,) + params)
 
 class SimpleXMLRPCServer4(SimpleXMLRPCServer):
 
     allow_reuse_address = True
-
-    def address_string(self):
-        # Workaround for http://bugs.python.org/issue6085
-        return self.client_address[0]
 
 
 class SimpleXMLRPCServer6(SimpleXMLRPCServer4):
@@ -48,10 +48,10 @@ class main(object):
         utils.setupLog(3)
 
         # Command line parsing
-        parser = argparse.ArgumentParser(
+        parser = utils.ArgParser(fromfile_prefix_chars='@',
                 description='Peer discovery http server for re6stnet')
         _ = parser.add_argument
-        _('--port', required=True, type=int, help='Port of the host server')
+        _('--port', type=int, default=80, help='Port of the host server')
         _('--db', required=True,
                 help='Path to database file')
         _('--ca', required=True,
@@ -76,21 +76,21 @@ class main(object):
                         address text not null,
                         date integer default (strftime('%s','now')))""")
         self.db.execute("CREATE INDEX IF NOT EXISTS peers_ping ON peers(date)")
-        self.db.execute("""CREATE TABLE IF NOT EXISTS tokens (
+        self.db.execute("""CREATE TABLE IF NOT EXISTS token (
                         token text primary key not null,
                         email text not null,
                         prefix_len integer not null,
                         date integer not null)""")
         try:
-            self.db.execute("""CREATE TABLE vpn (
+            self.db.execute("""CREATE TABLE cert (
                                prefix text primary key not null,
                                email text,
                                cert text)""")
         except sqlite3.OperationalError, e:
-            if e.args[0] != 'table vpn already exists':
+            if e.args[0] != 'table cert already exists':
                 raise RuntimeError
         else:
-            self.db.execute("INSERT INTO vpn VALUES ('',null,null)")
+            self.db.execute("INSERT INTO cert VALUES ('',null,null)")
 
         # Loading certificates
         with open(self.config.ca) as f:
@@ -124,7 +124,7 @@ class main(object):
             token = ''.join(random.sample(string.ascii_lowercase, 8))
             # Updating database
             try:
-                self.db.execute("INSERT INTO tokens VALUES (?,?,?,?)", (token, email, 16, int(time.time())))
+                self.db.execute("INSERT INTO token VALUES (?,?,?,?)", (token, email, 16, int(time.time())))
                 break
             except sqlite3.IntegrityError:
                 pass
@@ -143,18 +143,18 @@ class main(object):
         max_len = 128 - len(self.network)
         assert 0 < prefix_len <= max_len
         try:
-            prefix, = self.db.execute("""SELECT prefix FROM vpn WHERE length(prefix) <= ? AND cert is null
+            prefix, = self.db.execute("""SELECT prefix FROM cert WHERE length(prefix) <= ? AND cert is null
                                          ORDER BY length(prefix) DESC""", (prefix_len,)).next()
         except StopIteration:
             logging.error('There are no more free /%s prefix available' % (prefix_len,))
             raise
         while len(prefix) < prefix_len:
-            self.db.execute("UPDATE vpn SET prefix = ? WHERE prefix = ?", (prefix + '1', prefix))
+            self.db.execute("UPDATE cert SET prefix = ? WHERE prefix = ?", (prefix + '1', prefix))
             prefix += '0'
-            self.db.execute("INSERT INTO vpn VALUES (?,null,null)", (prefix,))
+            self.db.execute("INSERT INTO cert VALUES (?,null,null)", (prefix,))
         if len(prefix) < max_len or '1' in prefix:
             return prefix
-        self.db.execute("UPDATE vpn SET cert = 'reserved' WHERE prefix = ?", (prefix,))
+        self.db.execute("UPDATE cert SET cert = 'reserved' WHERE prefix = ?", (prefix,))
         return self._getPrefix(prefix_len)
 
     def requestCertificate(self, handler, token, cert_req):
@@ -162,11 +162,11 @@ class main(object):
             req = crypto.load_certificate_request(crypto.FILETYPE_PEM, cert_req)
             with self.db:
                 try:
-                    token, email, prefix_len, _ = self.db.execute("SELECT * FROM tokens WHERE token = ?", (token,)).next()
+                    token, email, prefix_len, _ = self.db.execute("SELECT * FROM token WHERE token = ?", (token,)).next()
                 except StopIteration:
                     logging.exception('Bad token (%s) in request' % (token,))
                     raise
-                self.db.execute("DELETE FROM tokens WHERE token = ?", (token,))
+                self.db.execute("DELETE FROM token WHERE token = ?", (token,))
 
                 # Get a new prefix
                 prefix = self._getPrefix(prefix_len)
@@ -185,7 +185,7 @@ class main(object):
                 cert = crypto.dump_certificate(crypto.FILETYPE_PEM, cert)
 
                 # Insert certificate into db
-                self.db.execute("UPDATE vpn SET email = ?, cert = ? WHERE prefix = ?", (email, cert, prefix))
+                self.db.execute("UPDATE cert SET email = ?, cert = ? WHERE prefix = ?", (email, cert, prefix))
 
             return cert
         except:
@@ -199,16 +199,14 @@ class main(object):
         return 'http://[%s]:%u' % (self.config.private, self.config.port)
 
     def getBootstrapPeer(self, handler, client_prefix):
-        cert, = self.db.execute("SELECT cert FROM vpn WHERE prefix = ?",
+        cert, = self.db.execute("SELECT cert FROM cert WHERE prefix = ?",
                 (client_prefix,)).next()
-        logging.trace('Getting bootpeer info...')
         try:
             prefix, address = self.db.execute("""SELECT prefix, address FROM peers
                 WHERE prefix != ? ORDER BY random() LIMIT 1""", (client_prefix,)).next()
         except StopIteration:
             logging.info('No peer to send for bootstrap')
             raise
-        logging.trace('Gotten bootpeer info from db')
         r, w = os.pipe()
         try:
             threading.Thread(target=os.write, args=(w, cert)).start()
@@ -221,12 +219,11 @@ class main(object):
             os.close(w)
 
     def declare(self, handler, address):
-        print "declaring new node"
         client_address, _, _, _ = handler.client_address
         client_ip = utils.binFromIp(client_address)
         if client_ip.startswith(self.network):
             prefix = client_ip[len(self.network):]
-            prefix, = self.db.execute("SELECT prefix FROM vpn WHERE prefix <= ? ORDER BY prefix DESC LIMIT 1", (prefix,)).next()
+            prefix, = self.db.execute("SELECT prefix FROM cert WHERE prefix <= ? ORDER BY prefix DESC LIMIT 1", (prefix,)).next()
             self.db.execute("INSERT OR REPLACE INTO peers (prefix, address) VALUES (?,?)", (prefix, address))
             return True
         else:

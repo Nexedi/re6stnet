@@ -6,11 +6,22 @@ logging_levels = logging.WARNING, logging.INFO, logging.DEBUG, 5
 
 def setupLog(log_level):
     logging.basicConfig(level=logging_levels[log_level],
-            format='%(asctime)s : %(message)s',
+            format='%(asctime)s %(levelname)-9s %(message)s',
             datefmt='%d-%m-%Y %H:%M:%S')
     logging.addLevelName(5, 'TRACE')
     logging.trace = lambda *args, **kw: logging.log(5, *args, **kw)
 
+class ArgParser(argparse.ArgumentParser):
+
+    def convert_arg_line_to_args(self, arg_line):
+        arg_line = arg_line.split('#')[0].rstrip()
+        if arg_line:
+            if arg_line.startswith('@'):
+                yield arg_line
+                return
+            for arg in ('--' + arg_line.lstrip('--')).split():
+                if arg.strip():
+                    yield arg
 
 def binFromIp(ip):
     ip1, ip2 = struct.unpack('>QQ', socket.inet_pton(socket.AF_INET6, ip))

@@ -6,19 +6,13 @@ import utils
 
 # Be carfull the refresh interval should let the routes be established
 
-log = None
-
 
 class Connection:
 
     def __init__(self, address, write_pipe, hello, iface, prefix, encrypt,
             ovpn_args):
-        self.process = plib.client(address, write_pipe, hello, encrypt, '--dev', iface,
-                *ovpn_args, stdout=os.open(os.path.join(log,
-                're6stnet.client.%s.log' % (prefix,)),
-                os.O_WRONLY | os.O_CREAT | os.O_TRUNC),
-                stderr=subprocess.STDOUT)
-
+        self.process = plib.client(iface, address, write_pipe, hello, encrypt,
+                                   *ovpn_args)
         self.iface = iface
         self.routes = 0
         self._prefix = prefix
@@ -61,10 +55,9 @@ class TunnelManager:
             for i in xrange(1, self._client_count + 1))
 
     def refresh(self):
-        logging.info('Checking the tunnels...')
+        logging.debug('Checking tunnels...')
         self._cleanDeads()
         if self._next_tunnel_refresh < time.time():
-            logging.info('Refreshing the tunnels...')
             self._countRoutes()
             self._removeSomeTunnels()
             self._next_tunnel_refresh = time.time() + self._refresh_time
@@ -84,12 +77,12 @@ class TunnelManager:
                 self._client_count + self._refresh_count)]:
             self._kill(prefix)
 
-    def _kill(self, prefix):
+    def _kill(self, prefix, kill=False):
         logging.info('Killing the connection with %s/%u...'
                 % (hex(int(prefix, 2))[2:], len(prefix)))
         connection = self._connection_dict.pop(prefix)
         try:
-            connection.process.terminate()
+            getattr(connection.process, 'kill' if kill else 'terminate')()
         except OSError:
             # If the process is already exited
             pass
@@ -144,7 +137,7 @@ class TunnelManager:
                 if iface in self._iface_list and self._net_len < subnet_size < 128:
                     prefix = ip[self._net_len:subnet_size]
                     logging.debug('A route to %s has been discovered on the LAN'
-                            % (hex(int(prefix), 2)[2:]))
+                            % hex(int(prefix, 2))[2:])
                     self._peer_db.blacklist(prefix, 0)
                 possiblePeers.add(line[0])
 
@@ -163,7 +156,7 @@ class TunnelManager:
 
     def killAll(self):
         for prefix in self._connection_dict.keys():
-            self._kill(prefix)
+            self._kill(prefix, True)
 
     def checkIncomingTunnel(self, prefix):
         if prefix in self._connection_dict:

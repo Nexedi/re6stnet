@@ -33,6 +33,7 @@ request.
 
 --port port
             The port on which the server will listen
+            Default: 80
 
 --db path
             Path to the server Database file. A new DB file will be created

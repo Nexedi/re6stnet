@@ -10,7 +10,7 @@ class PeerManager:
 
     # internal ip = temp arg/attribute
     def __init__(self, db_path, registry, key_path, refresh_time, address,
-                       internal_ip, prefix, manual, pp, db_size):
+                       internal_ip, prefix, ip_changed, db_size):
         self._refresh_time = refresh_time
         self.address = address
         self._internal_ip = internal_ip
@@ -18,8 +18,7 @@ class PeerManager:
         self.db_size = db_size
         self._registry = registry
         self._key_path = key_path
-        self._pp = pp
-        self._manual = manual
+        self._ip_changed = ip_changed
         self.tunnel_manager = None
 
         self.sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
@@ -53,7 +52,15 @@ class PeerManager:
             a, = self._db.execute("SELECT value FROM config WHERE name='registry'").next()
         except StopIteration:
             proxy = xmlrpclib.ServerProxy(registry)
-            a = proxy.getPrivateAddress()
+            retry = 1
+            while True:
+                try:
+                    a = proxy.getPrivateAddress()
+                    break
+                except socket.error, e:
+                    logging.warning(e)
+                    time.sleep(retry)
+                    retry = min(60, retry * 2)
             self._db.execute("INSERT INTO config VALUES ('registry',?)", (a,))
         self._proxy = xmlrpclib.ServerProxy(a)
         logging.debug('Database prepared')
@@ -97,7 +104,7 @@ class PeerManager:
             self.next_refresh = time.time() + self._refresh_time
             logging.debug('Info sent')
         else:
-            logging.warning("Warning : couldn't send ip, unknown external config. retrying in 30s")
+            logging.warning("Could not send ip, unknown external config. retrying in 30s")
 
     def getUnusedPeers(self, peer_count):
         for populate in self._bootstrap, bool:
@@ -107,7 +114,7 @@ class PeerManager:
             if peer_list:
                 return peer_list
             populate()
-        logging.warning('Cannot find any new peers')
+        logging.warning('Can not find any new peer')
         return []
 
     def _bootstrap(self):
@@ -152,22 +159,19 @@ class PeerManager:
             self.whitelist(utils.binFromSubnet(arg))
             logging.info('%s has disconnected' % (arg,))
         elif script_type == 'route-up':
-            if not self._manual:
-                external_ip = arg
-                new_address = list([external_ip, port, proto]
-                                   for port, proto, _ in self._pp)
-                if self.address != new_address:
-                    self.address = new_address
-                    logging.info('Received new external ip : %s'
-                              % (external_ip,))
+            if self._ip_changed:
+                address = self._ip_changed(arg)
+                if self.address != address:
+                    self.address = address
+                    logging.info('Received new external ip : %s', arg)
                     try:
                         self._declare()
                     except socket.error, e:
-                        logging.debug('socket.error : %s' % e)
-                        logging.info("""Connection to server failed while declaring external infos""")
+                        logging.info("Connection to server failed while"
+                                     " declaring external infos (%s)", e)
         else:
-            logging.debug('Unknow message recieved from the openvpn pipe : %s'
-                    % msg)
+            logging.info("Unknown message received from the openvpn pipe: %s",
+                         msg)
 
     def readSocket(self):
         msg = self.socket_file.readline()
