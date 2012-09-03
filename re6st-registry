@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import random, select, smtplib, sqlite3, string, socket
 import subprocess, time, threading, traceback, errno, logging, os, xmlrpclib
+from collections import deque
 from SimpleXMLRPCServer import SimpleXMLRPCServer, SimpleXMLRPCRequestHandler
 from email.mime.text import MIMEText
 from OpenSSL import crypto
@@ -222,6 +223,42 @@ class main(object):
         finally:
             os.close(r)
             os.close(w)
+
+    def topology(self, handler):
+        if handler.client_address[0] in ('127.0.0.1', '::'):
+            is_registry = utils.binFromIp(self.config.private
+                )[len(self.network):].startswith
+            peers = deque('%u/%u' % (int(x, 2), len(x))
+                for x, in self.db.execute("SELECT prefix FROM cert")
+                if is_registry(x))
+            assert len(peers) == 1
+            cookie = hex(random.randint(0, 1<<32))[2:]
+            graph = dict.fromkeys(peers)
+            asked = 0
+            while True:
+                r, w, _ = select.select([self.sock],
+                    [self.sock] if peers else [], [], 1)
+                if r:
+                    answer = self.sock.recv(1<<16)
+                    if answer[0] == '\xfe':
+                        answer = answer[1:].split('\n')[:-1]
+                        if len(answer) >= 3 and answer[0] == cookie:
+                            x = answer[3:]
+                            assert answer[1] not in x, (answer, graph)
+                            graph[answer[1]] = x[:int(answer[2])]
+                            x = set(x).difference(graph)
+                            peers += x
+                            graph.update(dict.fromkeys(x))
+                if w:
+                    x = utils.binFromSubnet(peers.popleft())
+                    x = utils.ipFromBin(self.network + x)
+                    try:
+                        self.sock.sendto('\xff%s\n' % cookie, (x, tunnel.PORT))
+                    except socket.error:
+                        pass
+                elif not r:
+                    break
+            return graph
 
 if __name__ == "__main__":
     main()

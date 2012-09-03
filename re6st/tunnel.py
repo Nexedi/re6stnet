@@ -294,3 +294,16 @@ class TunnelManager(object):
                     self.sock.sendto('\1' + ''.join(msg), address)
                 except socket.error, e:
                     logging.info('Failed to reply to %s (%s)', address, e)
+        elif code == 255:
+            # the registry wants to know the topology for debugging purpose
+            if utils.binFromIp(address[0]) == self._peer_db.registry_ip:
+                msg = ['\xfe%s%u/%u\n%u\n' % (msg[1:],
+                    int(self._prefix, 2), len(self._prefix),
+                    len(self._connection_dict))]
+                msg.extend('%s/%s\n' % (int(x, 2), len(x))
+                           for x in (self._connection_dict, self._served)
+                           for x in x)
+                try:
+                    self.sock.sendto(''.join(msg), address)
+                except socket.error, e:
+                    pass

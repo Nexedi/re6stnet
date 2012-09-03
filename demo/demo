@@ -170,7 +170,7 @@ def node_by_ll(addr):
                     _ll[a] = n, t
     return _ll[addr]
 
-def babel_svg(z=4):
+def route_svg(z=4):
     graph = {}
     for n in nodes:
         g = graph[n] = defaultdict(list)
@@ -214,18 +214,42 @@ if len(sys.argv) > 1:
 
     class Handler(SimpleHTTPServer.SimpleHTTPRequestHandler):
         def do_GET(self):
-            if self.path == '/':
-                mt = 'text/html'
-                x = babel_svg()
-                body = """<html>
+            svg = None
+            if self.path == '/route.html':
+                svg = route_svg()
+            elif self.path == '/tunnel.html':
+                gv = registry.Popen(('python', '-c', r"""if 1:
+                    import math, xmlrpclib
+                    g = xmlrpclib.ServerProxy('http://localhost/').topology()
+                    print 'digraph {'
+                    a = 2 * math.pi / len(g)
+                    z = 4
+                    for i, n in enumerate(sorted(g)):
+                        p = g[n]
+                        print '"%s"[pos="%s,%s!"%s];' % (n,
+                            z * math.cos(a * i), z * math.sin(a * i),
+                            ', style=dashed' if p is None else '')
+                        for p in p or ():
+                            print '"%s" -> "%s";' % (n, p)
+                    print '}'
+                """), stdout=subprocess.PIPE).communicate()[0]
+                if gv:
+                    svg = subprocess.Popen(('neato', '-Tsvg'),
+                        stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                        ).communicate(gv)[0]
+                if not svg:
+                    self.send_error(500)
+                    return
+            else:
+                self.send_error(404)
+                return
+            mt = 'text/html'
+            body = """<html>
 <head><meta http-equiv="refresh" content="10"/></head>
 <body>
 %s
 </body>
-</html>""" % x[x.find('<svg'):]
-            else:
-                self.send_error(404)
-                return
+</html>""" % svg[svg.find('<svg'):]
             self.send_response(200)
             self.send_header('Content-Length', len(body))
             self.send_header('Content-type', mt + '; charset=utf-8')
