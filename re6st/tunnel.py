@@ -1,18 +1,19 @@
-import os, traceback, time, subprocess, logging
-import socket
-import random
-import plib
-import utils
+import logging, random, socket, time
+from itertools import chain
+from . import plib, utils
 
-# Be carfull the refresh interval should let the routes be established
+PORT = 326
+RTF_CACHE = 0x01000000  # cache entry
 
+# Be careful the refresh interval should let the routes be established
 
 class Connection:
 
     def __init__(self, address, write_pipe, hello, iface, prefix, encrypt,
             ovpn_args):
         self.process = plib.client(iface, address, write_pipe, hello, encrypt,
-                                   *ovpn_args)
+            '--tls-remote', '%u/%u' % (int(prefix, 2), len(prefix)),
+            '--connect-retry-max', '3', *ovpn_args)
         self.iface = iface
         self.routes = 0
         self._prefix = prefix
@@ -26,25 +27,31 @@ class Connection:
         return True
 
 
-class TunnelManager:
+class TunnelManager(object):
 
     def __init__(self, write_pipe, peer_db, openvpn_args, hello_interval,
-                refresh, connection_count, iface_list, network, prefix, nSend,
-                encrypt):
+                refresh, connection_count, iface_list, network, prefix,
+                address, ip_changed, encrypt):
         self._write_pipe = write_pipe
         self._peer_db = peer_db
+        self._connecting = set()
         self._connection_dict = {}
+        self._disconnected = None
+        self._distant_peers = []
         self._iface_to_prefix = {}
         self._ovpn_args = openvpn_args
         self._hello = hello_interval
         self._refresh_time = refresh
         self._network = network
-        self._net_len = len(network)
         self._iface_list = iface_list
         self._prefix = prefix
-        self._nSend = nSend
+        self._address = utils.address_str(address)
+        self._ip_changed = ip_changed
         self._encrypt = encrypt
-        self._fast_start_done = False
+        self._served = set()
+
+        self.sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+        self.sock.bind(('::', PORT))
 
         self.next_refresh = time.time()
         self._next_tunnel_refresh = time.time()
@@ -57,11 +64,13 @@ class TunnelManager:
     def refresh(self):
         logging.debug('Checking tunnels...')
         self._cleanDeads()
-        if self._next_tunnel_refresh < time.time():
+        remove = self._next_tunnel_refresh < time.time()
+        if remove:
             self._countRoutes()
             self._removeSomeTunnels()
             self._next_tunnel_refresh = time.time() + self._refresh_time
-        self._makeNewTunnels()
+            self._peer_db.log()
+        self._makeNewTunnels(remove)
         self.next_refresh = time.time() + 5
 
     def _cleanDeads(self):
@@ -87,92 +96,201 @@ class TunnelManager:
             # If the process is already exited
             pass
         self.free_interface_set.add(connection.iface)
-        self._peer_db.unusePeer(prefix)
         del self._iface_to_prefix[connection.iface]
         logging.trace('Connection with %s/%u killed'
                 % (hex(int(prefix, 2))[2:], len(prefix)))
 
-    def _makeNewTunnels(self):
-        tunnel_to_make = self._client_count - len(self._connection_dict)
-        if tunnel_to_make <= 0:
+    def _makeTunnel(self, prefix, address):
+        assert len(self._connection_dict) < self._client_count, (prefix, self.__dict__)
+        if prefix in self._served or prefix in self._connection_dict:
+            return False
+        assert prefix != self._prefix, self.__dict__
+        logging.info('Establishing a connection with %s/%u',
+                     hex(int(prefix, 2))[2:], len(prefix))
+        iface = self.free_interface_set.pop()
+        self._connection_dict[prefix] = Connection(address, self._write_pipe,
+            self._hello, iface, prefix, self._encrypt, self._ovpn_args)
+        self._iface_to_prefix[iface] = prefix
+        self._peer_db.connecting(prefix, 1)
+        return True
+
+    def _makeNewTunnels(self, route_counted):
+        count = self._client_count - len(self._connection_dict)
+        if not count:
             return
-        i = 0
-        logging.trace('Trying to make %i new tunnels...' % tunnel_to_make)
-        try:
-            for prefix, address in self._peer_db.getUnusedPeers(tunnel_to_make):
-                logging.info('Establishing a connection with %s/%u' %
-                        (hex(int(prefix, 2))[2:], len(prefix)))
-                iface = self.free_interface_set.pop()
-                self._connection_dict[prefix] = Connection(address,
-                        self._write_pipe, self._hello, iface,
-                        prefix, self._encrypt, self._ovpn_args)
-                self._iface_to_prefix[iface] = prefix
-                self._peer_db.usePeer(prefix)
-                i += 1
-            logging.trace('%u new tunnels established' % (i,))
-        except KeyError:
-            logging.warning("""Can't establish connection with %s
-                              : no available interface""" % prefix)
-        except Exception:
-            traceback.print_exc()
+        assert count >= 0
+        # CAVEAT: Forget any peer that didn't reply to our previous address
+        #         request, either because latency is too high or some packet
+        #         was lost. However, this means that some time should pass
+        #         before calling _makeNewTunnels again.
+        self._connecting.clear()
+        distant_peers = self._distant_peers
+        if len(distant_peers) < count and not route_counted:
+            self._countRoutes()
+        disconnected = self._disconnected
+        if disconnected is not None:
+            # We aren't the registry node and we have no tunnel to or from it,
+            # so it looks like we are not connected to the network, and our
+            # neighbours are in the same situation.
+            self._disconnected = None
+            disconnected = set(disconnected).union(distant_peers)
+            if disconnected:
+                # We do have neighbours that are probably also disconnected,
+                # so force rebootstrapping.
+                peer = self._peer_db.getBootstrapPeer()
+                if not peer:
+                    # Registry dead ? Assume we're connected after all.
+                    disconnected = None
+                elif peer[0] not in disconnected:
+                    # Got a node that will probably help us rejoining the
+                    # network, so connect to it.
+                    count -= self._makeTunnel(*peer)
+        if disconnected is None:
+            # Normal operation. Choose peers to connect to by looking at the
+            # routing table.
+            while count and distant_peers:
+                i = random.randrange(0, len(distant_peers))
+                peer = distant_peers[i]
+                distant_peers[i] = distant_peers[-1]
+                del distant_peers[-1]
+                address = self._peer_db.getAddress(peer)
+                if address:
+                    count -= self._makeTunnel(peer, address)
+                else:
+                    ip = utils.ipFromBin(self._network + peer)
+                    try:
+                        self.sock.sendto('\2', (ip, PORT))
+                    except socket.error, e:
+                        logging.info('Failed to query %s (%s)', ip, e)
+                    self._connecting.add(peer)
+                    count -= 1
+        elif count:
+            # No route/tunnel to registry, which usually happens when starting
+            # up. Select peers from cache for which we have no route.
+            for peer, address in self._peer_db.getPeerList():
+                if peer not in disconnected and self._makeTunnel(peer, address):
+                    count -= 1
+                    if not count:
+                        break
+            else:
+                if not (disconnected or self._served or self._connection_dict):
+                    # Startup without any good address in the cache.
+                    peer = self._peer_db.getBootstrapPeer()
+                    if not (peer and self._makeTunnel(*peer)):
+                        # Failed to bootstrap ! Last change to connect is to
+                        # retry an address that already failed :(
+                        for peer in self._peer_db.getPeerList(1):
+                            if self._makeTunnel(*peer):
+                                break
 
     def _countRoutes(self):
         logging.debug('Starting to count the routes on each interface...')
-        self._peer_db.clear_blacklist(0)
-        possiblePeers = set()
-        for iface in self._iface_to_prefix.keys():
-            self._connection_dict[self._iface_to_prefix[iface]].routes = 0
-        for line in open('/proc/net/ipv6_route'):
-            line = line.split()
-            ip = bin(int(line[0], 16))[2:].rjust(128, '0')
-
-            if (ip.startswith(self._network) and
-                    not ip.startswith(self._network + self._prefix)):
+        del self._distant_peers[:]
+        for conn in self._connection_dict.itervalues():
+            conn.routes = 0
+        a = len(self._network)
+        b = a + len(self._prefix)
+        other = []
+        with open('/proc/net/ipv6_route') as f:
+            self._last_routing_table = f.read()
+            for line in self._last_routing_table.splitlines():
+                line = line.split()
                 iface = line[-1]
-                subnet_size = int(line[1], 16)
-                logging.trace('Route on iface %s detected to %s/%s'
-                        % (iface, line[0], subnet_size))
-                if iface in self._iface_to_prefix.keys():
-                    self._connection_dict[self._iface_to_prefix[iface]].routes += 1
-                if iface in self._iface_list and self._net_len < subnet_size < 128:
-                    prefix = ip[self._net_len:subnet_size]
-                    logging.debug('A route to %s has been discovered on the LAN'
-                            % hex(int(prefix, 2))[2:])
-                    self._peer_db.blacklist(prefix, 0)
-                possiblePeers.add(line[0])
-
-        if not self._fast_start_done and len(possiblePeers) > 4:
-            nSend = min(self._peer_db.db_size, len(possiblePeers))
+                if iface == 'lo' or int(line[-2], 16) & RTF_CACHE:
+                    continue
+                ip = bin(int(line[0], 16))[2:].rjust(128, '0')
+                if ip[:a] != self._network or ip[a:b] == self._prefix:
+                    continue
+                prefix_len = int(line[1], 16)
+                prefix = ip[a:prefix_len]
+                logging.trace('Route on iface %s detected to %s/%u',
+                              iface, utils.ipFromBin(ip), prefix_len)
+                nexthop = self._iface_to_prefix.get(iface)
+                if nexthop:
+                    self._connection_dict[nexthop].routes += 1
+                if prefix in self._served or prefix in self._connection_dict:
+                    continue
+                if iface in self._iface_list:
+                    other.append(prefix)
+                else:
+                    self._distant_peers.append(prefix)
+        is_registry = self._peer_db.registry_ip[a:].startswith
+        if is_registry(self._prefix) or any(is_registry(peer)
+              for peer in chain(self._distant_peers, other,
+                                self._served, self._connection_dict)):
+            self._disconnected = None
+            # XXX: When there is no new peer to connect when looking at routes
+            #      coming from tunnels, we'd like to consider those discovered
+            #      from the LAN. However, we don't want to create tunnels to
+            #      nodes of the LAN so do nothing until we find a way to get
+            #      some information from Babel.
+            #if not self._distant_peers:
+            #    self._distant_peers = other
         else:
-            nSend = min(2, len(possiblePeers))
-        for ip in random.sample(possiblePeers, nSend):
-            self._notifyPeer(ip)
-
-        logging.debug("Routes have been counted")
-        for p in self._connection_dict.keys():
-            logging.trace('Routes on iface %s : %s' % (
-                self._connection_dict[p].iface,
-                self._connection_dict[p].routes))
+            self._disconnected = other
+        logging.debug("Routes counted: %u distant peers",
+                      len(self._distant_peers))
+        for c in self._connection_dict.itervalues():
+            logging.trace('- %s: %s', c.iface, c.routes)
 
     def killAll(self):
         for prefix in self._connection_dict.keys():
             self._kill(prefix, True)
 
-    def checkIncomingTunnel(self, prefix):
-        if prefix in self._connection_dict:
-            if prefix < self._prefix:
-                return False
-            else:
-                self._kill(prefix)
-        return True
-
-    def _notifyPeer(self, peerIp):
+    def handleTunnelEvent(self, msg):
         try:
-            if self._peer_db.address:
-                ip = '%s:%s:%s:%s:%s:%s:%s:%s' % (peerIp[0:4], peerIp[4:8], peerIp[8:12],
-                    peerIp[12:16], peerIp[16:20], peerIp[20:24], peerIp[24:28], peerIp[28:32])
-                logging.trace('Notifying peer %s' % ip)
-                self._peer_db.sock.sendto('%s %s\n' % (self._prefix, utils.address_str(self._peer_db.address)), (ip, 326))
-        except socket.error, e:
-            logging.debug('Unable to notify %s' % ip)
-            logging.debug('socket.error : %s' % e)
+            script_type, arg = msg.split(None, 1)
+            m = getattr(self, '_ovpn_' + script_type.replace('-', '_'))
+        except (AttributeError, ValueError):
+            logging.warning("Unknown message received from OpenVPN: %s", msg)
+        else:
+            logging.debug('%s: %s', script_type, arg)
+            m(arg)
+
+    def _ovpn_client_connect(self, common_name):
+        prefix = utils.binFromSubnet(common_name)
+        self._served.add(prefix)
+        if prefix in self._connection_dict and self._prefix < prefix:
+            self._kill(prefix)
+            self._peer_db.connecting(prefix, 0)
+
+    def _ovpn_client_disconnect(self, common_name):
+        prefix = utils.binFromSubnet(common_name)
+        self._served.remove(prefix)
+
+    def _ovpn_route_up(self, arg):
+        common_name, ip = arg.split()
+        self._peer_db.connecting(utils.binFromSubnet(common_name), 0)
+        if self._ip_changed:
+            self._address = utils.address_str(self._ip_changed(ip))
+
+    def handlePeerEvent(self):
+        msg, address = self.sock.recvfrom(1<<16)
+        code = ord(msg[0])
+        if code == 1: # answer
+            # TODO: do not fail if message contains garbage
+            # We parse the message in a way to discard a truncated line.
+            for peer in msg[1:].split('\n')[:-1]:
+                prefix, address = peer.split()
+                if prefix != self._prefix:
+                    self._peer_db.addPeer(prefix, address)
+                    try:
+                        self._connecting.remove(prefix)
+                    except KeyError:
+                        continue
+                    self._makeTunnel(prefix, address)
+        elif code == 2: # request
+            encode = '%s %s\n'.__mod__
+            if self._address:
+                msg = [encode((self._prefix, self._address))]
+            else: # I don't know my IP yet!
+                msg = []
+            # Add an extra random peer, mainly for the registry.
+            for peer in self._peer_db.getPeerList():
+                msg.append(encode(peer))
+                break
+            if msg:
+                try:
+                    self.sock.sendto('\1' + ''.join(msg), address)
+                except socket.error, e:
+                    logging.info('Failed to reply to %s (%s)', address, e)

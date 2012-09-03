@@ -4,7 +4,7 @@ import subprocess, time, threading, traceback, errno, logging, os, xmlrpclib
 from SimpleXMLRPCServer import SimpleXMLRPCServer, SimpleXMLRPCRequestHandler
 from email.mime.text import MIMEText
 from OpenSSL import crypto
-from re6st  import utils
+from re6st import tunnel, utils
 
 # To generate server ca and key with serial for 2001:db8:42::/48
 # openssl req -nodes -new -x509 -key ca.key -set_serial 0x120010db80042 -days 365 -out ca.crt
@@ -64,18 +64,15 @@ class main(object):
                 help='VPN IP of the node on which runs the registry')
         self.config = parser.parse_args()
 
-        if not self.config.private:
+        if self.config.private:
+            self.sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+        else:
             logging.warning('You have declared no private address'
                     ', either this is the first start, or you should'
                     'check you configuration')
 
         # Database initializing
         self.db = sqlite3.connect(self.config.db, isolation_level=None)
-        self.db.execute("""CREATE TABLE IF NOT EXISTS peers (
-                        prefix text primary key not null,
-                        address text not null,
-                        date integer default (strftime('%s','now')))""")
-        self.db.execute("CREATE INDEX IF NOT EXISTS peers_ping ON peers(date)")
         self.db.execute("""CREATE TABLE IF NOT EXISTS token (
                         token text primary key not null,
                         email text not null,
@@ -196,40 +193,35 @@ class main(object):
         return crypto.dump_certificate(crypto.FILETYPE_PEM, self.ca)
 
     def getPrivateAddress(self, handler):
-        return 'http://[%s]:%u' % (self.config.private, self.config.port)
+        return self.config.private
 
     def getBootstrapPeer(self, handler, client_prefix):
         cert, = self.db.execute("SELECT cert FROM cert WHERE prefix = ?",
                 (client_prefix,)).next()
-        try:
-            prefix, address = self.db.execute("""SELECT prefix, address FROM peers
-                WHERE prefix != ? ORDER BY random() LIMIT 1""", (client_prefix,)).next()
-        except StopIteration:
-            logging.info('No peer to send for bootstrap')
-            raise
+        address = self.config.private, tunnel.PORT
+        self.sock.sendto('\2', address)
+        peer = None
+        while select.select([self.sock], [], [], peer is None)[0]:
+            msg = self.sock.recv(1<<16)
+            if msg[0] == '\1':
+                try:
+                    peer = msg[1:].split('\n')[-2]
+                except IndexError:
+                    peer = ''
+        if peer is None:
+            raise EnvironmentError("Timeout while querying [%s]:%u", *address)
+        if not peer or peer.split()[0] == client_prefix:
+            raise LookupError("No bootstrap peer found")
+        logging.info("Sending bootstrap peer: %s", peer)
         r, w = os.pipe()
         try:
             threading.Thread(target=os.write, args=(w, cert)).start()
             p = subprocess.Popen(('openssl', 'rsautl', '-encrypt', '-certin', '-inkey', '/proc/self/fd/%u' % r),
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-            logging.info("Sending bootstrap peer (%s, %s)" % (prefix, address))
-            return xmlrpclib.Binary(p.communicate('%s %s' % (prefix, address))[0])
+            return xmlrpclib.Binary(p.communicate(peer)[0])
         finally:
             os.close(r)
             os.close(w)
-
-    def declare(self, handler, address):
-        client_address, _, _, _ = handler.client_address
-        client_ip = utils.binFromIp(client_address)
-        if client_ip.startswith(self.network):
-            prefix = client_ip[len(self.network):]
-            prefix, = self.db.execute("SELECT prefix FROM cert WHERE prefix <= ? ORDER BY prefix DESC LIMIT 1", (prefix,)).next()
-            self.db.execute("INSERT OR REPLACE INTO peers (prefix, address) VALUES (?,?)", (prefix, address))
-            return True
-        else:
-            logging.warning("Unauthorized connection from %s which does not start with %s"
-                    % (utils.ipFromBin(client_ip), utils.ipFromBin(self.network.ljust(128, '0'))))
-            return False
 
 if __name__ == "__main__":
     main()

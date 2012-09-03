@@ -4,10 +4,13 @@ from OpenSSL import crypto
 logging_levels = logging.WARNING, logging.INFO, logging.DEBUG, 5
 
 
-def setupLog(log_level):
-    logging.basicConfig(level=logging_levels[log_level],
+def setupLog(log_level, **kw):
+    if log_level:
+        logging.basicConfig(level=logging_levels[log_level-1],
             format='%(asctime)s %(levelname)-9s %(message)s',
-            datefmt='%d-%m-%Y %H:%M:%S')
+            datefmt='%d-%m-%Y %H:%M:%S', **kw)
+    else:
+        logging.disable(logging.CRITICAL)
     logging.addLevelName(5, 'TRACE')
     logging.trace = lambda *args, **kw: logging.log(5, *args, **kw)
 
@@ -28,19 +31,10 @@ def binFromIp(ip):
     return bin(ip1)[2:].rjust(64, '0') + bin(ip2)[2:].rjust(64, '0')
 
 
-def ipFromBin(prefix):
-    prefix = hex(int(prefix, 2))[2:]
-    ip = ''
-    for i in xrange(0, len(prefix) - 1, 4):
-        ip += prefix[i:i + 4] + ':'
-    return ip.rstrip(':')
-
-
-def ipFromPrefix(re6stnet, prefix, prefix_len):
-    prefix = bin(int(prefix))[2:].rjust(prefix_len, '0')
-    ip_t = (re6stnet + prefix).ljust(127, '0').ljust(128, '1')
-    return ipFromBin(ip_t), prefix
-
+def ipFromBin(prefix, suffix=''):
+    ip = prefix + suffix.rjust(128 - len(prefix), '0')
+    return socket.inet_ntop(socket.AF_INET6,
+        struct.pack('>QQ', int(ip[:64], 2), int(ip[64:], 2)))
 
 def networkFromCa(ca_path):
     # Get network prefix from ca.crt
@@ -48,15 +42,14 @@ def networkFromCa(ca_path):
         ca = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
         return bin(ca.get_serial_number())[3:]
 
-
 def ipFromCert(network, cert_path):
     # Get ip from cert.crt
     with open(cert_path, 'r') as f:
         cert = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
         subject = cert.get_subject()
         prefix, prefix_len = subject.CN.split('/')
-        return ipFromPrefix(network, prefix, int(prefix_len))
-
+        prefix = bin(int(prefix))[2:].rjust(int(prefix_len), '0')
+        return ipFromBin(network + prefix, '1'), prefix
 
 def address_str(address):
     return ';'.join(map(','.join, address))
@@ -68,7 +61,5 @@ def address_list(address_list):
 
 
 def binFromSubnet(subnet):
-    prefix, subnet_size = subnet.split('/')
-    binary = bin(int(prefix))[2:]
-    binary = ('0' * (int(subnet_size) - len(binary))) + binary
-    return binary
+    p, l = subnet.split('/')
+    return bin(int(p))[2:].rjust(int(l), '0')

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import atexit, os, sys, select, socket, time
+import atexit, os, sys, select, time
 import argparse, signal, subprocess, sqlite3, logging, traceback
 from re6st import plib, utils, db, tunnel
 
@@ -27,13 +27,11 @@ def getConfig():
     _('--registry', required=True,
             help="HTTP URL of the discovery peer server,"
                  " with public host (default port: 80)")
-    _('--peers-db-refresh', default=43200, type=int,
-            help='the time (seconds) to wait before refreshing the peers db')
     _('-l', '--log', default='/var/log',
             help='Path to re6stnet logs directory')
     _('-s', '--state', default='/var/lib/re6stnet',
             help='Path to re6stnet state directory')
-    _('-v', '--verbose', default=0, type=int,
+    _('-v', '--verbose', default=1, type=int,
             help='Log level of re6st itself')
     _('-i', '--interface', action='append', dest='iface_list', default=[],
             help='Extra interface for LAN discovery')
@@ -83,7 +81,8 @@ def main():
     db_path = os.path.join(config.state, 'peers.db')
 
     # Set logging
-    utils.setupLog(config.verbose)
+    utils.setupLog(config.verbose,
+        filename=os.path.join(config.log, 're6stnet.log'))
 
     logging.trace("Configuration :\n%s" % config)
 
@@ -124,13 +123,11 @@ def main():
     if address:
         ip_changed = None
 
-    peer_db = db.PeerManager(db_path, config.registry, config.key,
-            config.peers_db_refresh, address, internal_ip, prefix,
-            ip_changed, 200)
+    peer_db = db.PeerDB(db_path, config.registry, config.key, prefix)
     tunnel_manager = tunnel.TunnelManager(write_pipe, peer_db, openvpn_args,
-            config.hello, config.tunnel_refresh, config.connection_count,
-            config.iface_list, network, prefix, 2, config.encrypt)
-    peer_db.tunnel_manager = tunnel_manager
+        config.hello, config.tunnel_refresh, config.connection_count,
+        config.iface_list, network, prefix, address, ip_changed,
+        config.encrypt)
 
     # Launch routing protocol. WARNING : you have to be root to start babeld
     server_tunnels = {}
@@ -156,24 +153,24 @@ def main():
                     config.connection_count, config.dh, write_pipe, port,
                     proto, config.hello, config.encrypt, *openvpn_args))
             while True:
-                nextUpdate = min(tunnel_manager.next_refresh, peer_db.next_refresh)
+                next = tunnel_manager.next_refresh
                 if forwarder:
-                    nextUpdate = min(nextUpdate, forwarder.next_refresh)
-                nextUpdate = max(0, nextUpdate - time.time())
-                select_list = [read_pipe]
-                if peer_db.socket_file:
-                    select_list.append(peer_db.socket_file)
-                ready, tmp1, tmp2 = select.select(select_list, [], [], nextUpdate)
-                if read_pipe in ready:
-                    peer_db.handle_message(read_pipe.readline())
-                if time.time() >= peer_db.next_refresh:
-                    peer_db.refresh()
-                if time.time() >= tunnel_manager.next_refresh:
+                    next = min(next, forwarder.next_refresh)
+                r = [read_pipe, tunnel_manager.sock]
+                r = select.select(r, [], [], max(0, next - time.time()))[0]
+                if read_pipe in r:
+                    tunnel_manager.handleTunnelEvent(read_pipe.readline())
+                if tunnel_manager.sock in r:
+                    tunnel_manager.handlePeerEvent()
+                t = time.time()
+                if t >= tunnel_manager.next_refresh:
                     tunnel_manager.refresh()
-                if forwarder and time.time() > forwarder.next_refresh:
+                if forwarder and t >= forwarder.next_refresh:
                     forwarder.refresh()
-                if peer_db.socket_file in ready:
-                    peer_db.readSocket()
+        except Exception:
+            f = traceback.format_exception(*sys.exc_info())
+            logging.error('%s%s', f.pop(), ''.join(f))
+            raise
         finally:
             router.terminate()
             for p in server_process:
@@ -186,7 +183,6 @@ def main():
             except:
                 pass
     except sqlite3.Error:
-        traceback.print_exc()
         os.rename(db_path, db_path + '.bak')
         try:
             sys.exitfunc()

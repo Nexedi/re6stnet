@@ -1,9 +1,5 @@
 PRAGMA foreign_keys=OFF;
 BEGIN TRANSACTION;
-CREATE TABLE peers (
-    prefix text primary key not null,
-    address text not null,
-    date integer default (strftime('%s','now')));
 CREATE TABLE token (
     token text primary key not null,
     email text not null,
@@ -190,5 +186,4 @@ rlyT1Q==
 INSERT INTO "cert" VALUES('0000000000001001',NULL,NULL);
 INSERT INTO "cert" VALUES('000000000000101',NULL,NULL);
 INSERT INTO "cert" VALUES('00000000000011',NULL,NULL);
-CREATE INDEX peers_ping ON peers(date);
 COMMIT;

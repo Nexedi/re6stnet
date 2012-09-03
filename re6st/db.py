@@ -1,195 +1,109 @@
 import logging, sqlite3, socket, subprocess, xmlrpclib, time
+from urllib import splittype, splithost, splitport
 import utils
 
-# used = 0 : fresh node
-# used = 1 : previously used peer
-# used = 2 : curently in use
 
-
-class PeerManager:
+class PeerDB(object):
 
     # internal ip = temp arg/attribute
-    def __init__(self, db_path, registry, key_path, refresh_time, address,
-                       internal_ip, prefix, ip_changed, db_size):
-        self._refresh_time = refresh_time
-        self.address = address
-        self._internal_ip = internal_ip
+    def __init__(self, db_path, registry, key_path, prefix, db_size=200):
         self._prefix = prefix
-        self.db_size = db_size
-        self._registry = registry
+        self._db_size = db_size
         self._key_path = key_path
-        self._ip_changed = ip_changed
-        self.tunnel_manager = None
+        self._proxy = xmlrpclib.ServerProxy(registry)
 
-        self.sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
-        self.sock.bind(('::', 326))
-        self.socket_file = self.sock.makefile()
-
-        logging.info('Connecting to peers database...')
+        logging.info('Initialize cache ...')
         self._db = sqlite3.connect(db_path, isolation_level=None)
-        logging.debug('Database opened')
-
-        logging.info('Preparing peers database...')
-        self._db.execute("""CREATE TABLE IF NOT EXISTS peers (
-                            prefix TEXT PRIMARY KEY,
-                            address TEXT NOT NULL,
-                            used INTEGER NOT NULL DEFAULT 0,
-                            date INTEGER DEFAULT (strftime('%s', 'now')))""")
-        self._db.execute("UPDATE peers SET used = 1 WHERE used = 2")
-        self._db.execute("""CREATE INDEX IF NOT EXISTS
-                          _peers_used ON peers(used)""")
-        self._db.execute("""CREATE TABLE IF NOT EXISTS config (
-                            name text primary key,
-                            value text)""")
-        self._db.execute('ATTACH DATABASE ":memory:" AS blacklist')
-        self._db.execute("""CREATE TABLE blacklist.flag (
-                            prefix TEXT PRIMARY KEY,
-                            flag INTEGER NOT NULL)""")
-        self._db.execute("""CREATE INDEX blacklist.blacklist_flag
-                            ON flag(flag)""")
-        self._db.execute("INSERT INTO blacklist.flag VALUES (?,?)", (prefix, 1))
+        q = self._db.execute
+        q("PRAGMA synchronous = OFF")
+        q("PRAGMA journal_mode = MEMORY")
+        q("""CREATE TABLE IF NOT EXISTS peer (
+            prefix TEXT PRIMARY KEY,
+            address TEXT NOT NULL)""")
+        q("""CREATE TABLE IF NOT EXISTS config (
+            name text primary key,
+            value text)""")
+        q('ATTACH DATABASE ":memory:" AS volatile')
+        q("""CREATE TABLE volatile.stat (
+            peer TEXT PRIMARY KEY REFERENCES peer(prefix) ON DELETE CASCADE,
+            try INTEGER NOT NULL DEFAULT 0)""")
+        q("CREATE INDEX volatile.stat_try ON stat(try)")
+        q("INSERT INTO volatile.stat (peer) SELECT prefix FROM peer")
         try:
-            a, = self._db.execute("SELECT value FROM config WHERE name='registry'").next()
+            a = q("SELECT value FROM config WHERE name='registry'").next()[0]
         except StopIteration:
-            proxy = xmlrpclib.ServerProxy(registry)
+            logging.info("Private IP of registry not in cache."
+                         " Asking registry via its public IP ...")
             retry = 1
             while True:
                 try:
-                    a = proxy.getPrivateAddress()
+                    a = self._proxy.getPrivateAddress()
                     break
                 except socket.error, e:
                     logging.warning(e)
                     time.sleep(retry)
                     retry = min(60, retry * 2)
-            self._db.execute("INSERT INTO config VALUES ('registry',?)", (a,))
-        self._proxy = xmlrpclib.ServerProxy(a)
-        logging.debug('Database prepared')
+            q("INSERT INTO config VALUES ('registry',?)", (a,))
+        self.registry_ip = utils.binFromIp(a)
+        logging.info("Cache initialized. Registry IP is %s", a)
 
-        self.next_refresh = time.time()
+    def log(self):
+        if logging.getLogger().isEnabledFor(5):
+            logging.trace("Cache:")
+            for prefix, address, _try in self._db.execute(
+                    "SELECT peer.*, try FROM peer, volatile.stat"
+                    " WHERE prefix=peer ORDER BY prefix"):
+                logging.trace("- %s: %s%s", prefix, address,
+                              ' (blacklisted)' if _try else '')
 
-    def clear_blacklist(self, flag):
-        logging.info('Clearing blacklist from flag %u' % flag)
-        self._db.execute("DELETE FROM blacklist.flag WHERE flag = ?",
-                          (flag,))
-        logging.info('Blacklist cleared')
+    def connecting(self, prefix, connecting):
+        self._db.execute("UPDATE volatile.stat SET try=? WHERE peer=?",
+                         (connecting, prefix))
 
-    def blacklist(self, prefix, flag):
-        logging.info('Blacklisting %s' % prefix)
-        self._db.execute("DELETE FROM peers WHERE prefix = ?", (prefix,))
-        self._db.execute("INSERT OR REPLACE INTO blacklist.flag VALUES (?,?)",
-                          (prefix, flag))
-        logging.debug('%s blacklisted' % prefix)
+    def resetConnecting(self):
+        self._db.execute("UPDATE volatile.stat SET try=0")
 
-    def whitelist(self, prefix):
-        logging.info('Unblacklisting %s' % prefix)
-        self._db.execute("DELETE FROM blacklist.flag WHERE prefix = ?", (prefix,))
-        logging.debug('%s whitelisted' % prefix)
+    def getAddress(self, prefix):
+        r = self._db.execute("SELECT address FROM peer, volatile.stat"
+                             " WHERE prefix=? AND prefix=peer AND try=0",
+                             (prefix,)).fetchone()
+        return r and r[0]
 
-    def refresh(self):
-        logging.info('Refreshing the peers DB...')
-        try:
-            self.next_refresh = time.time() + 30
-            self._declare()
-        except socket.error, e:
-            logging.info('Connection to server failed, re-bootstraping and retrying in 30s')
-        try:
-            self._bootstrap()
-        except socket.error, e:
-            logging.debug('socket.error : %s' % e)
+    def getPeerList(self, failed=0):
+        # Exclude our own address from results in case it is there, which may
+        # happen if a node change its certificate without clearing the cache.
+        # IOW, one should probably always put our own address there.
+        return self._db.execute(
+            "SELECT prefix, address FROM peer, volatile.stat"
+            " WHERE prefix=peer AND prefix!=? AND try=? ORDER BY RANDOM()",
+            (self._prefix, failed))
 
-    def _declare(self):
-        if self.address != None:
-            logging.info('Sending connection info to server...')
-            self._proxy.declare(utils.address_str(self.address))
-            self.next_refresh = time.time() + self._refresh_time
-            logging.debug('Info sent')
-        else:
-            logging.warning("Could not send ip, unknown external config. retrying in 30s")
-
-    def getUnusedPeers(self, peer_count):
-        for populate in self._bootstrap, bool:
-            peer_list = self._db.execute("""SELECT prefix, address FROM peers WHERE used
-                                            <> 2 ORDER BY used ASC, RANDOM() LIMIT ?""",
-                                         (peer_count,)).fetchall()
-            if peer_list:
-                return peer_list
-            populate()
-        logging.warning('Can not find any new peer')
-        return []
-
-    def _bootstrap(self):
+    def getBootstrapPeer(self):
         logging.info('Getting Boot peer...')
-        proxy = xmlrpclib.ServerProxy(self._registry)
         try:
-            bootpeer = proxy.getBootstrapPeer(self._prefix).data
-            logging.debug('Boot peer received from server')
+            bootpeer = self._proxy.getBootstrapPeer(self._prefix).data
+        except (socket.error, xmlrpclib.Fault), e:
+            logging.warning('Failed to bootstrap (%s)', e)
+        else:
             p = subprocess.Popen(('openssl', 'rsautl', '-decrypt', '-inkey', self._key_path),
                     stdin=subprocess.PIPE, stdout=subprocess.PIPE)
             bootpeer = p.communicate(bootpeer)[0].split()
-            return self._addPeer(bootpeer)
-        except socket.error:
-            pass
-        except sqlite3.IntegrityError, e:
-            if e.args[0] != 'column prefix is not unique':
-                raise
-        except Exception, e:
-            logging.info('Unable to bootstrap : %s' % e)
-        return False
+            if bootpeer[0] != self._prefix:
+                self.addPeer(*bootpeer)
+                return bootpeer
+            logging.warning('Buggy registry sent us our own address')
 
-    def usePeer(self, prefix):
-        logging.trace('Updating peers database : using peer %s' % prefix)
-        self._db.execute("UPDATE peers SET used = 2 WHERE prefix = ?",
-                (prefix,))
-        logging.debug('DB updated')
-
-    def unusePeer(self, prefix):
-        logging.trace('Updating peers database : unusing peer %s' % prefix)
-        self._db.execute("UPDATE peers SET used = 1 WHERE prefix = ?",
-                (prefix,))
-        logging.debug('DB updated')
-
-    def handle_message(self, msg):
-        script_type, arg = msg.split()
-        if script_type == 'client-connect':
-            logging.info('Incoming connection from %s' % (arg,))
-            prefix = utils.binFromSubnet(arg)
-            if self.tunnel_manager.checkIncomingTunnel(prefix):
-                self.blacklist(prefix, 2)
-        elif script_type == 'client-disconnect':
-            self.whitelist(utils.binFromSubnet(arg))
-            logging.info('%s has disconnected' % (arg,))
-        elif script_type == 'route-up':
-            if self._ip_changed:
-                address = self._ip_changed(arg)
-                if self.address != address:
-                    self.address = address
-                    logging.info('Received new external ip : %s', arg)
-                    try:
-                        self._declare()
-                    except socket.error, e:
-                        logging.info("Connection to server failed while"
-                                     " declaring external infos (%s)", e)
-        else:
-            logging.info("Unknown message received from the openvpn pipe: %s",
-                         msg)
-
-    def readSocket(self):
-        msg = self.socket_file.readline()
-        peer = msg.replace('\n', '').split(' ')
-        if len(peer) != 2:
-            logging.debug('Invalid package recieved : %s' % msg)
-            return
-        self._addPeer(peer)
-
-    def _addPeer(self, peer):
-        logging.debug('Adding peer %s' % peer)
-        if int(self._db.execute("""SELECT COUNT(*) FROM blacklist.flag WHERE prefix = ?""", (peer[0],)).next()[0]) > 0:
-            logging.info('Peer is blacklisted')
-            return False
-        self._db.execute("""DELETE FROM peers WHERE used <> 2 ORDER BY used DESC, date DESC
-            LIMIT MAX(0, (SELECT COUNT(*) FROM peers
-            WHERE used <> 2) - ?)""", (str(self.db_size),))
-        self._db.execute("UPDATE peers SET address = ?, used = 0, date = strftime('%s','now') WHERE used = 1 and prefix = ?", (peer[1], peer[0],))
-        self._db.execute("INSERT OR IGNORE INTO peers (prefix, address) VALUES (?,?)", peer)
-        logging.debug('Peer added')
-        return True
+    def addPeer(self, prefix, address):
+        logging.debug('Adding peer %s: %s', prefix, address)
+        with self._db:
+            q = self._db.execute
+            try:
+                (a,), = q("SELECT address FROM peer WHERE prefix=?", (prefix,))
+            except ValueError:
+                q("DELETE FROM peer WHERE prefix IN (SELECT peer"
+                  " FROM volatile.stat ORDER BY try, RANDOM() LIMIT ?,-1)",
+                  (self._db_size,))
+                a = None
+            if a != address:
+                q("INSERT OR REPLACE INTO peer VALUES (?,?)", (prefix, address))
+            q("INSERT OR REPLACE INTO volatile.stat VALUES (?,0)", (prefix,))

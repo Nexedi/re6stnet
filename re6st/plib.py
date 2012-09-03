@@ -74,7 +74,7 @@ def router(network, subnet, subnet_size, interface_list,
             '-C', 'out local ip %s/%s le %s' % (subnet, subnet_size, subnet_size),
             '-C', 'out local deny',
             # Route VIFIB ip adresses
-            '-C', 'in ip %s::/%u' % (utils.ipFromBin(network), len(network)),
+            '-C', 'in ip %s/%u' % (utils.ipFromBin(network), len(network)),
                   # Route only addresse in the 'local' network,
                   # or other entire networks
                   #'-C', 'in ip %s' % (config.internal_ip),
