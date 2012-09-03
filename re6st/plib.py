@@ -21,9 +21,9 @@ def openvpn(iface, hello_interval, encrypt, *args, **kw):
         ] + list(args)
     if not encrypt:
         args.extend(['--cipher', 'none'])
-    logging.trace('%r', args)
+    logging.debug('%r', args)
     fd = os.open(os.path.join(log, '%s.log' % iface),
-                 os.O_WRONLY | os.O_CREAT | os.O_APPEND)
+                 os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0666)
     try:
         return subprocess.Popen(args, stdout=fd, stderr=subprocess.STDOUT, **kw)
     finally:
@@ -31,7 +31,6 @@ def openvpn(iface, hello_interval, encrypt, *args, **kw):
 
 
 def server(iface, server_ip, ip_length, max_clients, dh_path, pipe_fd, port, proto, hello_interval, encrypt, *args, **kw):
-    logging.debug('Starting server...')
     if server_ip:
         script_up = '%s %s/%u' % (ovpn_server, server_ip, 64)
     else:
@@ -50,7 +49,6 @@ def server(iface, server_ip, ip_length, max_clients, dh_path, pipe_fd, port, pro
 
 
 def client(iface, server_address, pipe_fd, hello_interval, encrypt, *args, **kw):
-    logging.debug('Starting client...')
     remote = ['--nobind',
               '--client',
               '--up', ovpn_client,
@@ -68,7 +66,6 @@ def client(iface, server_address, pipe_fd, hello_interval, encrypt, *args, **kw)
 
 def router(network, subnet, subnet_size, interface_list,
            wireless, hello_interval, verbose, pidfile, state_path, **kw):
-    logging.info('Starting babel...')
     args = ['babeld',
             '-C', 'redistribute local ip %s/%s le %s' % (subnet, subnet_size, subnet_size),
             '-C', 'redistribute local deny',
@@ -103,5 +100,5 @@ def router(network, subnet, subnet_size, interface_list,
     if wireless:
         args.append('-w')
     args = args + interface_list
-    logging.trace('%r', args)
+    logging.info('%r', args)
     return subprocess.Popen(args, **kw)

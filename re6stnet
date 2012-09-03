@@ -143,7 +143,7 @@ def main():
         interface_list, config.wireless, config.hello, config.babel_verb,
         config.babel_pidfile, os.path.join(config.state, 'babeld.state'),
         stdout=os.open(os.path.join(config.log, 'babeld.log'),
-        os.O_WRONLY | os.O_CREAT | os.O_APPEND), stderr=subprocess.STDOUT)
+        os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0666), stderr=subprocess.STDOUT)
 
     # main loop
     try:
@@ -191,7 +191,7 @@ def main():
         try:
             sys.exitfunc()
         finally:
-            os.execvp(sys.executable, sys.argv)
+            os.execvp(sys.argv[0], sys.argv)
     except KeyboardInterrupt:
         return 0
 
