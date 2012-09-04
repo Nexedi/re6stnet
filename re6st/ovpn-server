@@ -2,57 +2,24 @@
 import os
 import sys
 
-# example of os.environ
-{'X509_0_C': 'FR',
- 'X509_0_CN': 'ulm',
- 'X509_0_O': 'Guillaume Bury',
- 'X509_0_OU': 'VPN',
- 'X509_1_C': 'FR',
- 'X509_1_CN': 'Guillaume Bury CA',
- 'X509_1_O': 'Guillaume Bury',
- 'X509_1_OU': 'VPN',
- 'common_name': 'ulm',
- 'daemon': '0',
- 'daemon_log_redirect': '0',
- 'daemon_pid': '11637',
- 'daemon_start_time': '1341568405',
- 'dev': 're6stnet',
- 'link_mtu': '1573',
- 'local_port_1': '1194',
- 'proto_1': 'udp',
- 'remote_port_1': '1194',
- 'script_context': 'init',
- 'script_type': 'client-connect',
- 'time_ascii': 'Fri Jul  6 11:53:31 2012',
- 'time_unix': '1341568411',
- 'tls_digest_0': '2d:eb:f3:05:5d:bf:17:62:dd:ef:d4:bb:30:c0:5b:b7:ef:e3:e8:a6',
- 'tls_digest_1': '43:1c:a1:22:ca:c0:a0:f5:b0:c6:65:6f:33:29:b2:bb:1d:04:43:9a',
- 'tls_id_0': '/C=FR/O=Guillaume_Bury/OU=VPN/CN=ulm',
- 'tls_id_1': '/C=FR/O=Guillaume_Bury/OU=VPN/CN=Guillaume_Bury_CA',
- 'tls_serial_0': '02',
- 'tls_serial_1': 'CC3019BC1CFA5141',
- 'trusted_ip': '192.0.2.25',
- 'trusted_port': '59345',
- 'tun_mtu': '1500',
- 'untrusted_ip': '192.0.2.25',
- 'untrusted_port': '59345',
- 'verb': '3'}
-
 script_type = os.environ['script_type']
 if script_type == 'up':
-    from subprocess import call
+    import subprocess
+    def call(*args):
+        r = subprocess.call(args)
+        if r:
+            sys.exit(r)
     dev = os.environ['dev']
+    call('ip', 'link', 'set', dev, 'up')
     if sys.argv[1] != 'none':
-        sys.exit(call(('ip', 'link', 'set', dev, 'up'))
-            or call(('ip', 'addr', 'add', sys.argv[1], 'dev', dev)))
-    else:
-        sys.exit(call(('ip', 'link', 'set', dev, 'up')))
+        call('ip', 'addr', 'add', sys.argv[1], 'dev', dev)
 
-if script_type == 'client-connect':
-    # Send client its external ip address
-    with open(sys.argv[2], 'w') as f:
-        f.write('push "setenv-safe external_ip %s"\n'
-                % os.environ['trusted_ip'])
+else:
+    if script_type == 'client-connect':
+        # Send client its external ip address
+        with open(sys.argv[2], 'w') as f:
+            f.write('push "setenv-safe external_ip %s"\n'
+                    % os.environ['trusted_ip'])
 
-# Write into pipe connect/disconnect events
-os.write(int(sys.argv[1]), '%(script_type)s %(common_name)s\n' % os.environ)
+    # Write into pipe connect/disconnect events
+    os.write(int(sys.argv[1]), '%(script_type)s %(common_name)s\n' % os.environ)

@@ -1,6 +1,14 @@
 #!/usr/bin/env python
 import argparse, os, subprocess, sqlite3, sys, xmlrpclib
 from OpenSSL import crypto
+from re6st import utils
+
+def create(path, text, mode=0666):
+    fd = os.open(path, os.O_CREAT | os.O_WRONLY | os.O_EXCL, mode)
+    try:
+        os.write(fd, text)
+    finally:
+        os.close(fd)
 
 def main():
     parser = argparse.ArgumentParser(
@@ -8,10 +16,8 @@ def main():
     _ = parser.add_argument
     _('--ca-only', action='store_true',
             help='To only get CA form server')
-    _('--server', required=True,
-            help='Address of the server delivering certifiactes')
-    _('--port', required=True, type=int,
-            help='Port to which connect on the server')
+    _('--registry', required=True,
+            help='HTTP URL of the server delivering certificates')
     _('-d', '--dir', default='/etc/re6stnet',
             help='Directory where the key and certificate will be stored')
     _('-r', '--req', nargs=2, action='append',
@@ -19,20 +25,22 @@ def main():
     _('--email', help='Your email address')
     _('--token', help='The token you received')
     config = parser.parse_args()
-    ca_path = os.path.join(config.dir, 'ca.pem')
-    cert_path = os.path.join(config.dir, 'cert.crt')
-    key_path = os.path.join(config.dir, 'cert.key')
+    if config.dir:
+        os.chdir(config.dir)
+    ca_path = 'ca.crt'
+    cert_path = 'cert.crt'
+    key_path = 'cert.key'
+    dh_path = 'dh2048.pem'
 
     # Establish connection with server
-    s = xmlrpclib.ServerProxy('http://%s:%u' % (config.server, config.port))
+    s = xmlrpclib.ServerProxy(config.registry)
 
     # Get CA
     ca = s.getCa()
-    with open(ca_path, 'w') as f:
-        f.write(ca)
+    create(ca_path, ca)
 
     if config.ca_only:
-        sys.exit(0)
+        sys.exit()
 
     # Get token
     if not config.token:
@@ -59,21 +67,21 @@ def main():
     cert = s.requestCertificate(config.token, req)
 
     # Store cert and key
-    with open(key_path, 'w') as f:
-        f.write(key)
-    with open(cert_path, 'w') as f:
-        f.write(cert)
+    create(key_path, key, 0600)
+    create(cert_path, cert)
 
     # Generating dh file
-    if not os.access(os.path.join(config.dir, 'dh2048.pem'), os.F_OK):
-        subprocess.call(['openssl', 'dhparam', '-out', os.path.join(config.dir, 'dh2048.pem'), '2048'])
+    if not os.access(dh_path, os.F_OK):
+        r = subprocess.call(('openssl', 'dhparam', '-out', dh_path, '2048'))
+        if r:
+            sys.exit(r)
 
     print "Certificate setup complete."
 
-    network = utils.networkFromCa(ca_path)
-    internal_ip, prefix = utils.ipFromCert(network, cert_path)
-    print "Your re6st ip : %s" % internal_ip
-    print "Your prefix : %s" % prefix
+    cn = utils.subnetFromCert(cert_path)
+    subnet = utils.networkFromCa(ca_path) + utils.binFromSubnet(cn)
+    print "Your subnet: %s/%u (CN=%s)" \
+        % (utils.ipFromBin(subnet), len(subnet), cn)
 
 if __name__ == "__main__":
     main()

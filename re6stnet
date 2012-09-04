@@ -1,6 +1,6 @@
 #!/usr/bin/env python
-import atexit, os, sys, select, time
-import argparse, signal, subprocess, sqlite3, logging, traceback
+import argparse, atexit, errno, logging, os
+import select, signal, sqlite3, sys, time, traceback
 from re6st import plib, utils, db, tunnel
 
 def ovpnArgs(optional_args, ca_path, cert_path, key_path):
@@ -27,12 +27,12 @@ def getConfig():
     _('--registry', required=True,
             help="HTTP URL of the discovery peer server,"
                  " with public host (default port: 80)")
-    _('-l', '--log', default='/var/log',
+    _('-l', '--log', default='/var/log/re6stnet',
             help='Path to re6stnet logs directory')
     _('-s', '--state', default='/var/lib/re6stnet',
             help='Path to re6stnet state directory')
     _('-v', '--verbose', default=1, type=int,
-            help='Log level of re6st itself')
+            help='Log level of re6stnet itself')
     _('-i', '--interface', action='append', dest='iface_list', default=[],
             help='Extra interface for LAN discovery')
 
@@ -75,18 +75,15 @@ def main():
     # Get arguments
     config = getConfig()
     network = utils.networkFromCa(config.ca)
-    internal_ip, prefix = utils.ipFromCert(network, config.cert)
+    prefix = utils.binFromSubnet(utils.subnetFromCert(config.cert))
     openvpn_args = ovpnArgs(config.openvpn_args, config.ca, config.cert,
                                                  config.key)
-    db_path = os.path.join(config.state, 'peers.db')
-
     # Set logging
-    utils.setupLog(config.verbose,
-        filename=os.path.join(config.log, 're6stnet.log'))
+    utils.setupLog(config.verbose, os.path.join(config.log, 're6stnet.log'))
 
-    logging.trace("Configuration :\n%s" % config)
-
-    # Set global variables
+    logging.trace("Configuration:\n%r", config)
+    utils.makedirs(config.state)
+    db_path = os.path.join(config.state, 'peers.db')
     plib.log = tunnel.log = config.log
 
     # Create and open read_only pipe to get server events
@@ -95,8 +92,8 @@ def main():
     read_pipe = os.fdopen(r_pipe)
 
     signal.signal(signal.SIGHUP, lambda *args: sys.exit(-1))
+    signal.signal(signal.SIGTERM, lambda *args: sys.exit())
 
-    # Init db and tunnels
     address = []
     if config.pp:
         pp = [(int(port), proto) for port, proto in config.pp]
@@ -123,32 +120,30 @@ def main():
     if address:
         ip_changed = None
 
-    peer_db = db.PeerDB(db_path, config.registry, config.key, prefix)
-    tunnel_manager = tunnel.TunnelManager(write_pipe, peer_db, openvpn_args,
-        config.hello, config.tunnel_refresh, config.connection_count,
-        config.iface_list, network, prefix, address, ip_changed,
-        config.encrypt)
-
-    # Launch routing protocol. WARNING : you have to be root to start babeld
-    server_tunnels = {}
-    for x in pp:
-        server_tunnels.setdefault('re6stnet-' + x[1], x)
-    interface_list = list(tunnel_manager.free_interface_set) \
-                     + config.iface_list + server_tunnels.keys()
-    subnet = utils.ipFromBin((network + prefix).ljust(128, '0'))
-    router = plib.router(network, subnet, len(prefix) + len(network),
-        interface_list, config.wireless, config.hello, config.babel_verb,
-        config.babel_pidfile, os.path.join(config.state, 'babeld.state'),
-        stdout=os.open(os.path.join(config.log, 'babeld.log'),
-        os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0666), stderr=subprocess.STDOUT)
-
-    # main loop
     try:
+        # Init db and tunnels
+        peer_db = db.PeerDB(db_path, config.registry, config.key, prefix)
+        tunnel_manager = tunnel.TunnelManager(write_pipe, peer_db, openvpn_args,
+            config.hello, config.tunnel_refresh, config.connection_count,
+            config.iface_list, network, prefix, address, ip_changed,
+            config.encrypt)
+
+        server_tunnels = {}
+        for x in pp:
+            server_tunnels.setdefault('re6stnet-' + x[1], x)
+        interface_list = list(tunnel_manager.free_interface_set) \
+                       + config.iface_list + server_tunnels.keys()
+        subnet = network + prefix
+        router = plib.router(network, utils.ipFromBin(subnet), len(subnet),
+            interface_list, config.wireless, config.hello, config.babel_verb,
+            config.babel_pidfile, os.path.join(config.state, 'babeld.state'))
+
+        # main loop
         try:
             server_process = []
             for iface, (port, proto) in server_tunnels.iteritems():
                 server_process.append(plib.server(iface,
-                    internal_ip if proto == pp[0][1] else None,
+                    utils.ipFromBin(subnet, '1') if proto == pp[0][1] else None,
                     len(network) + len(prefix),
                     config.connection_count, config.dh, write_pipe, port,
                     proto, config.hello, config.encrypt, *openvpn_args))
@@ -157,7 +152,12 @@ def main():
                 if forwarder:
                     next = min(next, forwarder.next_refresh)
                 r = [read_pipe, tunnel_manager.sock]
-                r = select.select(r, [], [], max(0, next - time.time()))[0]
+                try:
+                    r = select.select(r, [], [], max(0, next - time.time()))[0]
+                except select.error as e:
+                    if e.args[0] != errno.EINTR:
+                        raise
+                    continue
                 if read_pipe in r:
                     tunnel_manager.handleTunnelEvent(read_pipe.readline())
                 if tunnel_manager.sock in r:
@@ -167,10 +167,6 @@ def main():
                     tunnel_manager.refresh()
                 if forwarder and t >= forwarder.next_refresh:
                     forwarder.refresh()
-        except Exception:
-            f = traceback.format_exception(*sys.exc_info())
-            logging.error('%s%s', f.pop(), ''.join(f))
-            raise
         finally:
             router.terminate()
             for p in server_process:
@@ -183,6 +179,7 @@ def main():
             except:
                 pass
     except sqlite3.Error:
+        logging.exception("Restarting with empty cache")
         os.rename(db_path, db_path + '.bak')
         try:
             sys.exitfunc()
@@ -190,6 +187,10 @@ def main():
             os.execvp(sys.argv[0], sys.argv)
     except KeyboardInterrupt:
         return 0
+    except Exception:
+        f = traceback.format_exception(*sys.exc_info())
+        logging.error('%s%s', f.pop(), ''.join(f))
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

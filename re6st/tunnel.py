@@ -13,7 +13,7 @@ class Connection:
             ovpn_args):
         self.process = plib.client(iface, address, write_pipe, hello, encrypt,
             '--tls-remote', '%u/%u' % (int(prefix, 2), len(prefix)),
-            '--connect-retry-max', '3', *ovpn_args)
+            '--connect-retry-max', '3', '--tls-exit', *ovpn_args)
         self.iface = iface
         self.routes = 0
         self._prefix = prefix
@@ -21,8 +21,8 @@ class Connection:
     def refresh(self):
         # Check that the connection is alive
         if self.process.poll() != None:
-            logging.info('Connection with %s has failed with return code %s'
-                     % (self._prefix, self.process.returncode))
+            logging.info('Connection with %s has failed with return code %s',
+                         self._prefix, self.process.returncode)
             return False
         return True
 
@@ -51,6 +51,8 @@ class TunnelManager(object):
         self._served = set()
 
         self.sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+        # See also http://stackoverflow.com/questions/597225/
+        # about binding and anycast.
         self.sock.bind(('::', PORT))
 
         self.next_refresh = time.time()
@@ -87,8 +89,8 @@ class TunnelManager(object):
             self._kill(prefix)
 
     def _kill(self, prefix, kill=False):
-        logging.info('Killing the connection with %s/%u...'
-                % (hex(int(prefix, 2))[2:], len(prefix)))
+        logging.info('Killing the connection with %u/%u...',
+                     int(prefix, 2), len(prefix))
         connection = self._connection_dict.pop(prefix)
         try:
             getattr(connection.process, 'kill' if kill else 'terminate')()
@@ -97,16 +99,16 @@ class TunnelManager(object):
             pass
         self.free_interface_set.add(connection.iface)
         del self._iface_to_prefix[connection.iface]
-        logging.trace('Connection with %s/%u killed'
-                % (hex(int(prefix, 2))[2:], len(prefix)))
+        logging.trace('Connection with %u/%u killed',
+                      int(prefix, 2), len(prefix))
 
     def _makeTunnel(self, prefix, address):
         assert len(self._connection_dict) < self._client_count, (prefix, self.__dict__)
         if prefix in self._served or prefix in self._connection_dict:
             return False
         assert prefix != self._prefix, self.__dict__
-        logging.info('Establishing a connection with %s/%u',
-                     hex(int(prefix, 2))[2:], len(prefix))
+        logging.info('Establishing a connection with %u/%u',
+                     int(prefix, 2), len(prefix))
         iface = self.free_interface_set.pop()
         self._connection_dict[prefix] = Connection(address, self._write_pipe,
             self._hello, iface, prefix, self._encrypt, self._ovpn_args)
@@ -239,13 +241,14 @@ class TunnelManager(object):
 
     def handleTunnelEvent(self, msg):
         try:
-            script_type, arg = msg.split(None, 1)
-            m = getattr(self, '_ovpn_' + script_type.replace('-', '_'))
+            msg = msg.rstrip()
+            args = msg.split()
+            m = getattr(self, '_ovpn_' + args.pop(0).replace('-', '_'))
         except (AttributeError, ValueError):
             logging.warning("Unknown message received from OpenVPN: %s", msg)
         else:
-            logging.debug('%s: %s', script_type, arg)
-            m(arg)
+            logging.debug(msg)
+            m(*args)
 
     def _ovpn_client_connect(self, common_name):
         prefix = utils.binFromSubnet(common_name)
@@ -258,14 +261,15 @@ class TunnelManager(object):
         prefix = utils.binFromSubnet(common_name)
         self._served.remove(prefix)
 
-    def _ovpn_route_up(self, arg):
-        common_name, ip = arg.split()
+    def _ovpn_route_up(self, common_name, ip):
         self._peer_db.connecting(utils.binFromSubnet(common_name), 0)
         if self._ip_changed:
             self._address = utils.address_str(self._ip_changed(ip))
 
     def handlePeerEvent(self):
         msg, address = self.sock.recvfrom(1<<16)
+        if not utils.binFromIp(address[0]).startswith(self._network):
+            return
         code = ord(msg[0])
         if code == 1: # answer
             # TODO: do not fail if message contains garbage
@@ -300,7 +304,7 @@ class TunnelManager(object):
                 msg = ['\xfe%s%u/%u\n%u\n' % (msg[1:],
                     int(self._prefix, 2), len(self._prefix),
                     len(self._connection_dict))]
-                msg.extend('%s/%s\n' % (int(x, 2), len(x))
+                msg.extend('%u/%u\n' % (int(x, 2), len(x))
                            for x in (self._connection_dict, self._served)
                            for x in x)
                 try:

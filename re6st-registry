@@ -1,6 +1,7 @@
 #!/usr/bin/env python
-import random, select, smtplib, sqlite3, string, socket
-import subprocess, time, threading, traceback, errno, logging, os, xmlrpclib
+import errno, logging, mailbox, os, random, select
+import smtplib, socket, sqlite3, string, subprocess, sys
+import threading, time, traceback, xmlrpclib
 from collections import deque
 from SimpleXMLRPCServer import SimpleXMLRPCServer, SimpleXMLRPCRequestHandler
 from email.mime.text import MIMEText
@@ -46,7 +47,6 @@ class main(object):
         self.refresh_interval = 600
         self.last_refresh = time.time()
 
-        utils.setupLog(3)
 
         # Command line parsing
         parser = utils.ArgParser(fromfile_prefix_chars='@',
@@ -60,10 +60,19 @@ class main(object):
         _('--key', required=True,
                 help='Path to certificate key')
         _('--mailhost', required=True,
-                help='SMTP server mail host')
+                help='SMTP server mail host; for debugging purpose, it can also'
+                     ' be an absolute or existing path to a mailbox file')
         _('--private',
                 help='VPN IP of the node on which runs the registry')
+        _('--prefix-length', default=16,
+                help='Default length of allocated prefixes')
+        _('-l', '--logfile', default='/var/log/re6stnet/registry.log',
+                help='Path to logging file')
+        _('-v', '--verbose', default=1, type=int,
+                help='Log level')
         self.config = parser.parse_args()
+
+        utils.setupLog(self.config.verbose, self.config.logfile)
 
         if self.config.private:
             self.sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
@@ -97,7 +106,9 @@ class main(object):
             self.key = crypto.load_privatekey(crypto.FILETYPE_PEM, f.read())
         # Get vpn network prefix
         self.network = bin(self.ca.get_serial_number())[3:]
-        logging.info("Network prefix : %s/%u" % (self.network, len(self.network)))
+        logging.info("Network: %s/%u", utils.ipFromBin(self.network),
+                                       len(self.network))
+        self._email = self.ca.get_subject().emailAddress
 
         # Starting server
         server4 = SimpleXMLRPCServer4(('0.0.0.0', self.config.port), requestHandler=RequestHandler, allow_none=True)
@@ -108,8 +119,8 @@ class main(object):
         # Main loop
         while True:
             try:
-                r, w, e = select.select([server4, server6], [], [])
-            except (OSError, select.error) as e:
+                r = select.select([server4, server6], [], [])[0]
+            except select.error as e:
                 if e.args[0] != errno.EINTR:
                     raise
             else:
@@ -120,22 +131,32 @@ class main(object):
         while True:
             # Generating token
             token = ''.join(random.sample(string.ascii_lowercase, 8))
+            args = token, email, self.config.prefix_length, int(time.time())
             # Updating database
             try:
-                self.db.execute("INSERT INTO token VALUES (?,?,?,?)", (token, email, 16, int(time.time())))
+                self.db.execute("INSERT INTO token VALUES (?,?,?,?)", args)
                 break
             except sqlite3.IntegrityError:
                 pass
 
         # Creating and sending email
-        s = smtplib.SMTP(self.config.mailhost)
-        me = 'postmaster@re6st.net'
-        msg = MIMEText('Hello world !\nYour token : %s' % (token,))  # XXX
+        msg = MIMEText('Hello, your token to join re6st network is: %s\n'
+                       % token)
         msg['Subject'] = '[re6stnet] Token Request'
-        msg['From'] = me
+        if self._email:
+            msg['From'] = self._email
         msg['To'] = email
-        s.sendmail(me, email, msg.as_string())
-        s.quit()
+        if os.path.isabs(self.config.mailhost) or \
+           os.path.isfile(self.config.mailhost):
+            m = mailbox.mbox(self.config.mailhost)
+            try:
+                m.add(msg)
+            finally:
+                m.close()
+        else:
+            s = smtplib.SMTP(self.config.mailhost)
+            s.sendmail(self._email, email, msg.as_string())
+            s.quit()
 
     def _getPrefix(self, prefix_len):
         max_len = 128 - len(self.network)
@@ -144,7 +165,7 @@ class main(object):
             prefix, = self.db.execute("""SELECT prefix FROM cert WHERE length(prefix) <= ? AND cert is null
                                          ORDER BY length(prefix) DESC""", (prefix_len,)).next()
         except StopIteration:
-            logging.error('There are no more free /%s prefix available' % (prefix_len,))
+            logging.error('No more free /%u prefix available', prefix_len)
             raise
         while len(prefix) < prefix_len:
             self.db.execute("UPDATE cert SET prefix = ? WHERE prefix = ?", (prefix + '1', prefix))
@@ -162,7 +183,7 @@ class main(object):
                 try:
                     token, email, prefix_len, _ = self.db.execute("SELECT * FROM token WHERE token = ?", (token,)).next()
                 except StopIteration:
-                    logging.exception('Bad token (%s) in request' % (token,))
+                    logging.exception('Bad token (%s) in request', token)
                     raise
                 self.db.execute("DELETE FROM token WHERE token = ?", (token,))
 
@@ -186,8 +207,9 @@ class main(object):
                 self.db.execute("UPDATE cert SET email = ?, cert = ? WHERE prefix = ?", (email, cert, prefix))
 
             return cert
-        except:
-            traceback.print_exc()
+        except Exception:
+            f = traceback.format_exception(*sys.exc_info())
+            logging.error('%s%s', f.pop(), ''.join(f))
             raise
 
     def getCa(self, handler):
@@ -210,7 +232,7 @@ class main(object):
                 except IndexError:
                     peer = ''
         if peer is None:
-            raise EnvironmentError("Timeout while querying [%s]:%u", *address)
+            raise EnvironmentError("Timeout while querying [%s]:%u" % address)
         if not peer or peer.split()[0] == client_prefix:
             raise LookupError("No bootstrap peer found")
         logging.info("Sending bootstrap peer: %s", peer)

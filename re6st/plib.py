@@ -17,17 +17,13 @@ def openvpn(iface, hello_interval, encrypt, *args, **kw):
         '--persist-key',
         '--script-security', '2',
         '--ping-exit', str(4 * hello_interval),
+        '--log-append', os.path.join(log, '%s.log' % iface),
         #'--user', 'nobody', '--group', 'nogroup',
         ] + list(args)
     if not encrypt:
-        args.extend(['--cipher', 'none'])
+        args += '--cipher', 'none'
     logging.debug('%r', args)
-    fd = os.open(os.path.join(log, '%s.log' % iface),
-                 os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0666)
-    try:
-        return subprocess.Popen(args, stdout=fd, stderr=subprocess.STDOUT, **kw)
-    finally:
-        os.close(fd)
+    return subprocess.Popen(args, **kw)
 
 
 def server(iface, server_ip, ip_length, max_clients, dh_path, pipe_fd, port, proto, hello_interval, encrypt, *args, **kw):
@@ -58,8 +54,8 @@ def client(iface, server_address, pipe_fd, hello_interval, encrypt, *args, **kw)
             remote += '--remote', ip, port, \
                 'tcp-client' if proto == 'tcp' else proto
     except ValueError, e:
-        logging.warning('Error "%s" in unpacking address %s for openvpn client'
-                % (e, server_address,))
+        logging.warning("Failed to parse node address %r (%s)",
+                        server_address, e)
     remote += args
     return openvpn(iface, hello_interval, encrypt, *remote, **kw)
 
@@ -84,6 +80,7 @@ def router(network, subnet, subnet_size, interface_list,
             '-d', str(verbose),
             '-h', str(hello_interval),
             '-H', str(hello_interval),
+            '-L', os.path.join(log, 'babeld.log'),
             '-S', state_path,
             '-s',
             ]

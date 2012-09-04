@@ -1,14 +1,44 @@
-import argparse, time, struct, socket, logging
+import argparse, errno, logging, os, signal, struct, socket, time
 from OpenSSL import crypto
 
 logging_levels = logging.WARNING, logging.INFO, logging.DEBUG, 5
 
+class FileHandler(logging.FileHandler):
 
-def setupLog(log_level, **kw):
+    _reopen = False
+
+    def release(self):
+        try:
+            if self._reopen:
+                self._reopen = False
+                self.close()
+                self._open()
+        finally:
+            self.lock.release()
+        # In the rare case _reopen is set just before the lock was released
+        if self._reopen and self.lock.acquire(0):
+            self.release()
+
+    def async_reopen(self, *_):
+        self._reopen = True
+        if self.lock.acquire(0):
+            self.release()
+
+def setupLog(log_level, filename=None, **kw):
+    if log_level and filename:
+        makedirs(os.path.dirname(filename))
+        handler = FileHandler(filename)
+        sig = handler.async_reopen
+    else:
+        handler = logging.StreamHandler()
+        sig = signal.SIG_IGN
+    handler.setFormatter(logging.Formatter(
+        '%(asctime)s %(levelname)-9s %(message)s', '%d-%m-%Y %H:%M:%S'))
+    root = logging.getLogger()
+    root.addHandler(handler)
+    signal.signal(signal.SIGUSR1, sig)
     if log_level:
-        logging.basicConfig(level=logging_levels[log_level-1],
-            format='%(asctime)s %(levelname)-9s %(message)s',
-            datefmt='%d-%m-%Y %H:%M:%S', **kw)
+        root.setLevel(logging_levels[log_level-1])
     else:
         logging.disable(logging.CRITICAL)
     logging.addLevelName(5, 'TRACE')
@@ -26,6 +56,13 @@ class ArgParser(argparse.ArgumentParser):
                 if arg.strip():
                     yield arg
 
+def makedirs(path):
+    try:
+        os.makedirs(path)
+    except OSError, e:
+        if e.errno != errno.EEXIST:
+            raise
+
 def binFromIp(ip):
     ip1, ip2 = struct.unpack('>QQ', socket.inet_pton(socket.AF_INET6, ip))
     return bin(ip1)[2:].rjust(64, '0') + bin(ip2)[2:].rjust(64, '0')
@@ -42,14 +79,11 @@ def networkFromCa(ca_path):
         ca = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
         return bin(ca.get_serial_number())[3:]
 
-def ipFromCert(network, cert_path):
+def subnetFromCert(cert_path):
     # Get ip from cert.crt
     with open(cert_path, 'r') as f:
         cert = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
-        subject = cert.get_subject()
-        prefix, prefix_len = subject.CN.split('/')
-        prefix = bin(int(prefix))[2:].rjust(int(prefix_len), '0')
-        return ipFromBin(network + prefix, '1'), prefix
+        return cert.get_subject().CN
 
 def address_str(address):
     return ';'.join(map(','.join, address))

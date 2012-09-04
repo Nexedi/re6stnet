@@ -25,14 +25,11 @@ in re6stnet.
 USAGE
 =====
 
-re6st-conf requires data about a distant server running re6st-registry.
+re6st-conf needs address of node running re6st-registry.
 
---server address
-             Ip address of the machine running the re6stnet server. Both ipv4
-             and ipv6 addresses are supported.
-
---port port
-             Port to connect to on the machine running the re6stnet server.
+--registry address
+             Public HTTP URL of the registry, which is used for bootstrapping
+             and delivering certificates.
 
 Commands
 --------
