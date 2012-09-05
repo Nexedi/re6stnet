@@ -18,56 +18,75 @@ def ovpnArgs(optional_args, ca_path, cert_path, key_path):
 
 def getConfig():
     parser = utils.ArgParser(fromfile_prefix_chars='@',
-            description='Resilient virtual private network application')
+        description="Resilient virtual private network application.")
     _ = parser.add_argument
 
-    # General Configuration options
     _('--ip',
-            help='IP address advertised to other nodes')
-    _('--registry', required=True,
-            help="HTTP URL of the discovery peer server,"
-                 " with public host (default port: 80)")
+        help="IP address advertised to other nodes. Special values:\n"
+             "- upnp: force autoconfiguration via UPnP\n"
+             "- any: ask peers our IP\n"
+             " (default: ask peers if UPnP fails)")
+    _('--registry', required=True, metavar='URL',
+        help="Public HTTP URL of the registry, for bootstrapping.")
     _('-l', '--log', default='/var/log/re6stnet',
-            help='Path to re6stnet logs directory')
+        help="Path to the directory used for log files:\n"
+             "- re6stnet.log: log file of re6stnet itself\n"
+             "- babeld.log: log file of router\n"
+             "- <iface>.log: 1 file per spawned OpenVPN\n")
     _('-s', '--state', default='/var/lib/re6stnet',
-            help='Path to re6stnet state directory')
-    _('-v', '--verbose', default=1, type=int,
-            help='Log level of re6stnet itself')
+        help="Path to re6stnet state directory:\n"
+             "- peers.db: cache of peer addresses\n"
+             "- babeld.state: see option -S of babeld\n")
+    _('-v', '--verbose', default=1, type=int, metavar='LEVEL',
+        help="Log level of re6stnet itself. 0 disables logging."
+             " Use SIGUSR1 to reopen log."
+             " See also --babel-verb and --verb for logs of spawned processes.")
     _('-i', '--interface', action='append', dest='iface_list', default=[],
-            help='Extra interface for LAN discovery')
+        help="Extra interface for LAN discovery. Highly recommanded if there"
+             " are other re6st node on the same network segment.")
 
-    # Routing algorithm options
-    _('--babel-pidfile',
-            help='Specify a file to write our process id to')
-    _('--babel-verb', default=0,
-            help='Babel verbosity')
+    _ = parser.add_argument_group('routing').add_argument
+    _('--babel-pidfile', metavar='PID',
+        help="Specify a file to write our process id to"
+             " (option -I of Babel).")
+    _('--babel-verb', default=0, metavar='LEVEL',
+        help="Log level of Babel (option -d of Babel).")
     _('--hello', type=int, default=15,
-            help='Hello interval for babel, in seconds')
+        help="Hello interval in seconds, for both wired and wireless"
+             " connections. OpenVPN ping-exit option is set to 4 times the"
+             " hello interval. It takes between 3 and 4 times the"
+             " hello interval for Babel to re-establish connection with a"
+             " node for which the direct connection has been cut.")
     _('-w', '--wireless', action='store_true',
-            help='''Set all interfaces to be treated as wireless interfaces
-                    for the routing protocol''')
+        help="Assume all interfaces are wireless (option -w of Babel).")
 
-    # Tunnel options
+    _ = parser.add_argument_group('tunnelling').add_argument
     _('--encrypt', action='store_true',
-            help='specify that tunnels should be encrypted')
-    _('--pp', nargs=2, action='append',
-            help='Port and protocol to be used by other peers to connect')
+        help='Specify that tunnels should be encrypted.')
+    _('--pp', nargs=2, action='append', metavar=('PORT', 'PROTO'),
+        help="Port and protocol to be announced to other peers, ordered by"
+             " preference. For each protocol (either udp or tcp), start one"
+             " openvpn server on the first given port."
+             " (default: --pp 1194 udp --pp 1194 tcp)")
     _('--dh', required=True,
-            help='Path to dh file')
-    _('--ca', required=True,
-            help='Path to the certificate authority file')
+        help='File containing Diffie-Hellman parameters in .pem format')
+    _('--ca', required=True, help=parser._ca_help)
     _('--cert', required=True,
-            help='Path to the certificate file')
+        help="Local peer's signed certificate in .pem format."
+             " Common name defines the allocated prefix in the network.")
     _('--key', required=True,
-            help='Path to the private key file')
+        help="Local peer's private key in .pem format.")
     _('--connection-count', default=20, type=int,
-            help='Number of tunnels')
+        help="Maximum number of accepted clients per OpenVPN server."
+             " Also represents the average number of tunnels to peers.")
     _('--tunnel-refresh', default=300, type=int,
-            help='time (seconds) to wait before changing the connections')
+        help="Interval in seconds between two tunnel refresh: the worst"
+             " tunnel is closed if the number of client tunnels has reached"
+             " its maximum number (half of connection-count).")
 
-    # Openvpn options
     _('openvpn_args', nargs=argparse.REMAINDER,
-            help="Common OpenVPN options")
+        help="Use pseudo-argument '--' to forward positional arguments as extra"
+             " arguments to both server and client OpenVPN subprocesses.")
     return parser.parse_args()
 
 

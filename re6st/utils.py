@@ -1,4 +1,4 @@
-import argparse, errno, logging, os, signal, struct, socket, time
+import argparse, errno, logging, os, signal, struct, socket, textwrap, time
 from OpenSSL import crypto
 
 logging_levels = logging.WARNING, logging.INFO, logging.DEBUG, 5
@@ -44,7 +44,37 @@ def setupLog(log_level, filename=None, **kw):
     logging.addLevelName(5, 'TRACE')
     logging.trace = lambda *args, **kw: logging.log(5, *args, **kw)
 
+
+class HelpFormatter(argparse.ArgumentDefaultsHelpFormatter):
+
+    def _get_help_string(self, action):
+        return super(HelpFormatter, self)._get_help_string(action) \
+            if action.default else action.help
+
+    def _split_lines(self, text, width):
+        """Preserves new lines in option descriptions"""
+        lines = []
+        for text in text.splitlines():
+            lines += textwrap.wrap(text, width)
+        return lines
+
+    def _fill_text(self, text, width, indent):
+        """Preserves new lines in other descriptions"""
+        kw = dict(width=width, initial_indent=indent, subsequent_indent=indent)
+        return '\n'.join(textwrap.fill(t, **kw) for t in text.splitlines())
+
 class ArgParser(argparse.ArgumentParser):
+
+    class _HelpFormatter(HelpFormatter):
+
+        def _format_actions_usage(self, actions, groups):
+            r = HelpFormatter._format_actions_usage(self, actions, groups)
+            if actions and actions[0].option_strings:
+                r = '[@OPTIONS_FILE] ' + r
+            return r
+
+    _ca_help = "Certificate authority (CA) file in .pem format." \
+               " Serial number defines the prefix of the network."
 
     def convert_arg_line_to_args(self, arg_line):
         arg_line = arg_line.split('#')[0].rstrip()
@@ -55,6 +85,13 @@ class ArgParser(argparse.ArgumentParser):
             for arg in ('--' + arg_line.lstrip('--')).split():
                 if arg.strip():
                     yield arg
+
+    def __init__(self, **kw):
+        super(ArgParser, self).__init__(formatter_class=self._HelpFormatter,
+            epilog="""Options can be read from a file. For example:
+  $ cat OPTIONS_FILE
+  ca /etc/re6stnet/ca.crt""", **kw)
+
 
 def makedirs(path):
     try:

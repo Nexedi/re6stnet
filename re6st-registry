@@ -50,26 +50,35 @@ class main(object):
 
         # Command line parsing
         parser = utils.ArgParser(fromfile_prefix_chars='@',
-                description='Peer discovery http server for re6stnet')
+            description="re6stnet registry used to bootstrap nodes"
+                        " and deliver certificates.")
         _ = parser.add_argument
-        _('--port', type=int, default=80, help='Port of the host server')
-        _('--db', required=True,
-                help='Path to database file')
-        _('--ca', required=True,
-                help='Path to ca.crt file')
+        _('--port', type=int, default=80,
+            help="Port on which the server will listen.")
+        _('-4', dest='bind4', default='0.0.0.0',
+            help="Bind server to this IPv4.")
+        _('-6', dest='bind6', default='::',
+            help="Bind server to this IPv6.")
+        _('--db', default='/var/lib/re6stnet/registry.db',
+            help="Path to SQLite database file. It is automatically initialized"
+                 " if the file does not exist.")
+        _('--ca', required=True, help=parser._ca_help)
         _('--key', required=True,
-                help='Path to certificate key')
+                help="CA private key in .pem format.")
         _('--mailhost', required=True,
-                help='SMTP server mail host; for debugging purpose, it can also'
-                     ' be an absolute or existing path to a mailbox file')
+                help="SMTP host to send confirmation emails. For debugging"
+                     " purpose, it can also be an absolute or existing path to"
+                     " a mailbox file")
         _('--private',
-                help='VPN IP of the node on which runs the registry')
+                help="re6stnet IP of the node on which runs the registry."
+                     " Required for normal operation.")
         _('--prefix-length', default=16,
-                help='Default length of allocated prefixes')
+                help="Default length of allocated prefixes.")
         _('-l', '--logfile', default='/var/log/re6stnet/registry.log',
-                help='Path to logging file')
+                help="Path to logging file.")
         _('-v', '--verbose', default=1, type=int,
-                help='Log level')
+                help="Log level. 0 disables logging."
+                     " Use SIGUSR1 to reopen log.")
         self.config = parser.parse_args()
 
         utils.setupLog(self.config.verbose, self.config.logfile)
@@ -82,6 +91,7 @@ class main(object):
                     'check you configuration')
 
         # Database initializing
+        utils.makedirs(os.path.dirname(self.config.db))
         self.db = sqlite3.connect(self.config.db, isolation_level=None)
         self.db.execute("""CREATE TABLE IF NOT EXISTS token (
                         token text primary key not null,
@@ -111,21 +121,30 @@ class main(object):
         self._email = self.ca.get_subject().emailAddress
 
         # Starting server
-        server4 = SimpleXMLRPCServer4(('0.0.0.0', self.config.port), requestHandler=RequestHandler, allow_none=True)
-        server4.register_instance(self)
-        server6 = SimpleXMLRPCServer6(('::', self.config.port), requestHandler=RequestHandler, allow_none=True)
-        server6.register_instance(self)
+        server_list = []
+        if self.config.bind4:
+            server4 = SimpleXMLRPCServer4((self.config.bind4, self.config.port),
+                requestHandler=RequestHandler, allow_none=True)
+            server4.register_instance(self)
+            server_list.append(server4)
+        if self.config.bind6:
+            server6 = SimpleXMLRPCServer6((self.config.bind6, self.config.port),
+                requestHandler=RequestHandler, allow_none=True)
+            server6.register_instance(self)
+            server_list.append(server6)
 
-        # Main loop
-        while True:
-            try:
-                r = select.select([server4, server6], [], [])[0]
-            except select.error as e:
-                if e.args[0] != errno.EINTR:
-                    raise
-            else:
-                for r in r:
-                    r._handle_request_noblock()
+        if len(server_list) == 1:
+            server_list[0].serve_forever()
+        else:
+            while True:
+                try:
+                    r = select.select(server_list[:], [], [])[0]
+                except select.error as e:
+                    if e.args[0] != errno.EINTR:
+                        raise
+                else:
+                    for r in r:
+                        r._handle_request_noblock()
 
     def requestToken(self, handler, email):
         while True:
@@ -183,8 +202,7 @@ class main(object):
                 try:
                     token, email, prefix_len, _ = self.db.execute("SELECT * FROM token WHERE token = ?", (token,)).next()
                 except StopIteration:
-                    logging.exception('Bad token (%s) in request', token)
-                    raise
+                    return
                 self.db.execute("DELETE FROM token WHERE token = ?", (token,))
 
                 # Get a new prefix

@@ -15,32 +15,28 @@ re6stnet creates a resilient, scalable, ipv6 network on top of an existing ipv4
 network, by creating tunnels on the fly, and then routing targeted traffic
 through these tunnels.
 
-re6stnet can be used to :
+re6stnet can be used to:
 
 - guarantee connectedness between computers connected to the
-  internet, for which there exists a working route ( in case the direct route
-  isn't available ).
-- create very large networks
+  internet, for which there exists a working route (in case the direct route
+  isn't available).
+- create large networks
 - give ipv6 addresses to machines with only ipv4 available
-
 
 HOW IT WORKS
 ============
 
-A re6stnet networks consists of at least one server ( re6st-registry ) and many
-clients or nodes ( re6stnet ). The server delivers certificates for secure
-authentification in establishing tunnels, and - for now - store the complete
-list of nodes running.
-re6stnet detects and take into accounts nodes present on the local network.
+A re6stnet network consists of at least one server (re6st-registry) and many
+nodes (re6stnet). The server is only used to deliver certificates for secure
+authentification in establishing tunnels, and to bootstrap new nodes.
+re6stnet can detect and take into account nodes present on the local network.
 
 Resilience
 ----------
-re6stnet can guarantee that if there exists a route between two machines,
+re6stnet guarantees that if there exists a route between two machines,
 traffic will be correctly routed between these two machines.
-Since the destination of established connection are random, there can be no
-guarantee that such a route exists given which tunnels are established, but
-for big enough networks ( more than a hundred nodes ), the probability that
-the network isn't connected is very low.
+Even if the registry node is down, the probability that the network isn't
+connected is very low for big enough networks (more than a hundred nodes).
 
 Scalability
 -----------
@@ -51,30 +47,23 @@ scalable to tens of thousand of nodes
 Requirements
 ============
 
-- Python 2.7 or later
-
+- Python 2.6 or 2.7
 - OpenSSL binary and development libraries
-
 - OpenVPN
+- Babel_
+- python-miniupnpc for UPnP support (optional)
+- for the demo: miniupnpd_, Graphviz, Screen, Nemu_
 
-- Babel ( http://www.pps.univ-paris-diderot.fr/~jch/software/babel/ )
+See also `setup.py` for Python dependencies.
+
+.. _Babel: http://www.pps.univ-paris-diderot.fr/~jch/software/babel/
+   _Nemu: http://code.google.com/p/nemu/
+   _miniupnpd: http://miniupnp.free.fr/
 
 Installation
 ============
 
-Let's explain how to install the egg
+re6stnet is distributed as an Python egg, and is also packaged for Debian.
 
-Commercial Support
-==================
-
-Later....
-
-.. The organisation of the code
-    re6stnet.py         Client : Init and main loop
-    re6st/plib.py             Launch server/client/routing processes
-    re6st/utils.py            Small functions to do useful jobs
-    re6st/db.py               Manage the peer database
-    re6st/tunnel.py           Manage the tunnels
-    re6st/upnpigd.py          Forward ports
-    re6st-conf.py       Get certificates from server
-    re6st-registry.py   Server : deliver certificates and distribute peers
+See `re6stnet-registry` to set up a re6st network
+and `re6stnet-conf` to join an existing network.
