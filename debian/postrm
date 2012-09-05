@@ -1,0 +1,10 @@
+#!/bin/sh -e
+
+[ "$DPKG_MAINTSCRIPT_PACKAGE" ]
+
+[ "$1" = purge ] && for d in lib log; do
+  d=/var/$d/$DPKG_MAINTSCRIPT_PACKAGE
+  [ ! -d "$d" ] || rm -r "$d" || :
+done
+
+#DEBHELPER#

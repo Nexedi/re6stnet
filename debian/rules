@@ -3,7 +3,9 @@
 MANPAGELIST := $(patsubst %.rst, %.1, $(wildcard docs/*.rst))
 
 # Uncomment this to turn on verbose mode.
-export DH_VERBOSE=1
+#export DH_VERBOSE=1
+
+INIT=debian/re6stnet/etc/init.d
 
 override_dh_auto_clean:
 	dh_auto_clean
@@ -12,8 +14,27 @@ override_dh_auto_clean:
 %.1: %.rst
 	rst2man $< $@
 
+override_dh_install:
+	dh_install
+	install -d debian/re6stnet/usr/sbin
+	mv debian/re6stnet/usr/bin/re6stnet debian/re6stnet/usr/sbin
+
+override_dh_installinit:
+	install -d $(INIT)
+	sed 's/#NAME#/re6st-registry/; s/#DEPENDS#//; s,#DAEMON_DIR#,/usr/bin,' \
+		<debian/init.d >$(INIT)/re6st-registry
+	sed 's/#NAME#/re6stnet/; s/#DEPENDS#/re6st-registry/; s,#DAEMON_DIR#,/usr/sbin,' \
+		<debian/init.d >$(INIT)/re6stnet
+	for x in re6st-registry re6stnet; \
+	do chmod +x $(INIT)/$$x && dh_installinit --onlyscripts --name=$$x; \
+	done
+	install -Dpm 0644 debian/README.conf debian/re6stnet/etc/re6stnet/README
+
 override_dh_installman: $(MANPAGELIST)
 	dh_installman $^
+
+override_dh_python2:
+	dh_python2 --no-guessing-deps --depends=pyOpenSSL --recommends=miniupnpc
 
 %:
 	dh $@ --with python2 --buildsystem=python_distutils
