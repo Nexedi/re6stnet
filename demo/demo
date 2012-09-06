@@ -217,8 +217,10 @@ if len(sys.argv) > 1:
         def do_GET(self):
             svg = None
             if self.path == '/route.html':
+                other = 'tunnel'
                 svg = route_svg()
             elif self.path == '/tunnel.html':
+                other = 'route'
                 gv = registry.Popen(('python', '-c', r"""if 1:
                     import math, xmlrpclib
                     g = xmlrpclib.ServerProxy('http://localhost/').topology()
@@ -242,15 +244,20 @@ if len(sys.argv) > 1:
                     self.send_error(500)
                     return
             else:
-                self.send_error(404)
+                if self.path == '/':
+                    self.send_response(302)
+                    self.send_header('Location', 'route.html')
+                    self.end_headers()
+                else:
+                    self.send_error(404)
                 return
             mt = 'text/html'
             body = """<html>
 <head><meta http-equiv="refresh" content="10"/></head>
-<body>
+<body><a style="position: absolute" href="%s.html">%ss</a>
 %s
 </body>
-</html>""" % svg[svg.find('<svg'):]
+</html>""" % (other, other, svg[svg.find('<svg'):])
             self.send_response(200)
             self.send_header('Content-Length', len(body))
             self.send_header('Content-type', mt + '; charset=utf-8')
