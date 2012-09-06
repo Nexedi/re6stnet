@@ -1,12 +1,10 @@
 #!/usr/bin/env python
-import argparse, atexit, os, subprocess, sqlite3, sys, xmlrpclib
+import argparse, atexit, errno, os, subprocess, sqlite3, sys, xmlrpclib
 from OpenSSL import crypto
 from re6st import utils
 
 def create(path, text=None, mode=0666):
     fd = os.open(path, os.O_CREAT | os.O_WRONLY | os.O_TRUNC, mode)
-    if text is None:
-        return fd
     try:
         os.write(fd, text)
     finally:
@@ -56,11 +54,22 @@ def main():
             sys.exit(r)
 
     req = crypto.X509Req()
-    subj = req.get_subject()
+    try:
+        with open(cert_path) as f:
+            cert = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
+        components = dict(cert.get_subject().get_components())
+        components.pop('CN', None)
+    except IOError, e:
+        if e.errno != errno.ENOENT:
+            raise
+        components = {}
     if config.req:
-        for k, v in config.req:
-            if k == 'CN':
-                sys.exit("CN field is reserved.")
+        components.update(config.req)
+    subj = req.get_subject()
+    for k, v in components.iteritems():
+        if k == 'CN':
+            sys.exit("CN field is reserved.")
+        if v:
             setattr(subj, k, v)
 
     cert_fd = token_advice = None
@@ -72,31 +81,40 @@ def main():
             token_advice = "Use --token to retry without asking a new token\n"
             config.token = raw_input('Please enter your token: ')
 
-        # First make sure we can store private key and open certificate file
-        # for writing, to avoid using our token for nothing.
-        print "Generating key and cert requests ..."
-        cert_fd = create(cert_path)
-        pkey = crypto.PKey()
-        pkey.generate_key(crypto.TYPE_RSA, 2048)
-        key = crypto.dump_privatekey(crypto.FILETYPE_PEM, pkey)
+        try:
+            with open(key_path) as f:
+                pkey = crypto.load_privatekey(crypto.FILETYPE_PEM, f.read())
+            key = None
+            print "Reusing existing key."
+        except IOError, e:
+            if e.errno != errno.ENOENT:
+                raise
+            print "Generating 2048-bit key ..."
+            pkey = crypto.PKey()
+            pkey.generate_key(crypto.TYPE_RSA, 2048)
+            key = crypto.dump_privatekey(crypto.FILETYPE_PEM, pkey)
+            create(key_path, key, 0600)
 
         req.set_pubkey(pkey)
         req.sign(pkey, 'sha1')
         req = crypto.dump_certificate_request(crypto.FILETYPE_PEM, req)
 
-        create(key_path, key, 0600)
+        # First make sure we can open certificate file for writing,
+        # to avoid using our token for nothing.
+        cert_fd = os.open(cert_path, os.O_CREAT | os.O_WRONLY, 0666)
         print "Requesting certificate ..."
         cert = s.requestCertificate(config.token, req)
         if not cert:
             token_advice = None
             sys.exit("Error: invalid or expired token")
     except:
-        if cert_fd:
+        if cert_fd is not None and not os.lseek(cert_fd, 0, os.SEEK_END):
             os.remove(cert_path)
         if token_advice:
             atexit.register(sys.stdout.write, token_advice)
         raise
     os.write(cert_fd, cert)
+    os.ftruncate(cert_fd, len(cert))
     os.close(cert_fd)
 
     print "Certificate setup complete."
