@@ -26,6 +26,11 @@ if not os.path.exists(registry):
     sql = open('registry/registry.sql').read()
     db = sqlite3.connect(registry)
     db.executescript(sql)
+    for prefix, cert in db.execute("SELECT prefix, cert FROM cert"
+                                   " WHERE cert IS NOT NULL"):
+        i = int(prefix, 2)
+        with open(("m%u" % i if i else "registry") + "/cert.crt", 'w') as f:
+            f.write(cert)
     db.close()
 
 def disable_signal_on_children(sig):

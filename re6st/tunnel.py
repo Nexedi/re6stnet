@@ -268,7 +268,7 @@ class TunnelManager(object):
 
     def handlePeerEvent(self):
         msg, address = self.sock.recvfrom(1<<16)
-        if not utils.binFromIp(address[0]).startswith(self._network):
+        if not (msg or utils.binFromIp(address[0]).startswith(self._network)):
             return
         code = ord(msg[0])
         if code == 1: # answer

@@ -1,13 +1,10 @@
-import errno
-import os
-import subprocess
-import logging
-import utils
+import logging, errno, os, subprocess
+from . import utils
 
 here = os.path.realpath(os.path.dirname(__file__))
 ovpn_server = os.path.join(here, 'ovpn-server')
 ovpn_client = os.path.join(here, 'ovpn-client')
-
+ovpn_log = None
 
 def openvpn(iface, hello_interval, encrypt, *args, **kw):
     args = ['openvpn',
@@ -17,9 +14,10 @@ def openvpn(iface, hello_interval, encrypt, *args, **kw):
         '--persist-key',
         '--script-security', '2',
         '--ping-exit', str(4 * hello_interval),
-        '--log-append', os.path.join(log, '%s.log' % iface),
         #'--user', 'nobody', '--group', 'nogroup',
         ] + list(args)
+    if ovpn_log:
+        args += '--log-append', os.path.join(ovpn_log, '%s.log' % iface),
     if not encrypt:
         args += '--cipher', 'none'
     logging.debug('%r', args)
@@ -60,8 +58,8 @@ def client(iface, server_address, pipe_fd, hello_interval, encrypt, *args, **kw)
     return openvpn(iface, hello_interval, encrypt, *remote, **kw)
 
 
-def router(network, subnet, subnet_size, interface_list,
-           wireless, hello_interval, verbose, pidfile, state_path, **kw):
+def router(network, subnet, subnet_size, hello_interval, log_path, state_path,
+           pidfile, *args, **kw):
     args = ['babeld',
             '-C', 'redistribute local ip %s/%s le %s' % (subnet, subnet_size, subnet_size),
             '-C', 'redistribute local deny',
@@ -77,25 +75,18 @@ def router(network, subnet, subnet_size, interface_list,
                   #'-C', 'in ip ::/0 le %s' % network_mask,
             # Don't route other addresses
             '-C', 'in deny',
-            '-d', str(verbose),
             '-h', str(hello_interval),
             '-H', str(hello_interval),
-            '-L', os.path.join(log, 'babeld.log'),
+            '-L', log_path,
             '-S', state_path,
+            '-I', pidfile,
             '-s',
-            ]
-    if pidfile:
-        args += '-I', pidfile
+            ] + list(args)
     # WKRD: babeld fails to start if pidfile already exists
-    else:
-        pidfile = '/var/run/babeld.pid'
     try:
         os.remove(pidfile)
     except OSError, e:
         if e.errno != errno.ENOENT:
             raise
-    if wireless:
-        args.append('-w')
-    args = args + interface_list
     logging.info('%r', args)
     return subprocess.Popen(args, **kw)

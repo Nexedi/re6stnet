@@ -1,19 +1,7 @@
 #!/usr/bin/env python
-import argparse, atexit, errno, logging, os
-import select, signal, sqlite3, sys, time, traceback
+import atexit, errno, logging, os, select
+import signal, sqlite3, sys, time, traceback
 from re6st import plib, utils, db, tunnel
-
-def ovpnArgs(optional_args, ca_path, cert_path, key_path):
-    # Treat openvpn arguments
-    if optional_args and optional_args[0] == "--":
-        del optional_args[0]
-    optional_args.append('--ca')
-    optional_args.append(ca_path)
-    optional_args.append('--cert')
-    optional_args.append(cert_path)
-    optional_args.append('--key')
-    optional_args.append(key_path)
-    return optional_args
 
 
 def getConfig():
@@ -46,21 +34,24 @@ def getConfig():
              " are other re6st node on the same network segment.")
 
     _ = parser.add_argument_group('routing').add_argument
-    _('--babel-pidfile', metavar='PID',
+    _('-B', dest='babel_args', metavar='ARG', action='append', default=[],
+        help="Extra arguments to forward to Babel.")
+    _('--babel-pidfile', metavar='PID', default='/var/run/re6st-babeld.pid',
         help="Specify a file to write our process id to"
              " (option -I of Babel).")
-    _('--babel-verb', default=0, metavar='LEVEL',
-        help="Log level of Babel (option -d of Babel).")
     _('--hello', type=int, default=15,
         help="Hello interval in seconds, for both wired and wireless"
              " connections. OpenVPN ping-exit option is set to 4 times the"
              " hello interval. It takes between 3 and 4 times the"
              " hello interval for Babel to re-establish connection with a"
              " node for which the direct connection has been cut.")
-    _('-w', '--wireless', action='store_true',
-        help="Assume all interfaces are wireless (option -w of Babel).")
 
     _ = parser.add_argument_group('tunnelling').add_argument
+    _('-O', dest='openvpn_args', metavar='ARG', action='append', default=[],
+        help="Extra arguments to forward to both server and client OpenVPN"
+             " subprocesses. Often used to configure verbosity.")
+    _('--ovpnlog', action='store_true',
+        help="Tell each OpenVPN subprocess to log to a dedicated file.")
     _('--encrypt', action='store_true',
         help='Specify that tunnels should be encrypted.')
     _('--pp', nargs=2, action='append', metavar=('PORT', 'PROTO'),
@@ -87,9 +78,6 @@ def getConfig():
              " tunnel is closed if the number of client tunnels has reached"
              " its maximum number (client-count).")
 
-    _('openvpn_args', nargs=argparse.REMAINDER,
-        help="Use pseudo-argument '--' to forward positional arguments as extra"
-             " arguments to both server and client OpenVPN subprocesses.")
     return parser.parse_args()
 
 
@@ -98,15 +86,19 @@ def main():
     config = getConfig()
     network = utils.networkFromCa(config.ca)
     prefix = utils.binFromSubnet(utils.subnetFromCert(config.cert))
-    openvpn_args = ovpnArgs(config.openvpn_args, config.ca, config.cert,
-                                                 config.key)
+    config.openvpn_args += (
+        '--ca', config.ca,
+        '--cert', config.cert,
+        '--key', config.key)
+
     # Set logging
     utils.setupLog(config.verbose, os.path.join(config.log, 're6stnet.log'))
 
     logging.trace("Configuration:\n%r", config)
     utils.makedirs(config.state)
     db_path = os.path.join(config.state, 'peers.db')
-    plib.log = tunnel.log = config.log
+    if config.ovpnlog:
+        plib.ovpn_log = config.log
 
     # Create and open read_only pipe to get server events
     logging.info('Creating pipe for server events...')
@@ -148,20 +140,22 @@ def main():
     try:
         # Init db and tunnels
         peer_db = db.PeerDB(db_path, config.registry, config.key, prefix)
-        tunnel_manager = tunnel.TunnelManager(write_pipe, peer_db, openvpn_args,
-            config.hello, config.tunnel_refresh, config.client_count,
-            config.iface_list, network, prefix, address, ip_changed,
-            config.encrypt)
+        tunnel_manager = tunnel.TunnelManager(write_pipe, peer_db,
+            config.openvpn_args, config.hello, config.tunnel_refresh,
+            config.client_count, config.iface_list, network, prefix, address,
+            ip_changed, config.encrypt)
 
         server_tunnels = {}
         for x in pp:
             server_tunnels.setdefault('re6stnet-' + x[1], x)
-        interface_list = list(tunnel_manager.free_interface_set) \
-                       + config.iface_list + server_tunnels.keys()
         subnet = network + prefix
+        config.babel_args += tunnel_manager.free_interface_set
+        config.babel_args += config.iface_list
+        config.babel_args += server_tunnels
         router = plib.router(network, utils.ipFromBin(subnet), len(subnet),
-            interface_list, config.wireless, config.hello, config.babel_verb,
-            config.babel_pidfile, os.path.join(config.state, 'babeld.state'))
+            config.hello, os.path.join(config.log, 'babeld.log'),
+            os.path.join(config.state, 'babeld.state'),
+            config.babel_pidfile, *config.babel_args)
 
         # main loop
         try:
@@ -171,7 +165,7 @@ def main():
                     utils.ipFromBin(subnet, '1') if proto == pp[0][1] else None,
                     len(network) + len(prefix),
                     config.max_clients, config.dh, write_pipe, port,
-                    proto, config.hello, config.encrypt, *openvpn_args))
+                    proto, config.hello, config.encrypt, *config.openvpn_args))
             while True:
                 next = tunnel_manager.next_refresh
                 if forwarder:
