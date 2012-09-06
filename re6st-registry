@@ -210,7 +210,7 @@ class main(object):
 
                 # Create certificate
                 cert = crypto.X509()
-                #cert.set_serial_number(serial)
+                cert.set_serial_number(0) # required for libssl < 1.0
                 cert.gmtime_adj_notBefore(0)
                 cert.gmtime_adj_notAfter(self.cert_duration)
                 cert.set_issuer(self.ca.get_subject())
