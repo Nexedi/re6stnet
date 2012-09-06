@@ -76,13 +76,16 @@ def getConfig():
              " Common name defines the allocated prefix in the network.")
     _('--key', required=True,
         help="Local peer's private key in .pem format.")
-    _('--connection-count', default=20, type=int,
-        help="Maximum number of accepted clients per OpenVPN server."
-             " Also represents the average number of tunnels to peers.")
+    _('--client-count', default=10, type=int,
+        help="Number of client tunnels to set up.")
+    _('--max-clients', type=int,
+        help="Maximum number of accepted clients per OpenVPN server. (default:"
+             " client-count * 2, which actually represents the average number"
+             " of tunnels to other peers)")
     _('--tunnel-refresh', default=300, type=int,
         help="Interval in seconds between two tunnel refresh: the worst"
              " tunnel is closed if the number of client tunnels has reached"
-             " its maximum number (half of connection-count).")
+             " its maximum number (client-count).")
 
     _('openvpn_args', nargs=argparse.REMAINDER,
         help="Use pseudo-argument '--' to forward positional arguments as extra"
@@ -112,6 +115,9 @@ def main():
 
     signal.signal(signal.SIGHUP, lambda *args: sys.exit(-1))
     signal.signal(signal.SIGTERM, lambda *args: sys.exit())
+
+    if config.max_clients is None:
+        config.max_clients = config.client_count * 2
 
     address = []
     if config.pp:
@@ -143,7 +149,7 @@ def main():
         # Init db and tunnels
         peer_db = db.PeerDB(db_path, config.registry, config.key, prefix)
         tunnel_manager = tunnel.TunnelManager(write_pipe, peer_db, openvpn_args,
-            config.hello, config.tunnel_refresh, config.connection_count,
+            config.hello, config.tunnel_refresh, config.client_count,
             config.iface_list, network, prefix, address, ip_changed,
             config.encrypt)
 
@@ -164,7 +170,7 @@ def main():
                 server_process.append(plib.server(iface,
                     utils.ipFromBin(subnet, '1') if proto == pp[0][1] else None,
                     len(network) + len(prefix),
-                    config.connection_count, config.dh, write_pipe, port,
+                    config.max_clients, config.dh, write_pipe, port,
                     proto, config.hello, config.encrypt, *openvpn_args))
             while True:
                 next = tunnel_manager.next_refresh
