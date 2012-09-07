@@ -3,6 +3,8 @@ import os
 import sys
 
 script_type = os.environ['script_type']
+arg1 = sys.argv[1]
+
 if script_type == 'up':
     import subprocess
     def call(*args):
@@ -11,8 +13,8 @@ if script_type == 'up':
             sys.exit(r)
     dev = os.environ['dev']
     call('ip', 'link', 'set', dev, 'up')
-    if sys.argv[1] != 'none':
-        call('ip', 'addr', 'add', sys.argv[1], 'dev', dev)
+    if arg1 != 'None':
+        call('ip', 'addr', 'add', arg1, 'dev', dev)
 
 else:
     if script_type == 'client-connect':
@@ -22,4 +24,5 @@ else:
                     % os.environ['trusted_ip'])
 
     # Write into pipe connect/disconnect events
-    os.write(int(sys.argv[1]), '%(script_type)s %(common_name)s\n' % os.environ)
+    if arg1 != 'None':
+        os.write(int(arg1), '%(script_type)s %(common_name)s\n' % os.environ)

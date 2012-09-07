@@ -9,15 +9,15 @@ VERBOSE = 4
 #                           |.2
 #                           |10.0.0
 #                           |.1
-#        ---------------Internet---------------
-#        |.1                |.1               |.1
-#        |10.1.0            |10.2.0           |
-#        |.2                |.2               |
+#        ---------------Internet----------------
+#        |.1                |.1                |.1
+#        |10.1.0            |10.2.0            |
+#        |.2                |.2                |
 #    gateway1           gateway2           s3:10.0.1
-#        |.1                |.1            |.2     |.3
-#    s1:10.1.1          s2:10.2.1          m5      m6
-#    |.2     |.3        |.2     |.3
-#    m1      m2         m3      m4
+#        |.1                |.1            |.2 |.3 |.4
+#    s1:10.1.1          s2:10.2.1          m6  m7  m8
+#    |.2     |.3        |.2 |.3 |.4
+#    m1      m2         m3  m4  m5
 #
 
 registry = 'registry/registry.db'
@@ -41,8 +41,8 @@ disable_signal_on_children(signal.SIGINT)
 # create nodes
 for name in """internet=I registry=R
                           gateway1=g1 machine1=1 machine2=2
-                          gateway2=g2 machine3=3 machine4=4
-                          machine5=5 machine6=6
+                          gateway2=g2 machine3=3 machine4=4 machine5=5
+                          machine6=6 machine7=7 machine8=8
             """.split():
     name, short = name.split('=')
     globals()[name] = node = nemu.Node()
@@ -78,6 +78,8 @@ m3_if_0 = nemu.NodeInterface(machine3)
 m4_if_0 = nemu.NodeInterface(machine4)
 m5_if_0 = nemu.NodeInterface(machine5)
 m6_if_0 = nemu.NodeInterface(machine6)
+m7_if_0 = nemu.NodeInterface(machine7)
+m8_if_0 = nemu.NodeInterface(machine8)
 
 # connect to switch
 switch1.connect(g1_if_1)
@@ -87,15 +89,17 @@ switch1.connect(m2_if_0)
 switch2.connect(g2_if_1)
 switch2.connect(m3_if_0)
 switch2.connect(m4_if_0)
+switch2.connect(m5_if_0)
 
 switch3.connect(in_if_3)
-switch3.connect(m5_if_0)
 switch3.connect(m6_if_0)
+switch3.connect(m7_if_0)
+switch3.connect(m8_if_0)
 
 # setting everything up
 switch1.up = switch2.up = switch3.up = True
 re_if_0.up = in_if_0.up = in_if_1.up = g1_if_0.up = in_if_2.up = g2_if_0.up = True
-in_if_3.up = g1_if_1.up = g2_if_1.up = m1_if_0.up = m2_if_0.up = m3_if_0.up = m4_if_0.up = m5_if_0.up = m6_if_0.up = True
+in_if_3.up = g1_if_1.up = g2_if_1.up = m1_if_0.up = m2_if_0.up = m3_if_0.up = m4_if_0.up = m5_if_0.up = m6_if_0.up = m7_if_0.up = m8_if_0.up = True
 
 # Add IPv4 addresses
 re_if_0.add_v4_address(address='10.0.0.2', prefix_len=24)
@@ -111,8 +115,10 @@ m1_if_0.add_v4_address(address='10.1.1.2', prefix_len=24)
 m2_if_0.add_v4_address(address='10.1.1.3', prefix_len=24)
 m3_if_0.add_v4_address(address='10.2.1.2', prefix_len=24)
 m4_if_0.add_v4_address(address='10.2.1.3', prefix_len=24)
-m5_if_0.add_v4_address(address='10.0.1.2', prefix_len=24)
-m6_if_0.add_v4_address(address='10.0.1.3', prefix_len=24)
+m5_if_0.add_v4_address(address='10.2.1.4', prefix_len=24)
+m6_if_0.add_v4_address(address='10.0.1.2', prefix_len=24)
+m7_if_0.add_v4_address(address='10.0.1.3', prefix_len=24)
+m8_if_0.add_v4_address(address='10.0.1.4', prefix_len=24)
 
 # setup routes
 registry.add_route(prefix='10.0.0.0', prefix_len=8, nexthop='10.0.0.1')
@@ -120,12 +126,12 @@ registry.add_route(prefix='10.0.0.0', prefix_len=8, nexthop='10.0.0.1')
 internet.add_route(prefix='10.2.0.0', prefix_len=16, nexthop='10.2.0.2')
 gateway1.add_route(prefix='10.0.0.0', prefix_len=8, nexthop='10.1.0.1')
 gateway2.add_route(prefix='10.0.0.0', prefix_len=8, nexthop='10.2.0.1')
-machine1.add_route(nexthop='10.1.1.1')
-machine2.add_route(nexthop='10.1.1.1')
-machine3.add_route(prefix='10.0.0.0', prefix_len=8, nexthop='10.2.1.1')
-machine4.add_route(prefix='10.0.0.0', prefix_len=8, nexthop='10.2.1.1')
-machine5.add_route(prefix='10.0.0.0', prefix_len=8, nexthop='10.0.1.1')
-machine6.add_route(prefix='10.0.0.0', prefix_len=8, nexthop='10.0.1.1')
+for m in machine1, machine2:
+    m.add_route(nexthop='10.1.1.1')
+for m in machine3, machine4, machine5:
+    m.add_route(prefix='10.0.0.0', prefix_len=8, nexthop='10.2.1.1')
+for m in machine6, machine7, machine8:
+    m.add_route(prefix='10.0.0.0', prefix_len=8, nexthop='10.0.1.1')
 
 # Test connectivity first. Run process, hide output and check
 # return code
@@ -147,10 +153,13 @@ if 1:
     machine2.screen('../re6stnet @m2/re6stnet.conf -v%u' % VERBOSE)
     machine3.screen('../re6stnet @m3/re6stnet.conf -v%u -i%s' % (VERBOSE, m3_if_0.name))
     machine4.screen('../re6stnet @m4/re6stnet.conf -v%u -i%s' % (VERBOSE, m4_if_0.name))
-    machine5.screen('../re6stnet @m5/re6stnet.conf -v%u' % VERBOSE)
+    machine5.screen('../re6stnet @m5/re6stnet.conf -v%u -i%s' % (VERBOSE, m5_if_0.name))
     machine6.screen('../re6stnet @m6/re6stnet.conf -v%u' % VERBOSE)
+    machine7.screen('../re6stnet @m7/re6stnet.conf -v%u' % VERBOSE)
+    machine8.screen('../re6stnet @m8/re6stnet.conf -v%u' % VERBOSE)
 
-nodes = registry, machine1, machine2, machine3, machine4, machine5, machine6
+nodes = registry, machine1, machine2, machine3, machine4, \
+                  machine5, machine6, machine7, machine8
 _ll = {}
 def node_by_ll(addr):
     try:

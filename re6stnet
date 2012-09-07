@@ -1,6 +1,6 @@
 #!/usr/bin/env python
-import atexit, errno, logging, os, select
-import signal, sqlite3, sys, time, traceback
+import atexit, errno, logging, os, select, signal
+import sqlite3, subprocess, sys, time, traceback
 from re6st import plib, utils, db, tunnel
 
 
@@ -14,7 +14,7 @@ def getConfig():
              "- upnp: force autoconfiguration via UPnP\n"
              "- any: ask peers our IP\n"
              " (default: ask peers if UPnP fails)")
-    _('--registry', required=True, metavar='URL',
+    _('--registry', metavar='URL',
         help="Public HTTP URL of the registry, for bootstrapping.")
     _('-l', '--log', default='/var/log/re6stnet',
         help="Path to the directory used for log files:\n"
@@ -59,7 +59,7 @@ def getConfig():
              " preference. For each protocol (either udp or tcp), start one"
              " openvpn server on the first given port."
              " (default: --pp 1194 udp --pp 1194 tcp)")
-    _('--dh', required=True,
+    _('--dh',
         help='File containing Diffie-Hellman parameters in .pem format')
     _('--ca', required=True, help=parser._ca_help)
     _('--cert', required=True,
@@ -77,6 +77,10 @@ def getConfig():
         help="Interval in seconds between two tunnel refresh: the worst"
              " tunnel is closed if the number of client tunnels has reached"
              " its maximum number (client-count).")
+    _('--client', metavar='HOST,PORT,PROTO[;...]',
+        help="Do not run any OpenVPN server, but only 1 OpenVPN client,"
+             " with specified remotes. Any other option not required in this"
+             " mode is ignored (e.g. client-count, max-clients, etc.)")
 
     return parser.parse_args()
 
@@ -90,6 +94,7 @@ def main():
         '--ca', config.ca,
         '--cert', config.cert,
         '--key', config.key)
+    # TODO: verify certificates (should we moved to M2Crypto ?)
 
     # Set logging
     utils.setupLog(config.verbose, os.path.join(config.log, 're6stnet.log'))
@@ -100,11 +105,6 @@ def main():
     if config.ovpnlog:
         plib.ovpn_log = config.log
 
-    # Create and open read_only pipe to get server events
-    logging.info('Creating pipe for server events...')
-    r_pipe, write_pipe = os.pipe()
-    read_pipe = os.fdopen(r_pipe)
-
     signal.signal(signal.SIGHUP, lambda *args: sys.exit(-1))
     signal.signal(signal.SIGTERM, lambda *args: sys.exit())
 
@@ -112,60 +112,101 @@ def main():
         config.max_clients = config.client_count * 2
 
     address = []
-    if config.pp:
-        pp = [(int(port), proto) for port, proto in config.pp]
-    else:
-        pp = (1194, 'udp'), (1194, 'tcp')
-    ip_changed = lambda ip: [(ip, str(port), proto) for port, proto in pp]
-    forwarder = None
-    if config.ip == 'upnp' or not config.ip:
-        logging.info('Attempting automatic configuration via UPnP...')
-        try:
-            from re6st.upnpigd import Forwarder
-            forwarder = Forwarder()
-        except Exception, e:
-            if config.ip:
-                raise
-            logging.info("%s: assume we are not NATed", e)
+    server_tunnels = {}
+    if config.client:
+        config.babel_args.append('re6stnet')
+    elif config.max_clients:
+        if config.pp:
+            pp = [(int(port), proto) for port, proto in config.pp]
         else:
-            atexit.register(forwarder.clear)
-            for port, proto in pp:
-                ip, port = forwarder.addRule(port, proto)
-                address.append((ip, str(port), proto))
-    elif config.ip != 'any':
-        address = ip_changed(config.ip)
-    if address:
-        ip_changed = None
-
-    try:
-        # Init db and tunnels
-        peer_db = db.PeerDB(db_path, config.registry, config.key, prefix)
-        tunnel_manager = tunnel.TunnelManager(write_pipe, peer_db,
-            config.openvpn_args, config.hello, config.tunnel_refresh,
-            config.client_count, config.iface_list, network, prefix, address,
-            ip_changed, config.encrypt)
-
-        server_tunnels = {}
+            pp = (1194, 'udp'), (1194, 'tcp')
+        ip_changed = lambda ip: [(ip, str(port), proto) for port, proto in pp]
+        forwarder = None
+        if config.ip == 'upnp' or not config.ip:
+            logging.info('Attempting automatic configuration via UPnP...')
+            try:
+                from re6st.upnpigd import Forwarder
+                forwarder = Forwarder()
+            except Exception, e:
+                if config.ip:
+                    raise
+                logging.info("%s: assume we are not NATed", e)
+            else:
+                atexit.register(forwarder.clear)
+                for port, proto in pp:
+                    ip, port = forwarder.addRule(port, proto)
+                    address.append((ip, str(port), proto))
+        elif config.ip != 'any':
+            address = ip_changed(config.ip)
+        if address:
+            ip_changed = None
         for x in pp:
             server_tunnels.setdefault('re6stnet-' + x[1], x)
-        subnet = network + prefix
-        config.babel_args += tunnel_manager.free_interface_set
-        config.babel_args += config.iface_list
         config.babel_args += server_tunnels
+
+    def call(*args, **kw):
+        r = subprocess.call(*args, **kw)
+        if r:
+            sys.exit(r)
+    def required(arg):
+        if not getattr(config, arg):
+            sys.exit("error: argument --%s is required" % arg)
+
+    try:
+        subnet = network + prefix
+        my_ip = '%s/%s' % (utils.ipFromBin(subnet, '1'), len(subnet))
+
+        # Init db and tunnels
+        if config.client_count and not config.client:
+            required('registry')
+            # Create and open read_only pipe to get server events
+            r_pipe, write_pipe = os.pipe()
+            read_pipe = os.fdopen(r_pipe)
+            peer_db = db.PeerDB(db_path, config.registry, config.key, prefix)
+            tunnel_manager = tunnel.TunnelManager(write_pipe, peer_db,
+                config.openvpn_args, config.hello, config.tunnel_refresh,
+                config.client_count, config.iface_list, network, prefix,
+                address, ip_changed, config.encrypt)
+            config.babel_args += tunnel_manager.free_interface_set
+        else:
+            tunnel_manager = write_pipe = None
+
+        config.babel_args += config.iface_list
         router = plib.router(network, utils.ipFromBin(subnet), len(subnet),
             config.hello, os.path.join(config.log, 'babeld.log'),
             os.path.join(config.state, 'babeld.state'),
             config.babel_pidfile, *config.babel_args)
 
-        # main loop
         try:
-            server_process = []
-            for iface, (port, proto) in server_tunnels.iteritems():
-                server_process.append(plib.server(iface,
-                    utils.ipFromBin(subnet, '1') if proto == pp[0][1] else None,
-                    len(network) + len(prefix),
-                    config.max_clients, config.dh, write_pipe, port,
-                    proto, config.hello, config.encrypt, *config.openvpn_args))
+            cleanup = []
+            # prepare persistent interfaces
+            if config.client:
+                cleanup.append(plib.client('re6stnet', config.client,
+                    config.encrypt,
+                    '--up', plib.ovpn_server + ' ' + my_ip,
+                    '--ping-restart', str(4 * config.hello),
+                    *config.openvpn_args).kill)
+            elif server_tunnels:
+                required('dh')
+                for iface, (port, proto) in server_tunnels.iteritems():
+                    cleanup.append(plib.server(iface,
+                        my_ip if proto == pp[0][1] else None,
+                        config.max_clients, config.dh, write_pipe, port,
+                        proto, config.encrypt, *config.openvpn_args).kill)
+            elif config.iface_list:
+                ip_args = ['ip', 'addr', 'add', my_ip,
+                           'dev', config.iface_list[0]]
+                call(ip_args)
+                ip_args[2] = 'del'
+                cleanup.append(lambda: call(ip_args))
+            else:
+                sys.exit("--client or --interface required"
+                         " when --max-clients is 0")
+
+            # main loop
+            if tunnel_manager is None:
+                sys.exit(os.WEXITSTATUS(os.wait()[1]))
+            cleanup.append(tunnel_manager.killAll)
             while True:
                 next = tunnel_manager.next_refresh
                 if forwarder:
@@ -188,15 +229,11 @@ def main():
                     forwarder.refresh()
         finally:
             router.terminate()
-            for p in server_process:
+            for cleanup in cleanup:
                 try:
-                    p.kill()
+                    cleanup()
                 except:
                     pass
-            try:
-                tunnel_manager.killAll()
-            except:
-                pass
     except sqlite3.Error:
         logging.exception("Restarting with empty cache")
         os.rename(db_path, db_path + '.bak')

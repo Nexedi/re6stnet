@@ -11,9 +11,13 @@ class Connection:
 
     def __init__(self, address, write_pipe, hello, iface, prefix, encrypt,
             ovpn_args):
-        self.process = plib.client(iface, address, write_pipe, hello, encrypt,
+        self.process = plib.client(iface, address, encrypt,
             '--tls-remote', '%u/%u' % (int(prefix, 2), len(prefix)),
-            '--connect-retry-max', '3', '--tls-exit', *ovpn_args)
+            '--connect-retry-max', '3', '--tls-exit',
+            '--ping-exit', str(4 * hello),
+            '--up', plib.ovpn_client,
+            '--route-up', '%s %u' % (plib.ovpn_client, write_pipe),
+            *ovpn_args)
         self.iface = iface
         self.routes = 0
         self._prefix = prefix

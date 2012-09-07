@@ -6,14 +6,13 @@ ovpn_server = os.path.join(here, 'ovpn-server')
 ovpn_client = os.path.join(here, 'ovpn-client')
 ovpn_log = None
 
-def openvpn(iface, hello_interval, encrypt, *args, **kw):
+def openvpn(iface, encrypt, *args, **kw):
     args = ['openvpn',
         '--dev-type', 'tap',
         '--dev', iface,
         '--persist-tun',
         '--persist-key',
         '--script-security', '2',
-        '--ping-exit', str(4 * hello_interval),
         #'--user', 'nobody', '--group', 'nogroup',
         ] + list(args)
     if ovpn_log:
@@ -24,17 +23,15 @@ def openvpn(iface, hello_interval, encrypt, *args, **kw):
     return subprocess.Popen(args, **kw)
 
 
-def server(iface, server_ip, ip_length, max_clients, dh_path, pipe_fd, port, proto, hello_interval, encrypt, *args, **kw):
-    if server_ip:
-        script_up = '%s %s/%u' % (ovpn_server, server_ip, ip_length)
-    else:
-        script_up = '%s none' % (ovpn_server)
-    return openvpn(iface, hello_interval, encrypt,
+def server(iface, my_ip, max_clients, dh_path, pipe_fd, port, proto, encrypt, *args, **kw):
+    client_script = '%s %s' % (ovpn_server, pipe_fd)
+    if pipe_fd is not None:
+        args = ('--client-disconnect', client_script) + args
+    return openvpn(iface, encrypt,
         '--tls-server',
         '--mode', 'server',
-        '--up', script_up,
-        '--client-connect', ovpn_server + ' ' + str(pipe_fd),
-        '--client-disconnect', ovpn_server + ' ' + str(pipe_fd),
+        '--up', '%s %s' % (ovpn_server, my_ip),
+        '--client-connect', client_script,
         '--dh', dh_path,
         '--max-clients', str(max_clients),
         '--port', str(port),
@@ -42,11 +39,8 @@ def server(iface, server_ip, ip_length, max_clients, dh_path, pipe_fd, port, pro
         *args, **kw)
 
 
-def client(iface, server_address, pipe_fd, hello_interval, encrypt, *args, **kw):
-    remote = ['--nobind',
-              '--client',
-              '--up', ovpn_client,
-              '--route-up', ovpn_client + ' ' + str(pipe_fd)]
+def client(iface, server_address, encrypt, *args, **kw):
+    remote = ['--nobind', '--client']
     try:
         for ip, port, proto in utils.address_list(server_address):
             remote += '--remote', ip, port, \
@@ -55,7 +49,7 @@ def client(iface, server_address, pipe_fd, hello_interval, encrypt, *args, **kw)
         logging.warning("Failed to parse node address %r (%s)",
                         server_address, e)
     remote += args
-    return openvpn(iface, hello_interval, encrypt, *remote, **kw)
+    return openvpn(iface, encrypt, *remote, **kw)
 
 
 def router(network, subnet, subnet_size, hello_interval, log_path, state_path,
