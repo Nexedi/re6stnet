@@ -26,7 +26,7 @@ def openvpn(iface, hello_interval, encrypt, *args, **kw):
 
 def server(iface, server_ip, ip_length, max_clients, dh_path, pipe_fd, port, proto, hello_interval, encrypt, *args, **kw):
     if server_ip:
-        script_up = '%s %s/%u' % (ovpn_server, server_ip, 64)
+        script_up = '%s %s/%u' % (ovpn_server, server_ip, ip_length)
     else:
         script_up = '%s none' % (ovpn_server)
     return openvpn(iface, hello_interval, encrypt,
