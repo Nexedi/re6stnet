@@ -47,4 +47,4 @@ class Forwarder:
     def clear(self):
         for args in self._rules:
             self._u.deleteportmapping(args[0], args[1])
-        del self.rules[:]
+        del self._rules[:]
