@@ -32,6 +32,9 @@ def getConfig():
     _('-i', '--interface', action='append', dest='iface_list', default=[],
         help="Extra interface for LAN discovery. Highly recommanded if there"
              " are other re6st node on the same network segment.")
+    _('-I', '--main-interface', metavar='IFACE',
+        help="Set re6stnet IP on given interface. Any interface not used for"
+             " tunnelling can be chosen. (default: first OpenVPN interface)")
 
     _ = parser.add_argument_group('routing').add_argument
     _('-B', dest='babel_args', metavar='ARG', action='append', default=[],
@@ -183,25 +186,29 @@ def main():
             if config.client:
                 cleanup.append(plib.client('re6stnet', config.client,
                     config.encrypt,
-                    '--up', plib.ovpn_server + ' ' + my_ip,
+                    '--up', '%s %s' % (plib.ovpn_server, None
+                        if config.main_interface else my_ip),
                     '--ping-restart', str(4 * config.hello),
                     *config.openvpn_args).kill)
             elif server_tunnels:
                 required('dh')
                 for iface, (port, proto) in server_tunnels.iteritems():
-                    cleanup.append(plib.server(iface,
-                        my_ip if proto == pp[0][1] else None,
-                        config.max_clients, config.dh, write_pipe, port,
-                        proto, config.encrypt, *config.openvpn_args).kill)
-            elif config.iface_list:
+                    cleanup.append(plib.server(iface, None
+                        if config.main_interface or proto != pp[0][1]
+                        else my_ip, config.max_clients, config.dh, write_pipe,
+                        port, proto, config.encrypt, *config.openvpn_args).kill)
+            elif config.iface_list and not config.main_interface:
+                config.main_interface = config.iface_list[0]
+            else:
+                sys.exit("--client, --interface or --main-interface required"
+                         " when --max-clients is 0")
+
+            if config.main_interface:
                 ip_args = ['ip', 'addr', 'add', my_ip,
-                           'dev', config.iface_list[0]]
+                           'dev', config.main_interface]
                 call(ip_args)
                 ip_args[2] = 'del'
                 cleanup.append(lambda: call(ip_args))
-            else:
-                sys.exit("--client or --interface required"
-                         " when --max-clients is 0")
 
             # main loop
             if tunnel_manager is None:

@@ -149,7 +149,7 @@ if 1:
     registry.screen('../re6stnet @registry/re6stnet.conf --ip 10.0.0.2 -v%u' % VERBOSE,
                     '../re6st-registry @registry/re6st-registry.conf -v%u'
                     ' --mailhost %s' % (VERBOSE, os.path.abspath('mbox')))
-    machine1.screen('../re6stnet @m1/re6stnet.conf -v%u' % VERBOSE)
+    machine1.screen('../re6stnet @m1/re6stnet.conf -v%u -I%s' % (VERBOSE, m1_if_0.name))
     machine2.screen('../re6stnet @m2/re6stnet.conf -v%u' % VERBOSE)
     machine3.screen('../re6stnet @m3/re6stnet.conf -v%u -i%s' % (VERBOSE, m3_if_0.name))
     machine4.screen('../re6stnet @m4/re6stnet.conf -v%u -i%s' % (VERBOSE, m4_if_0.name))
