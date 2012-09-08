@@ -1,4 +1,5 @@
-import argparse, errno, logging, os, signal, struct, socket, textwrap, time
+import argparse, errno, logging, os, shlex
+import  signal, struct, socket, textwrap, time
 from OpenSSL import crypto
 
 logging_levels = logging.WARNING, logging.INFO, logging.DEBUG, 5
@@ -77,14 +78,16 @@ class ArgParser(argparse.ArgumentParser):
                " Serial number defines the prefix of the network."
 
     def convert_arg_line_to_args(self, arg_line):
-        arg_line = arg_line.split('#')[0].rstrip()
+        arg_line = arg_line.split('#', 1)[0].rstrip()
         if arg_line:
             if arg_line.startswith('@'):
                 yield arg_line
                 return
-            for arg in ('--' + arg_line.lstrip('--')).split():
-                if arg.strip():
-                    yield arg
+            arg_line = shlex.split(arg_line)
+            arg = '--' + arg_line.pop(0)
+            yield arg[arg not in self._option_string_actions:]
+            for arg in arg_line:
+                yield arg
 
     def __init__(self, **kw):
         super(ArgParser, self).__init__(formatter_class=self._HelpFormatter,
