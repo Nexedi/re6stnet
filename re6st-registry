@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/python
 import errno, logging, mailbox, os, random, select
 import smtplib, socket, sqlite3, string, subprocess, sys
 import threading, time, traceback, xmlrpclib

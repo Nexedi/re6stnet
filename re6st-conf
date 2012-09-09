@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/python
 import argparse, atexit, errno, os, subprocess, sqlite3, sys, xmlrpclib
 from OpenSSL import crypto
 from re6st import utils
