@@ -160,6 +160,7 @@ def main():
         my_ip = '%s/%s' % (utils.ipFromBin(subnet, '1'), len(subnet))
 
         # Init db and tunnels
+        timeout = 4 * config.hello
         if config.client_count and not config.client:
             required('registry')
             # Create and open read_only pipe to get server events
@@ -167,7 +168,7 @@ def main():
             read_pipe = os.fdopen(r_pipe)
             peer_db = db.PeerDB(db_path, config.registry, config.key, prefix)
             tunnel_manager = tunnel.TunnelManager(write_pipe, peer_db,
-                config.openvpn_args, config.hello, config.tunnel_refresh,
+                config.openvpn_args, timeout, config.tunnel_refresh,
                 config.client_count, config.iface_list, network, prefix,
                 address, ip_changed, config.encrypt)
             config.babel_args += tunnel_manager.free_interface_set
@@ -188,7 +189,7 @@ def main():
                     config.encrypt,
                     '--up', '%s %s' % (plib.ovpn_server, None
                         if config.main_interface else my_ip),
-                    '--ping-restart', str(4 * config.hello),
+                    '--ping-restart', str(timeout),
                     *config.openvpn_args).kill)
             elif server_tunnels:
                 required('dh')
@@ -196,7 +197,8 @@ def main():
                     cleanup.append(plib.server(iface, None
                         if config.main_interface or proto != pp[0][1]
                         else my_ip, config.max_clients, config.dh, write_pipe,
-                        port, proto, config.encrypt, *config.openvpn_args).kill)
+                        port, proto, config.encrypt,
+                        '--ping-exit', str(timeout), *config.openvpn_args).kill)
             elif config.iface_list and not config.main_interface:
                 config.main_interface = config.iface_list[0]
             else:

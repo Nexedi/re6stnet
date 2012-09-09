@@ -9,12 +9,12 @@ RTF_CACHE = 0x01000000  # cache entry
 
 class Connection:
 
-    def __init__(self, address, write_pipe, hello, iface, prefix, encrypt,
+    def __init__(self, address, write_pipe, timeout, iface, prefix, encrypt,
             ovpn_args):
         self.process = plib.client(iface, address, encrypt,
             '--tls-remote', '%u/%u' % (int(prefix, 2), len(prefix)),
             '--connect-retry-max', '3', '--tls-exit',
-            '--ping-exit', str(4 * hello),
+            '--ping-exit', str(timeout),
             '--up', plib.ovpn_client,
             '--route-up', '%s %u' % (plib.ovpn_client, write_pipe),
             *ovpn_args)
@@ -33,7 +33,7 @@ class Connection:
 
 class TunnelManager(object):
 
-    def __init__(self, write_pipe, peer_db, openvpn_args, hello_interval,
+    def __init__(self, write_pipe, peer_db, openvpn_args, timeout,
                 refresh, client_count, iface_list, network, prefix,
                 address, ip_changed, encrypt):
         self._write_pipe = write_pipe
@@ -44,7 +44,7 @@ class TunnelManager(object):
         self._distant_peers = []
         self._iface_to_prefix = {}
         self._ovpn_args = openvpn_args
-        self._hello = hello_interval
+        self._timeout = timeout
         self._refresh_time = refresh
         self._network = network
         self._iface_list = iface_list
@@ -115,7 +115,7 @@ class TunnelManager(object):
                      int(prefix, 2), len(prefix))
         iface = self.free_interface_set.pop()
         self._connection_dict[prefix] = Connection(address, self._write_pipe,
-            self._hello, iface, prefix, self._encrypt, self._ovpn_args)
+            self._timeout, iface, prefix, self._encrypt, self._ovpn_args)
         self._iface_to_prefix[iface] = prefix
         self._peer_db.connecting(prefix, 1)
         return True
