@@ -145,7 +145,6 @@ def main():
             ip_changed = None
         for x in pp:
             server_tunnels.setdefault('re6stnet-' + x[1], x)
-        config.babel_args += server_tunnels
 
     def call(*args, **kw):
         r = subprocess.call(*args, **kw)
@@ -160,6 +159,7 @@ def main():
         my_ip = '%s/%s' % (utils.ipFromBin(subnet, '1'), len(subnet))
 
         # Init db and tunnels
+        tunnel_interfaces = server_tunnels.keys()
         timeout = 4 * config.hello
         if config.client_count and not config.client:
             required('registry')
@@ -171,7 +171,7 @@ def main():
                 config.openvpn_args, timeout, config.tunnel_refresh,
                 config.client_count, config.iface_list, network, prefix,
                 address, ip_changed, config.encrypt)
-            config.babel_args += tunnel_manager.free_interface_set
+            tunnel_interfaces += tunnel_manager.free_interface_set
         else:
             tunnel_manager = write_pipe = None
 
@@ -179,7 +179,7 @@ def main():
         router = plib.router(network, utils.ipFromBin(subnet), len(subnet),
             config.hello, os.path.join(config.log, 'babeld.log'),
             os.path.join(config.state, 'babeld.state'),
-            config.babel_pidfile, *config.babel_args)
+            config.babel_pidfile, tunnel_interfaces, *config.babel_args)
 
         try:
             cleanup = []

@@ -53,8 +53,8 @@ def client(iface, server_address, encrypt, *args, **kw):
 
 
 def router(network, subnet, subnet_size, hello_interval, log_path, state_path,
-           pidfile, *args, **kw):
-    args = ['babeld',
+           pidfile, tunnel_interfaces, *args, **kw):
+    cmd = ['babeld',
             '-C', 'redistribute local ip %s/%s le %s' % (subnet, subnet_size, subnet_size),
             '-C', 'redistribute local deny',
             '-C', 'redistribute ip %s/%s le %s' % (subnet, subnet_size, subnet_size),
@@ -74,13 +74,15 @@ def router(network, subnet, subnet_size, hello_interval, log_path, state_path,
             '-L', log_path,
             '-S', state_path,
             '-I', pidfile,
-            '-s',
-            ] + list(args)
+            '-s']
+    for iface in tunnel_interfaces:
+        cmd += '-C', 'interface %s rxcost 512' % iface
+    cmd += args
     # WKRD: babeld fails to start if pidfile already exists
     try:
         os.remove(pidfile)
     except OSError, e:
         if e.errno != errno.ENOENT:
             raise
-    logging.info('%r', args)
-    return subprocess.Popen(args, **kw)
+    logging.info('%r', cmd)
+    return subprocess.Popen(cmd, **kw)
