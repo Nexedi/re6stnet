@@ -179,13 +179,13 @@ def main():
             tunnel_manager = write_pipe = None
 
         config.babel_args += config.iface_list
-        router = plib.router(network, utils.ipFromBin(subnet), len(subnet),
+        cleanup = [plib.router(network, utils.ipFromBin(subnet), len(subnet),
             config.hello, os.path.join(config.log, 'babeld.log'),
             os.path.join(config.state, 'babeld.state'),
-            config.babel_pidfile, tunnel_interfaces, *config.babel_args)
+            config.babel_pidfile, tunnel_interfaces,
+            *config.babel_args).terminate]
 
         try:
-            cleanup = []
             my_network = "%s/%u" % (utils.ipFromBin(network), len(network))
             ip('route', 'unreachable', my_network, 'proto', 'static')
             # Source address selection is defined by RFC 3484, and in most
@@ -251,7 +251,6 @@ def main():
                 if forwarder and t >= forwarder.next_refresh:
                     forwarder.refresh()
         finally:
-            router.terminate()
             for cleanup in cleanup:
                 try:
                     cleanup()
