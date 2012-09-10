@@ -198,8 +198,9 @@ def main():
             # So only rule 6 can make the difference, i.e. prefer same label.
             # The value of the label does not matter, except that it must be
             # different from ::/0's (normally equal to 1).
-            # XXX: Wouldn't it better if Babel set a source address on routes
-            #      it installed ?
+            # XXX: This does not work with extra interfaces that already have
+            #      an public IP so Babel must be changed to set a source
+            #      address on routes it installs.
             ip('addrlabel', 'prefix', my_network, 'label', '99')
             # prepare persistent interfaces
             if config.client:
