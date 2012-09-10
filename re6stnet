@@ -35,6 +35,8 @@ def getConfig():
     _('-I', '--main-interface', metavar='IFACE', default='lo',
         help="Set re6stnet IP on given interface. Any interface not used for"
              " tunnelling can be chosen.")
+    _('--up', metavar='CMD',
+        help="Shell command to run after successful initialization.")
 
     _ = parser.add_argument_group('routing').add_argument
     _('-B', dest='babel_args', metavar='ARG', action='append', default=[],
@@ -223,6 +225,10 @@ def main():
                 subprocess.call(del_rtr)
                 del_rtr[4] = '%s/%u' % (utils.ipFromBin(subnet), len(subnet))
                 cleanup.append(lambda: subprocess.call(del_rtr))
+            if config.up:
+                r = os.system(config.up)
+                if r:
+                    sys.exit(r)
 
             # main loop
             if tunnel_manager is None:
