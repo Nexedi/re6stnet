@@ -4,6 +4,7 @@ from collections import defaultdict
 IPTABLES = 'iptables'
 SCREEN = 'screen'
 VERBOSE = 4
+REGISTRY='10.0.0.2'
 
 #                       registry
 #                           |.2
@@ -19,19 +20,6 @@ VERBOSE = 4
 #    |.2     |.3        |.2 |.3 |.4
 #    m1      m2         m3  m4  m5
 #
-
-registry = 'registry/registry.db'
-if not os.path.exists(registry):
-    import sqlite3
-    sql = open('registry/registry.sql').read()
-    db = sqlite3.connect(registry)
-    db.executescript(sql)
-    for prefix, cert in db.execute("SELECT prefix, cert FROM cert"
-                                   " WHERE cert IS NOT NULL"):
-        i = int(prefix, 2)
-        with open(("m%u" % i if i else "registry") + "/cert.crt", 'w') as f:
-            f.write(cert)
-    db.close()
 
 def disable_signal_on_children(sig):
     pid = os.getpid()
@@ -102,7 +90,7 @@ re_if_0.up = in_if_0.up = in_if_1.up = g1_if_0.up = in_if_2.up = g2_if_0.up = Tr
 in_if_3.up = g1_if_1.up = g2_if_1.up = m1_if_0.up = m2_if_0.up = m3_if_0.up = m4_if_0.up = m5_if_0.up = m6_if_0.up = m7_if_0.up = m8_if_0.up = True
 
 # Add IPv4 addresses
-re_if_0.add_v4_address(address='10.0.0.2', prefix_len=24)
+re_if_0.add_v4_address(address=REGISTRY, prefix_len=24)
 in_if_0.add_v4_address(address='10.0.0.1', prefix_len=24)
 in_if_1.add_v4_address(address='10.1.0.1', prefix_len=24)
 in_if_2.add_v4_address(address='10.2.0.1', prefix_len=24)
@@ -143,23 +131,59 @@ for ip in '10.1.1.2', '10.1.1.3', '10.2.1.2', '10.2.1.3':
 else:
     print "Connectivity IPv4 OK!"
 
+nodes = []
 gateway1.screen('miniupnpd -d -f miniupnpd.conf -P miniupnpd.pid -a 10.1.1.1'
                 ' -i %s' % g1_if_0_name)
 if 1:
-    registry.screen('../re6stnet @registry/re6stnet.conf --ip 10.0.0.2 -v%u' % VERBOSE,
-                    '../re6st-registry @registry/re6st-registry.conf -v%u'
-                    ' --mailhost %s' % (VERBOSE, os.path.abspath('mbox')))
-    machine1.screen('../re6stnet @m1/re6stnet.conf -v%u -I%s' % (VERBOSE, m1_if_0.name))
-    machine2.screen('../re6stnet @m2/re6stnet.conf -v%u' % VERBOSE)
-    machine3.screen('../re6stnet @m3/re6stnet.conf -v%u -i%s' % (VERBOSE, m3_if_0.name))
-    machine4.screen('../re6stnet @m4/re6stnet.conf -v%u -i%s' % (VERBOSE, m4_if_0.name))
-    machine5.screen('../re6stnet @m5/re6stnet.conf -v%u -i%s' % (VERBOSE, m5_if_0.name))
-    machine6.screen('../re6stnet @m6/re6stnet.conf -v%u' % VERBOSE)
-    machine7.screen('../re6stnet @m7/re6stnet.conf -v%u' % VERBOSE)
-    machine8.screen('../re6stnet @m8/re6stnet.conf -v%u' % VERBOSE)
+    import sqlite3
+    db_path = 'registry/registry.db'
+    registry.screen('../re6st-registry @registry/re6st-registry.conf --db %s'
+        ' --mailhost %s -v%u' % (db_path, os.path.abspath('mbox'), VERBOSE))
+    registry_url = 'http://%s/' % REGISTRY
+    registry.Popen(('python', '-c', """if 1:
+        import socket, time
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        while True:
+            try:
+                s.connect(('localhost', 80))
+                break
+            except socket.error:
+                time.sleep(.1)
+        """)).wait()
+    db = sqlite3.connect(db_path, isolation_level=None)
+    def re6stnet(node, folder, args='', prefix_len=None, registry=registry_url):
+        nodes.append(node)
+        if not os.path.exists(folder + '/cert.crt'):
+            dh_path = folder + '/dh2048.pem'
+            if not os.path.exists(dh_path):
+                os.symlink('../dh2048.pem', dh_path)
+            email = node.name + '@example.com'
+            p = node.Popen(('../../re6st-conf', '--registry', registry,
+                '--email', email), stdin=subprocess.PIPE, cwd=folder)
+            token = None
+            while not token:
+                time.sleep(.1)
+                token = db.execute("SELECT token FROM token WHERE email=?",
+                                   (email,)).fetchone()
+            if prefix_len:
+                db.execute("UPDATE token SET prefix_len=? WHERE token=?",
+                           (prefix_len, token[0]))
+            p.communicate(str(token[0]))
+            os.remove(dh_path)
+            os.remove(folder + '/ca.crt')
+        node.screen('../re6stnet @%s/re6stnet.conf -v%u --registry %s %s'
+                    % (folder, VERBOSE, registry, args))
+    re6stnet(registry, 'registry', '--ip ' + REGISTRY, registry='http://localhost/')
+    re6stnet(machine1, 'm1', '-I%s' % m1_if_0.name)
+    re6stnet(machine2, 'm2')
+    re6stnet(machine3, 'm3', '-i%s' % m3_if_0.name)
+    re6stnet(machine4, 'm4', '-i%s' % m4_if_0.name)
+    re6stnet(machine5, 'm5', '-i%s' % m5_if_0.name)
+    re6stnet(machine6, 'm6')
+    re6stnet(machine7, 'm7')
+    re6stnet(machine8, 'm8')
+    db.close()
 
-nodes = registry, machine1, machine2, machine3, machine4, \
-                  machine5, machine6, machine7, machine8
 _ll = {}
 def node_by_ll(addr):
     try:
