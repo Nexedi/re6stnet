@@ -1,28 +1,13 @@
 #!/usr/bin/python -S
-import os
-import sys
+import os, sys
 
-script_type = os.environ['script_type']
+if os.environ['script_type'] == 'client-connect':
+    # Send client its external ip address
+    with open(sys.argv[2], 'w') as f:
+        f.write('push "setenv-safe external_ip %s"\n'
+                % os.environ['trusted_ip'])
+
+# Write into pipe connect/disconnect events
 arg1 = sys.argv[1]
-
-if script_type == 'up':
-    import subprocess
-    def call(*args):
-        r = subprocess.call(args)
-        if r:
-            sys.exit(r)
-    dev = os.environ['dev']
-    call('ip', 'link', 'set', dev, 'up')
-    if arg1 != 'None':
-        call('ip', 'addr', 'add', arg1, 'dev', dev)
-
-else:
-    if script_type == 'client-connect':
-        # Send client its external ip address
-        with open(sys.argv[2], 'w') as f:
-            f.write('push "setenv-safe external_ip %s"\n'
-                    % os.environ['trusted_ip'])
-
-    # Write into pipe connect/disconnect events
-    if arg1 != 'None':
-        os.write(int(arg1), '%(script_type)s %(common_name)s\n' % os.environ)
+if arg1 != 'None':
+    os.write(int(arg1), '%(script_type)s %(common_name)s\n' % os.environ)

@@ -32,9 +32,9 @@ def getConfig():
     _('-i', '--interface', action='append', dest='iface_list', default=[],
         help="Extra interface for LAN discovery. Highly recommanded if there"
              " are other re6st node on the same network segment.")
-    _('-I', '--main-interface', metavar='IFACE',
+    _('-I', '--main-interface', metavar='IFACE', default='lo',
         help="Set re6stnet IP on given interface. Any interface not used for"
-             " tunnelling can be chosen. (default: first OpenVPN interface)")
+             " tunnelling can be chosen.")
 
     _ = parser.add_argument_group('routing').add_argument
     _('-B', dest='babel_args', metavar='ARG', action='append', default=[],
@@ -205,27 +205,24 @@ def main():
             # prepare persistent interfaces
             if config.client:
                 cleanup.append(plib.client('re6stnet', config.client,
-                    config.encrypt,
-                    '--up', '%s %s' % (plib.ovpn_server, None
-                        if config.main_interface else my_ip),
-                    '--ping-restart', str(timeout),
+                    config.encrypt, '--ping-restart', str(timeout),
                     *config.openvpn_args).kill)
             elif server_tunnels:
                 required('dh')
                 for iface, (port, proto) in server_tunnels.iteritems():
-                    cleanup.append(plib.server(iface, None
-                        if config.main_interface or proto != pp[0][1]
-                        else my_ip, config.max_clients, config.dh, write_pipe,
-                        port, proto, config.encrypt,
+                    cleanup.append(plib.server(iface, config.max_clients,
+                        config.dh, write_pipe, port, proto, config.encrypt,
                         '--ping-exit', str(timeout), *config.openvpn_args).kill)
-            elif config.iface_list and not config.main_interface:
-                config.main_interface = config.iface_list[0]
-            else:
-                sys.exit("--client, --interface or --main-interface required"
-                         " when --max-clients is 0")
 
-            if config.main_interface:
-                ip('addr', my_ip, 'dev', config.main_interface)
+            ip('addr', my_ip, 'dev', config.main_interface)
+            if config.main_interface == 'lo':
+                # WKRD: The kernel does not remove these routes on exit.
+                #       The first one can be removed now.
+                del_rtr = ['ip', 'route', 'del', 'unreachable', 'fe80::/64',
+                           'dev', 'lo']
+                subprocess.call(del_rtr)
+                del_rtr[4] = '%s/%u' % (utils.ipFromBin(subnet), len(subnet))
+                cleanup.append(lambda: subprocess.call(del_rtr))
 
             # main loop
             if tunnel_manager is None:

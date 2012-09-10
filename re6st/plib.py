@@ -13,6 +13,7 @@ def openvpn(iface, encrypt, *args, **kw):
         '--persist-tun',
         '--persist-key',
         '--script-security', '2',
+        '--up', ovpn_client,
         #'--user', 'nobody', '--group', 'nogroup',
         ] + list(args)
     if ovpn_log:
@@ -23,14 +24,13 @@ def openvpn(iface, encrypt, *args, **kw):
     return subprocess.Popen(args, **kw)
 
 
-def server(iface, my_ip, max_clients, dh_path, pipe_fd, port, proto, encrypt, *args, **kw):
+def server(iface, max_clients, dh_path, pipe_fd, port, proto, encrypt, *args, **kw):
     client_script = '%s %s' % (ovpn_server, pipe_fd)
     if pipe_fd is not None:
         args = ('--client-disconnect', client_script) + args
     return openvpn(iface, encrypt,
         '--tls-server',
         '--mode', 'server',
-        '--up', '%s %s' % (ovpn_server, my_ip),
         '--client-connect', client_script,
         '--dh', dh_path,
         '--max-clients', str(max_clients),

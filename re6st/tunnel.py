@@ -15,7 +15,6 @@ class Connection:
             '--tls-remote', '%u/%u' % (int(prefix, 2), len(prefix)),
             '--connect-retry-max', '3', '--tls-exit',
             '--ping-exit', str(timeout),
-            '--up', plib.ovpn_client,
             '--route-up', '%s %u' % (plib.ovpn_client, write_pipe),
             *ovpn_args)
         self.iface = iface
