@@ -175,7 +175,7 @@ if 1:
                     % (folder, VERBOSE, registry, args))
     re6stnet(registry, 'registry', '--ip ' + REGISTRY, registry='http://localhost/')
     re6stnet(machine1, 'm1', '-I%s' % m1_if_0.name)
-    re6stnet(machine2, 'm2')
+    re6stnet(machine2, 'm2', prefix_len=80)
     re6stnet(machine3, 'm3', '-i%s' % m3_if_0.name)
     re6stnet(machine4, 'm4', '-i%s' % m4_if_0.name)
     re6stnet(machine5, 'm5', '-i%s' % m5_if_0.name)
@@ -265,13 +265,15 @@ if len(sys.argv) > 1:
                     print 'digraph {'
                     a = 2 * math.pi / len(g)
                     z = 4
-                    for i, n in enumerate(sorted(g)):
-                        p = g[n]
-                        print '"%s"[pos="%s,%s!"%s];' % (n,
+                    m2 = '%u/80' % (2 << 64)
+                    title = lambda n: '2|80' if n == m2 else n
+                    g = sorted((title(k), v) for k, v in g.iteritems())
+                    for i, (n, p) in enumerate(g):
+                        print '"%s"[pos="%s,%s!"%s];' % (title(n),
                             z * math.cos(a * i), z * math.sin(a * i),
                             ', style=dashed' if p is None else '')
                         for p in p or ():
-                            print '"%s" -> "%s";' % (n, p)
+                            print '"%s" -> "%s";' % (n, title(p))
                     print '}'
                 """), stdout=subprocess.PIPE).communicate()[0]
                 if gv:

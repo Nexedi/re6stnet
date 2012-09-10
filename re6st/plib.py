@@ -52,21 +52,16 @@ def client(iface, server_address, encrypt, *args, **kw):
     return openvpn(iface, encrypt, *remote, **kw)
 
 
-def router(network, subnet, subnet_size, hello_interval, log_path, state_path,
-           pidfile, tunnel_interfaces, *args, **kw):
+def router(network, subnet, hello_interval, log_path, state_path, pidfile,
+           tunnel_interfaces, *args, **kw):
+    s = utils.ipFromBin(subnet)
+    n = len(subnet)
     cmd = ['babeld',
-            '-C', 'redistribute local ip %s/%s le %s' % (subnet, subnet_size, subnet_size),
             '-C', 'redistribute local deny',
-            '-C', 'redistribute ip %s/%s le %s' % (subnet, subnet_size, subnet_size),
+            '-C', 'redistribute ip %s/%u eq %u' % (s, n, n),
             '-C', 'redistribute deny',
-            '-C', 'out local ip %s/%s le %s' % (subnet, subnet_size, subnet_size),
-            '-C', 'out local deny',
-            '-C', 'in ip %s/%u' % (utils.ipFromBin(network), len(network)),
-                  # Route only addresse in the 'local' network,
-                  # or other entire networks
-                  #'-C', 'in ip %s' % (config.internal_ip),
-                  #'-C', 'in ip ::/0 le %s' % network_mask,
-            '-C', 'in deny',
+            #'-C', 'in ip %s/%u' % (utils.ipFromBin(network), len(network)),
+            #'-C', 'in deny',
             '-h', str(hello_interval),
             '-H', str(hello_interval),
             '-L', log_path,

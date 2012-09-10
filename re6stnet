@@ -179,8 +179,8 @@ def main():
             tunnel_manager = write_pipe = None
 
         config.babel_args += config.iface_list
-        cleanup = [plib.router(network, utils.ipFromBin(subnet), len(subnet),
-            config.hello, os.path.join(config.log, 'babeld.log'),
+        cleanup = [plib.router(network, subnet, config.hello,
+            os.path.join(config.log, 'babeld.log'),
             os.path.join(config.state, 'babeld.state'),
             config.babel_pidfile, tunnel_interfaces,
             *config.babel_args).terminate]

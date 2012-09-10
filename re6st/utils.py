@@ -108,8 +108,12 @@ def binFromIp(ip):
     return bin(ip1)[2:].rjust(64, '0') + bin(ip2)[2:].rjust(64, '0')
 
 
-def ipFromBin(prefix, suffix=''):
-    ip = prefix + suffix.rjust(128 - len(prefix), '0')
+def ipFromBin(ip, suffix=''):
+    suffix_len = 128 - len(ip)
+    if suffix_len > 0:
+        ip += suffix.rjust(suffix_len, '0')
+    elif suffix_len:
+        sys.exit("Prefix exceeds 128 bits")
     return socket.inet_ntop(socket.AF_INET6,
         struct.pack('>QQ', int(ip[:64], 2), int(ip[64:], 2)))
 
