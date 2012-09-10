@@ -146,13 +146,16 @@ def main():
         for x in pp:
             server_tunnels.setdefault('re6stnet-' + x[1], x)
 
-    def call(*args, **kw):
-        r = subprocess.call(*args, **kw)
-        if r:
-            sys.exit(r)
     def required(arg):
         if not getattr(config, arg):
             sys.exit("error: argument --%s is required" % arg)
+    def ip(object, *args):
+        args = ['ip', object, 'add'] + list(args)
+        r = subprocess.call(args)
+        if r:
+            sys.exit(r)
+        args[2] = 'del'
+        cleanup.append(lambda: subprocess.call(args))
 
     try:
         subnet = network + prefix
@@ -183,6 +186,8 @@ def main():
 
         try:
             cleanup = []
+            my_network = "%s/%u" % (utils.ipFromBin(network), len(network))
+            ip('route', 'unreachable', my_network, 'proto', 'static')
             # prepare persistent interfaces
             if config.client:
                 cleanup.append(plib.client('re6stnet', config.client,
@@ -206,11 +211,7 @@ def main():
                          " when --max-clients is 0")
 
             if config.main_interface:
-                ip_args = ['ip', 'addr', 'add', my_ip,
-                           'dev', config.main_interface]
-                call(ip_args)
-                ip_args[2] = 'del'
-                cleanup.append(lambda: call(ip_args))
+                ip('addr', my_ip, 'dev', config.main_interface)
 
             # main loop
             if tunnel_manager is None:
