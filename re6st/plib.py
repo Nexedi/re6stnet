@@ -52,22 +52,22 @@ def client(iface, server_address, encrypt, *args, **kw):
     return openvpn(iface, encrypt, *remote, **kw)
 
 
-def router(network, subnet, hello_interval, log_path, state_path, pidfile,
+def router(subnet, hello_interval, gateway, log_path, state_path, pidfile,
            tunnel_interfaces, *args, **kw):
     s = utils.ipFromBin(subnet)
     n = len(subnet)
     cmd = ['babeld',
-            '-C', 'redistribute local deny',
-            '-C', 'redistribute ip %s/%u eq %u' % (s, n, n),
-            '-C', 'redistribute deny',
-            #'-C', 'in ip %s/%u' % (utils.ipFromBin(network), len(network)),
-            #'-C', 'in deny',
             '-h', str(hello_interval),
             '-H', str(hello_interval),
             '-L', log_path,
             '-S', state_path,
             '-I', pidfile,
-            '-s']
+            '-s',
+            '-C', 'redistribute local deny',
+            '-C', 'redistribute ip %s/%u eq %u' % (s, n, n),
+            '-C', 'redistribute deny']
+    if gateway:
+        cmd[-2:-2] = '-C', 'redistribute ip ::/0 eq 0'
     for iface in tunnel_interfaces:
         cmd += '-C', 'interface %s rxcost 512' % iface
     cmd += args
