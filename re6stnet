@@ -188,6 +188,19 @@ def main():
             cleanup = []
             my_network = "%s/%u" % (utils.ipFromBin(network), len(network))
             ip('route', 'unreachable', my_network, 'proto', 'static')
+            # Source address selection is defined by RFC 3484, and in most
+            # applications, it usually works  thanks to rule 5 (prefer outgoing
+            # interface). But here, it rarely applies because we use several
+            # interfaces to connect to a re6st network.
+            # Rule 7 is little strange because it prefers temporary addresses
+            # over IP with a longer matching prefix (rule 8, which is not even
+            # mandatory).
+            # So only rule 6 can make the difference, i.e. prefer same label.
+            # The value of the label does not matter, except that it must be
+            # different from ::/0's (normally equal to 1).
+            # XXX: Wouldn't it better if Babel set a source address on routes
+            #      it installed ?
+            ip('addrlabel', 'prefix', my_network, 'label', '99')
             # prepare persistent interfaces
             if config.client:
                 cleanup.append(plib.client('re6stnet', config.client,
