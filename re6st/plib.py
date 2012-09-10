@@ -61,13 +61,11 @@ def router(network, subnet, subnet_size, hello_interval, log_path, state_path,
             '-C', 'redistribute deny',
             '-C', 'out local ip %s/%s le %s' % (subnet, subnet_size, subnet_size),
             '-C', 'out local deny',
-            # Route VIFIB ip adresses
             '-C', 'in ip %s/%u' % (utils.ipFromBin(network), len(network)),
                   # Route only addresse in the 'local' network,
                   # or other entire networks
                   #'-C', 'in ip %s' % (config.internal_ip),
                   #'-C', 'in ip ::/0 le %s' % network_mask,
-            # Don't route other addresses
             '-C', 'in deny',
             '-h', str(hello_interval),
             '-H', str(hello_interval),
