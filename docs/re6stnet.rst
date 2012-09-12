@@ -27,6 +27,15 @@ USAGE
 
 Use ``re6stnet --help`` to get the complete list of options.
 
+If you already have IPv6 connectivity by autoconfiguration and still want to
+use it for communications that are unrelated to this network, then:
+
+- your kernel must support source address based routing (because you can't
+  use ``--table 0`` option).
+- you must set ``net.ipv6.conf.<iface>.accept_ra`` sysctl to value 2 and
+  trigger SLAAC with ``rdisc6 <iface>`` to restore the default route if the
+  kernel removed while enabling forwarding.
+
 HOW TO
 ======
 

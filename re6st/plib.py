@@ -68,9 +68,6 @@ def router(subnet, hello_interval, table, log_path, state_path, pidfile,
             '-C', 'redistribute deny']
     if table:
         cmd += '-t%u' % table, '-T%u' % table
-    elif table is None:
-        # Tell peers not to route external IP via me.
-        cmd += '-C', 'out eq 0 deny'
     else:
         cmd[-2:-2] = '-C', 'redistribute ip ::/0 eq 0'
     for iface in tunnel_interfaces:

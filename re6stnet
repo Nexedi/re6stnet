@@ -51,9 +51,12 @@ def getConfig():
              " hello interval for Babel to re-establish connection with a"
              " node for which the direct connection has been cut.")
     _('--table', type=int, default=42,
-        help="Use given table id. If 0, the main table will be used and any"
-             " existing default route will be exported.")
-
+        help="Use given table id. Set 0 to use the main table, if:\n"
+             "- you are a gateway of this network (the default route will be"
+             "  exported)\n"
+             "- or you want to use the default route of this network for all"
+             " communications (in this case, make sure you don't already have"
+             " a default route).\n")
     _ = parser.add_argument_group('tunnelling').add_argument
     _('-O', dest='openvpn_args', metavar='ARG', action='append', default=[],
         help="Extra arguments to forward to both server and client OpenVPN"
@@ -234,22 +237,15 @@ def main():
                 try:
                     ip('rule', 'from', *x)
                 except EnvironmentError:
-                    logging.warning("I refuse to forward packets whose"
-                        " destination IP is not part of %s, because your kernel"
-                        " was compiled without support for source-based routing"
-                        " policy. Pass --table 0 if you are sure you don't"
-                        " have any default route.", my_network)
-                    # XXX: The issue with such fallback is that a node will be
-                    #      unreachable from outside if it is only connected to
-                    #      limited peers. This could be fixed the same way as
-                    #      for checking connectedness.
-                    config.table = None
-                    del x[1:]
-                else:
-                    ip('rule', 'to', *x)
-                    call(if_rt)
-                    if_rt += x[1:]
-                    call(if_rt[:3] + ['add', 'proto', 'static'] + if_rt[4:])
+                    logging.error("It seems that your kernel was compiled"
+                        " without support for source address based routing"
+                        " (CONFIG_IPV6_SUBTREES). Consider using --table=0"
+                        " option if you can't change your kernel.")
+                    raise
+                ip('rule', 'to', *x)
+                call(if_rt)
+                if_rt += x[1:]
+                call(if_rt[:3] + ['add', 'proto', 'static'] + if_rt[4:])
             ip('route', 'unreachable', *x)
 
             config.babel_args += config.iface_list
