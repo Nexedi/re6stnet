@@ -163,6 +163,8 @@ class TunnelManager(object):
                     count -= self._makeTunnel(peer, address)
                 else:
                     ip = utils.ipFromBin(self._network + peer)
+                    # TODO: Send at least 1 address. This helps the registry
+                    #       node filling its cache when building a new network.
                     try:
                         self.sock.sendto('\2', (ip, PORT))
                     except socket.error, e:
