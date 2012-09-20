@@ -1,4 +1,5 @@
-import logging, random, socket, time
+import logging, random, socket, subprocess, threading, time
+from collections import deque
 from itertools import chain
 from . import plib, utils
 
@@ -63,8 +64,40 @@ class TunnelManager(object):
 
         self._client_count = client_count
         self._refresh_count = 1
-        self.free_interface_set = set('re6stnet' + str(i)
-            for i in xrange(1, client_count + 1))
+        self.new_iface_list = deque('re6stnet' + str(i)
+            for i in xrange(1, self._client_count + 1))
+        self._free_iface_list = []
+
+    def _tuntap(self, iface=None):
+        if iface:
+            self.new_iface_list.appendleft(iface)
+            action = 'del'
+        else:
+            iface = self.new_iface_list.popleft()
+            action = 'add'
+        args = 'ip', 'tuntap', action, 'dev', iface, 'mode', 'tap'
+        logging.debug('%r', args)
+        subprocess.call(args)
+        return iface
+
+    def delInterfaces(self):
+        iface_list = self._free_iface_list
+        iface_list += self._iface_to_prefix
+        self._iface_to_prefix.clear()
+        while iface_list:
+          self._tuntap(iface_list.pop())
+
+    def getFreeInterface(self, prefix):
+        try:
+          iface = self._free_iface_list.pop()
+        except IndexError:
+          iface = self._tuntap()
+        self._iface_to_prefix[iface] = prefix
+        return iface
+
+    def freeInterface(self, iface):
+        self._free_iface_list.append(iface)
+        del self._iface_to_prefix[iface]
 
     def refresh(self):
         logging.debug('Checking tunnels...')
@@ -76,6 +109,8 @@ class TunnelManager(object):
             self._next_tunnel_refresh = time.time() + self._refresh_time
             self._peer_db.log()
         self._makeNewTunnels(remove)
+        if remove and self._free_iface_list:
+            self._tuntap(self._free_iface_list.pop())
         self.next_refresh = time.time() + 5
 
     def _cleanDeads(self):
@@ -95,13 +130,17 @@ class TunnelManager(object):
         logging.info('Killing the connection with %u/%u...',
                      int(prefix, 2), len(prefix))
         connection = self._connection_dict.pop(prefix)
+        self.freeInterface(connection.iface)
+        p = connection.process
         try:
-            getattr(connection.process, 'kill' if kill else 'terminate')()
+            getattr(p, 'kill' if kill else 'terminate')()
         except OSError:
-            # If the process is already exited
-            pass
-        self.free_interface_set.add(connection.iface)
-        del self._iface_to_prefix[connection.iface]
+            pass # we already polled an exited process
+        else:
+            t = threading.Timer(5, p.kill)
+            kill or t.start()
+            p.wait()
+            t.cancel()
         logging.trace('Connection with %u/%u killed',
                       int(prefix, 2), len(prefix))
 
@@ -112,10 +151,9 @@ class TunnelManager(object):
         assert prefix != self._prefix, self.__dict__
         logging.info('Establishing a connection with %u/%u',
                      int(prefix, 2), len(prefix))
-        iface = self.free_interface_set.pop()
+        iface = self.getFreeInterface(prefix)
         self._connection_dict[prefix] = Connection(address, self._write_pipe,
             self._timeout, iface, prefix, self._encrypt, self._ovpn_args)
-        self._iface_to_prefix[iface] = prefix
         self._peer_db.connecting(prefix, 1)
         return True
 

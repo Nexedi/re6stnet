@@ -189,7 +189,7 @@ def main():
                 config.openvpn_args, timeout, config.tunnel_refresh,
                 config.client_count, config.iface_list, network, prefix,
                 address, ip_changed, config.encrypt)
-            tunnel_interfaces += tunnel_manager.free_interface_set
+            tunnel_interfaces += tunnel_manager.new_iface_list
         else:
             tunnel_manager = write_pipe = None
 
@@ -262,7 +262,7 @@ def main():
             # main loop
             if tunnel_manager is None:
                 sys.exit(os.WEXITSTATUS(os.wait()[1]))
-            cleanup.append(tunnel_manager.killAll)
+            cleanup += tunnel_manager.delInterfaces, tunnel_manager.killAll
             while True:
                 next = tunnel_manager.next_refresh
                 if forwarder:
