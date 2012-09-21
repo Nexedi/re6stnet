@@ -17,8 +17,8 @@ REGISTRY='10.0.0.2'
 #    gateway1           gateway2           s3:10.0.1
 #        |.1                |.1            |.2 |.3 |.4
 #    s1:10.1.1          s2:10.2.1          m6  m7  m8
-#    |.2     |.3        |.2 |.3 |.4
-#    m1      m2         m3  m4  m5
+#    |.2     |.3        |.2 |.3 |.4        |
+#    m1      m2         m3  m4  m5         m9
 #
 
 def disable_signal_on_children(sig):
@@ -36,7 +36,7 @@ nemu.Node._add_interface = _add_interface
 for name in """internet=I registry=R
                           gateway1=g1 machine1=1 machine2=2
                           gateway2=g2 machine3=3 machine4=4 machine5=5
-                          machine6=6 machine7=7 machine8=8
+                          machine6=6 machine7=7 machine8=8 machine9=9
             """.split():
     name, short = name.split('=')
     globals()[name] = node = nemu.Node()
@@ -56,12 +56,14 @@ switch3 = nemu.Switch()
 re_if_0, in_if_0 = nemu.P2PInterface.create_pair(registry, internet)
 in_if_1, g1_if_0 = nemu.P2PInterface.create_pair(internet, gateway1)
 in_if_2, g2_if_0 = nemu.P2PInterface.create_pair(internet, gateway2)
+m6_if_1, m9_if_0 = nemu.P2PInterface.create_pair(machine6, machine9)
 
 g1_if_0_name = g1_if_0.name
 gateway1.Popen((IPTABLES, '-t', 'nat', '-A', 'POSTROUTING', '-o', g1_if_0_name, '-j', 'MASQUERADE')).wait()
 gateway1.Popen((IPTABLES, '-t', 'nat', '-N', 'MINIUPNPD')).wait()
 gateway1.Popen((IPTABLES, '-t', 'nat', '-A', 'PREROUTING', '-i', g1_if_0_name, '-j', 'MINIUPNPD')).wait()
 gateway1.Popen((IPTABLES, '-N', 'MINIUPNPD')).wait()
+machine9.Popen(('sysctl', 'net.ipv6.conf.%s.accept_ra=2' % m9_if_0.name)).wait()
 
 in_if_3 = nemu.NodeInterface(internet)
 g1_if_1 = nemu.NodeInterface(gateway1)
@@ -93,7 +95,7 @@ switch3.connect(m8_if_0)
 # setting everything up
 switch1.up = switch2.up = switch3.up = True
 re_if_0.up = in_if_0.up = in_if_1.up = g1_if_0.up = in_if_2.up = g2_if_0.up = True
-in_if_3.up = g1_if_1.up = g2_if_1.up = m1_if_0.up = m2_if_0.up = m3_if_0.up = m4_if_0.up = m5_if_0.up = m6_if_0.up = m7_if_0.up = m8_if_0.up = True
+in_if_3.up = g1_if_1.up = g2_if_1.up = m1_if_0.up = m2_if_0.up = m3_if_0.up = m4_if_0.up = m5_if_0.up = m6_if_0.up = m6_if_1.up = m7_if_0.up = m8_if_0.up = m9_if_0.up = True
 
 # Add IPv4 addresses
 re_if_0.add_v4_address(address=REGISTRY, prefix_len=24)
@@ -114,6 +116,7 @@ m5_if_0.add_v4_address(address='10.2.1.4', prefix_len=24)
 m6_if_0.add_v4_address(address='10.0.1.2', prefix_len=24)
 m7_if_0.add_v4_address(address='10.0.1.3', prefix_len=24)
 m8_if_0.add_v4_address(address='10.0.1.4', prefix_len=24)
+m6_if_1.add_v4_address(address='192.168.241.1', prefix_len=24)
 
 def add_llrtr(iface, peer, dst='default'):
     for a in peer.get_addresses():
@@ -194,7 +197,7 @@ if 1:
     re6stnet(machine3, 'm3', '-i%s' % m3_if_0.name)
     re6stnet(machine4, 'm4', '-i%s' % m4_if_0.name)
     re6stnet(machine5, 'm5', '-i%s' % m5_if_0.name)
-    re6stnet(machine6, 'm6')
+    re6stnet(machine6, 'm6', '-I%s' % m6_if_1.name)
     re6stnet(machine7, 'm7')
     re6stnet(machine8, 'm8')
     db.close()

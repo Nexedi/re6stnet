@@ -36,6 +36,18 @@ use it for communications that are unrelated to this network, then:
   trigger SLAAC with ``rdisc6 <iface>`` to restore the default route if the
   kernel removed while enabling forwarding.
 
+Following environment variables are available for processes started with
+``--up`` or ``--daemon``:
+
+re6stnet_iface
+  value of ``--main-interface`` option
+re6stnet_ip
+  IPv6 set on main interface
+re6stnet_subnet
+  your subnet, written in CIDR notation
+re6stnet_network
+  the re6st network you belong to, written in CIDR notation
+
 HOW TO
 ======
 

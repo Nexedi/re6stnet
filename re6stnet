@@ -37,6 +37,10 @@ def getConfig():
              " tunnelling can be chosen.")
     _('--up', metavar='CMD',
         help="Shell command to run after successful initialization.")
+    _('--daemon', action='append', metavar='CMD',
+        help="Same as --up, but run in background: the command will be killed"
+             " at exit (with a TERM signal, followed by KILL 5 seconds later"
+             " if process is still alive).")
 
     _ = parser.add_argument_group('routing').add_argument
     _('-B', dest='babel_args', metavar='ARG', action='append', default=[],
@@ -175,6 +179,12 @@ def main():
     try:
         subnet = network + prefix
         my_ip = '%s/%s' % (utils.ipFromBin(subnet, '1'), len(subnet))
+        my_subnet = '%s/%u' % (utils.ipFromBin(subnet), len(subnet))
+        my_network = "%s/%u" % (utils.ipFromBin(network), len(network))
+        os.environ['re6stnet_ip'] = my_ip
+        os.environ['re6stnet_iface'] = config.main_interface
+        os.environ['re6stnet_subnet'] = my_subnet
+        os.environ['re6stnet_network'] = my_network
 
         # Init db and tunnels
         tunnel_interfaces = server_tunnels.keys()
@@ -195,7 +205,6 @@ def main():
 
         cleanup = []
         try:
-            my_network = "%s/%u" % (utils.ipFromBin(network), len(network))
             # Source address selection is defined by RFC 3484, and in most
             # applications, it usually works  thanks to rule 5 (prefer outgoing
             # interface). But here, it rarely applies because we use several
@@ -229,7 +238,7 @@ def main():
                 # WKRD: Removed this useless route now, since the kernel does
                 #       not even remove it on exit.
                 subprocess.call(if_rt)
-            if_rt[4] = '%s/%u' % (utils.ipFromBin(subnet), len(subnet))
+            if_rt[4] = my_subnet
             cleanup.append(lambda: subprocess.call(if_rt))
             x = [my_network]
             if config.table:
@@ -258,6 +267,8 @@ def main():
                 r = os.system(config.up)
                 if r:
                     sys.exit(r)
+            for cmd in config.daemon or ():
+                cleanup.append(utils.Popen(cmd, shell=True).stop)
 
             # main loop
             if tunnel_manager is None:

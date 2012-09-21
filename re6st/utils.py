@@ -78,8 +78,7 @@ class ArgParser(argparse.ArgumentParser):
                " Serial number defines the prefix of the network."
 
     def convert_arg_line_to_args(self, arg_line):
-        arg_line = arg_line.split('#', 1)[0].rstrip()
-        if arg_line:
+        if arg_line.split('#', 1)[0].rstrip():
             if arg_line.startswith('@'):
                 yield arg_line
                 return
