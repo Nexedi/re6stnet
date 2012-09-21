@@ -1,4 +1,4 @@
-import logging, random, socket, subprocess, threading, time
+import logging, random, socket, subprocess, time
 from collections import deque
 from itertools import chain
 from . import plib, utils
@@ -126,21 +126,15 @@ class TunnelManager(object):
                 self._client_count + self._refresh_count)]:
             self._kill(prefix)
 
-    def _kill(self, prefix, kill=False):
+    def _kill(self, prefix):
         logging.info('Killing the connection with %u/%u...',
                      int(prefix, 2), len(prefix))
         connection = self._connection_dict.pop(prefix)
         self.freeInterface(connection.iface)
-        p = connection.process
         try:
-            getattr(p, 'kill' if kill else 'terminate')()
+            connection.process.stop()
         except OSError:
             pass # we already polled an exited process
-        else:
-            t = threading.Timer(5, p.kill)
-            kill or t.start()
-            p.wait()
-            t.cancel()
         logging.trace('Connection with %u/%u killed',
                       int(prefix, 2), len(prefix))
 
@@ -280,7 +274,7 @@ class TunnelManager(object):
 
     def killAll(self):
         for prefix in self._connection_dict.keys():
-            self._kill(prefix, True)
+            self._kill(prefix)
 
     def handleTunnelEvent(self, msg):
         try:

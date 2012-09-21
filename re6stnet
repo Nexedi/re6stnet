@@ -214,13 +214,13 @@ def main():
             if config.client:
                 cleanup.append(plib.client('re6stnet', config.client,
                     config.encrypt, '--ping-restart', str(timeout),
-                    *config.openvpn_args).kill)
+                    *config.openvpn_args).stop)
             elif server_tunnels:
                 required('dh')
                 for iface, (port, proto) in server_tunnels.iteritems():
                     cleanup.append(plib.server(iface, config.max_clients,
                         config.dh, write_pipe, port, proto, config.encrypt,
-                        '--ping-exit', str(timeout), *config.openvpn_args).kill)
+                        '--ping-exit', str(timeout), *config.openvpn_args).stop)
 
             ip('addr', my_ip, 'dev', config.main_interface)
             if_rt = ['ip', '-6', 'route', 'del',
@@ -253,7 +253,7 @@ def main():
                 os.path.join(config.log, 'babeld.log'),
                 os.path.join(config.state, 'babeld.state'),
                 config.babel_pidfile, tunnel_interfaces,
-                *config.babel_args).terminate)
+                *config.babel_args).stop)
             if config.up:
                 r = os.system(config.up)
                 if r:

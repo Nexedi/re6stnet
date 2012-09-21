@@ -1,5 +1,5 @@
-import argparse, errno, logging, os, shlex
-import  signal, struct, socket, textwrap, time
+import argparse, errno, logging, os, shlex, signal, socket
+import struct, subprocess, textwrap, threading, time
 from OpenSSL import crypto
 
 logging_levels = logging.WARNING, logging.INFO, logging.DEBUG, 5
@@ -94,6 +94,17 @@ class ArgParser(argparse.ArgumentParser):
             epilog="""Options can be read from a file. For example:
   $ cat OPTIONS_FILE
   ca /etc/re6stnet/ca.crt""", **kw)
+
+
+class Popen(subprocess.Popen):
+
+    def stop(self):
+        self.terminate()
+        t = threading.Timer(5, self.kill)
+        t.start()
+        r = self.wait()
+        t.cancel()
+        return r
 
 
 def makedirs(path):

@@ -1,4 +1,4 @@
-import logging, errno, os, subprocess
+import logging, errno, os
 from . import utils
 
 here = os.path.realpath(os.path.dirname(__file__))
@@ -21,7 +21,7 @@ def openvpn(iface, encrypt, *args, **kw):
     if not encrypt:
         args += '--cipher', 'none'
     logging.debug('%r', args)
-    return subprocess.Popen(args, **kw)
+    return utils.Popen(args, **kw)
 
 
 def server(iface, max_clients, dh_path, pipe_fd, port, proto, encrypt, *args, **kw):
@@ -80,4 +80,4 @@ def router(subnet, hello_interval, table, log_path, state_path, pidfile,
         if e.errno != errno.ENOENT:
             raise
     logging.info('%r', cmd)
-    return subprocess.Popen(cmd, **kw)
+    return utils.Popen(cmd, **kw)
