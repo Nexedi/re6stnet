@@ -41,7 +41,12 @@ class Forwarder:
     def refresh(self):
         logging.debug('Refreshing port forwarding')
         for args in self._rules:
-            self._u.addportmapping(*args)
+            try:
+                self._u.addportmapping(*args)
+            except Exception, e:
+                if str(e) != 'UnknownError':
+                    raise
+                logging.warning("Failed to refresh port forwarding: %s", args)
         self.next_refresh = time.time() + 500
 
     def clear(self):
