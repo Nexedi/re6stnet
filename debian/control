@@ -2,11 +2,12 @@ Source: re6stnet
 Maintainer: Julien Muchembled <jm@nexedi.com>
 Section: net
 Priority: optional
-Build-Depends: python-setuptools (>= 0.6b3), python-all (>= 2.6.6-3), debhelper (>= 7.4.3)
+Build-Depends: python-setuptools (>= 0.6b3), python-all (>= 2.6.6-3), debhelper (>= 7.4.3), python-docutils | python3-docutils
 Standards-Version: 3.9.1
 
 Package: re6stnet
 Architecture: all
 Depends: ${misc:Depends}, python (>= 2.6.6-3), python (<< 2.8), python-argparse, python-openssl, openvpn (>= 2.1.3), babeld (>= 1.3.1), iproute, openssl
 Recommends: ${python:Recommends}
+Suggests: ndisc6
 Description: resilient, scalable, IPv6 network application
