@@ -205,7 +205,7 @@ def main():
 
         cleanup = []
         try:
-            # Source address selection is defined by RFC 3484, and in most
+            # Source address selection is defined by RFC 6724, and in most
             # applications, it usually works  thanks to rule 5 (prefer outgoing
             # interface). But here, it rarely applies because we use several
             # interfaces to connect to a re6st network.
