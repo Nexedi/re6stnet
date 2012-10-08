@@ -44,7 +44,7 @@ class Forwarder:
             try:
                 self._u.addportmapping(*args)
             except Exception, e:
-                if str(e) != 'UnknownError':
+                if str(e) not in ('UnknownError', 'Invalid Args'):
                     raise
                 logging.warning("Failed to refresh port forwarding: %s", args)
         self.next_refresh = time.time() + 500
