@@ -69,14 +69,16 @@ class PeerDB(object):
                              (prefix,)).fetchone()
         return r and r[0]
 
-    def getPeerList(self, failed=0):
-        # Exclude our own address from results in case it is there, which may
-        # happen if a node change its certificate without clearing the cache.
-        # IOW, one should probably always put our own address there.
-        return self._db.execute(
-            "SELECT prefix, address FROM peer, volatile.stat"
-            " WHERE prefix=peer AND prefix!=? AND try=? ORDER BY RANDOM()",
-            (self._prefix, failed))
+    # Exclude our own address from results in case it is there, which may
+    # happen if a node change its certificate without clearing the cache.
+    # IOW, one should probably always put our own address there.
+    _get_peer_sql = "SELECT %s FROM peer, volatile.stat" \
+                    " WHERE prefix=peer AND prefix!=? AND try=?"
+    def getPeerList(self, failed=0, __sql=_get_peer_sql % "prefix, address"
+                                                        + " ORDER BY RANDOM()"):
+        return self._db.execute(__sql, (self._prefix, failed))
+    def getPeerCount(self, failed=0, __sql=_get_peer_sql % "COUNT(*)"):
+        return self._db.execute(__sql, (self._prefix, failed)).next()[0]
 
     def getBootstrapPeer(self):
         logging.info('Getting Boot peer...')

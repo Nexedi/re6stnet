@@ -327,9 +327,8 @@ class TunnelManager(object):
             else: # I don't know my IP yet!
                 msg = []
             # Add an extra random peer, mainly for the registry.
-            for peer in self._peer_db.getPeerList():
-                msg.append(encode(peer))
-                break
+            if random.randint(0, self._peer_db.getPeerCount()):
+                msg.append(encode(self._peer_db.getPeerList().next()))
             if msg:
                 try:
                     self.sock.sendto('\1' + ''.join(msg), address)
