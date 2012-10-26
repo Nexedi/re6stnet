@@ -296,7 +296,7 @@ class TunnelManager(object):
 
     def _ovpn_client_disconnect(self, common_name):
         prefix = utils.binFromSubnet(common_name)
-        self._served.remove(prefix)
+        self._served.discard(prefix)
 
     def _ovpn_route_up(self, common_name, ip):
         self._peer_db.connecting(utils.binFromSubnet(common_name), 0)
