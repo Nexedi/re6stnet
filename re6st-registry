@@ -72,8 +72,11 @@ class main(object):
         _('--private',
                 help="re6stnet IP of the node on which runs the registry."
                      " Required for normal operation.")
-        _('--prefix-length', default=16,
+        _('--prefix-length', default=16, type=int,
                 help="Default length of allocated prefixes.")
+        _('--anonymous-prefix-length', type=int,
+                help="Length of allocated anonymous prefixes."
+                     " If 0 or unset, registration by email is required")
         _('-l', '--logfile', default='/var/log/re6stnet/registry.log',
                 help="Path to logging file.")
         _('-v', '--verbose', default=1, type=int,
@@ -199,11 +202,19 @@ class main(object):
         try:
             req = crypto.load_certificate_request(crypto.FILETYPE_PEM, cert_req)
             with self.db:
-                try:
-                    token, email, prefix_len, _ = self.db.execute("SELECT * FROM token WHERE token = ?", (token,)).next()
-                except StopIteration:
-                    return
-                self.db.execute("DELETE FROM token WHERE token = ?", (token,))
+                if token is None:
+                    prefix_len = self.config.anonymous_prefix_length
+                    if not prefix_len:
+                        return
+                    email = None
+                else:
+                    try:
+                        token, email, prefix_len, _ = self.db.execute(
+                            "SELECT * FROM token WHERE token = ?",
+                            (token,)).next()
+                    except StopIteration:
+                        return
+                    self.db.execute("DELETE FROM token WHERE token = ?", (token,))
 
                 # Get a new prefix
                 prefix = self._getPrefix(prefix_len)
