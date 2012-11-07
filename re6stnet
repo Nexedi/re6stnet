@@ -114,7 +114,8 @@ def main():
     # Set logging
     utils.setupLog(config.verbose, os.path.join(config.log, 're6stnet.log'))
 
-    logging.trace("Configuration:\n%r", config)
+    logging.trace("Environment: %r", os.environ)
+    logging.trace("Configuration: %r", config)
     utils.makedirs(config.state)
     db_path = os.path.join(config.state, 'peers.db')
     if config.ovpnlog:
