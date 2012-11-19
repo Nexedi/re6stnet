@@ -11,9 +11,10 @@ def getConfig():
 
     _('--ip',
         help="IP address advertised to other nodes. Special values:\n"
-             "- upnp: force autoconfiguration via UPnP\n"
+             "- upnp: redirect ports when UPnP device is found\n"
              "- any: ask peers our IP\n"
-             " (default: ask peers if UPnP fails)")
+             " (default: like 'upnp' if miniupnpc is installed,\n"
+             "  otherwise like 'any')")
     _('--registry', metavar='URL',
         help="Public HTTP URL of the registry, for bootstrapping.")
     _('-l', '--log', default='/var/log/re6stnet',
@@ -142,7 +143,7 @@ def main():
             logging.info('Attempting automatic configuration via UPnP...')
             try:
                 from re6st.upnpigd import Forwarder
-                forwarder = Forwarder()
+                forwarder = Forwarder('re6stnet openvpn server')
             except Exception, e:
                 if config.ip:
                     raise
@@ -150,11 +151,11 @@ def main():
             else:
                 atexit.register(forwarder.clear)
                 for port, proto in pp:
-                    ip, port = forwarder.addRule(port, proto)
-                    address.append((ip, str(port), proto))
+                    forwarder.addRule(port, proto)
+                ip_changed = forwarder.checkExternalIp
+                address = ip_changed()
         elif config.ip != 'any':
             address = ip_changed(config.ip)
-        if address:
             ip_changed = None
         for x in pp:
             server_tunnels.setdefault('re6stnet-' + x[1], x)
