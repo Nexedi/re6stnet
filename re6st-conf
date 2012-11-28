@@ -36,6 +36,7 @@ def main():
     config = parser.parse_args()
     if config.dir:
         os.chdir(config.dir)
+    conf_path = 're6stnet.conf'
     ca_path = 'ca.crt'
     cert_path = 'cert.crt'
     key_path = 'cert.key'
@@ -124,6 +125,25 @@ def main():
     os.close(cert_fd)
 
     print "Certificate setup complete."
+
+    if not os.path.lexists(conf_path):
+        create(conf_path, """\
+registry %s
+ca %s
+cert %s
+key %s
+dh %s
+# for udp only:
+#pp 1194 udp
+# increase re6stnet verbosity:
+#verbose 3
+# enable OpenVPN logging:
+#ovpnlog
+# increase OpenVPN verbosity:
+#O--verb
+#O3
+""" % (config.registry, ca_path, cert_path, key_path, dh_path))
+        print "Sample configuration file created."
 
     cn = utils.subnetFromCert(cert_path)
     subnet = utils.networkFromCa(ca_path) + utils.binFromSubnet(cn)
