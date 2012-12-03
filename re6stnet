@@ -42,6 +42,10 @@ def getConfig():
         help="Same as --up, but run in background: the command will be killed"
              " at exit (with a TERM signal, followed by KILL 5 seconds later"
              " if process is still alive).")
+    _('--test', metavar='EXPR',
+        help="Exit after configuration parsing. Status code is the"
+             " result of the given Python expression. For example:\n"
+             "  main_interface != 'eth0'")
 
     _ = parser.add_argument_group('routing').add_argument
     _('-B', dest='babel_args', metavar='ARG', action='append', default=[],
@@ -111,6 +115,9 @@ def main():
         '--cert', config.cert,
         '--key', config.key)
     # TODO: verify certificates (should we moved to M2Crypto ?)
+
+    if config.test:
+        sys.exit(eval(config.test, None, config.__dict__))
 
     # Set logging
     utils.setupLog(config.verbose, os.path.join(config.log, 're6stnet.log'))

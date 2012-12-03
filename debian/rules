@@ -6,6 +6,7 @@ MANPAGELIST := $(patsubst %.rst, %.1, $(wildcard docs/*.rst))
 #export DH_VERBOSE=1
 
 INIT=debian/re6stnet/etc/init.d
+NM=/etc/NetworkManager/dispatcher.d/50re6stnet
 
 override_dh_auto_clean:
 	dh_auto_clean
@@ -18,17 +19,25 @@ override_dh_install:
 	dh_install
 	install -d debian/re6stnet/usr/sbin
 	mv debian/re6stnet/usr/bin/re6stnet debian/re6stnet/usr/sbin
+	install -Dpm 0644 debian/README.conf debian/re6stnet/etc/re6stnet/README
+	install -Dp daemon/network-manager debian/re6stnet$(NM)
+	for a in up down; do \
+	set debian/re6stnet/etc/network/if-$$a.d/re6stnet; \
+	install -d $${1%/*}; \
+	printf '#!/bin/sh -e\n[ "$$METHOD" = NetworkManager ] ||exec $(NM) "$$IFACE" %s\n' $$a >$$1; \
+	chmod +x $$1; \
+	done
 
 override_dh_installinit:
 	install -d $(INIT)
 	sed 's/#NAME#/re6st-registry/; s/#DEPENDS#//; s,#DAEMON_DIR#,/usr/bin,' \
 		<debian/init.d >$(INIT)/re6st-registry
-	sed 's/#NAME#/re6stnet/; s/#DEPENDS#/re6st-registry/; s,#DAEMON_DIR#,/usr/sbin,' \
+	sed 's/#NAME#/re6stnet/; s/#DEPENDS#/re6st-registry/; s,#DAEMON_DIR#,/usr/sbin,; /start)$$/a \
+	    cd $$CONFDIR; $$DAEMON @$$NAME.conf --test "main_interface != '\'lo\''" || exit 0' \
 		<debian/init.d >$(INIT)/re6stnet
 	for x in re6st-registry re6stnet; \
 	do chmod +x $(INIT)/$$x && dh_installinit --onlyscripts --name=$$x; \
 	done
-	install -Dpm 0644 debian/README.conf debian/re6stnet/etc/re6stnet/README
 
 override_dh_installman: $(MANPAGELIST)
 	dh_installman $^

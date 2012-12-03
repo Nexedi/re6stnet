@@ -1,0 +1,55 @@
+#!/usr/bin/python -S
+# Is there something standard like Debian's start-stop-daemon ?
+
+import errno, os, subprocess, signal, sys, time
+
+DAEMON = "re6stnet"
+CONFDIR = "/etc/re6stnet"
+
+os.environ["PATH"] = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+iface = sys.argv[1]
+action = sys.argv[2]
+pid_file = "/var/run/re6stnet-%s.pid" % iface
+
+if action in ("up", "vpn-up"):
+    os.chdir(CONFDIR)
+    if os.path.exists("re6stnet.conf") and not subprocess.call(
+       (DAEMON, "@re6stnet.conf", "--test", "main_interface != %r" % iface)):
+        pid_fd = os.open(pid_file, os.O_CREAT | os.O_WRONLY | os.O_EXCL, 0666)
+        try:
+            pid = os.fork()
+            if not pid:
+                os.setsid()
+                os.execlp(DAEMON, DAEMON, "@re6stnet.conf")
+            os.write(pid_fd, str(pid))
+        except:
+            os.remove(pid_file)
+            raise
+
+elif action in ("down", "vpn-down"):
+    try:
+        pid = open(pid_file).read()
+        os.remove(pid_file)
+    except IOError, e:
+        if e.errno != errno.ENOENT:
+            raise
+    else:
+        stat = open('/proc/%s/stat' % pid).read().split()
+        if stat[0] == pid and stat[1] == "(re6stnet)":
+            pid = int(pid)
+            def kill(sig):
+                try:
+                    os.kill(pid, sig)
+                except OSError, e:
+                    if e.errno == errno.ESRCH:
+                        sys.exit()
+                    raise
+            kill(signal.SIGTERM)
+            sleep = .1
+            while sleep < 5:
+                time.sleep(sleep)
+                kill(0)
+                sleep *= 1.5
+            # we waited for about 11 seconds
+            pid = -int(stat[4])
+            kill(signal.SIGKILL)

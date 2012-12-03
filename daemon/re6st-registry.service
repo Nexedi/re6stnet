@@ -1,0 +1,11 @@
+[Unit]
+Description=Server application for re6snet
+ConditionPathExists=/etc/re6stnet/re6st-registry.conf
+
+[Service]
+WorkingDirectory=/etc/re6stnet
+ExecStart=/usr/bin/re6st-registry @re6st-registry.conf
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
