@@ -19,7 +19,7 @@ override_dh_install:
 	dh_install
 	install -d debian/re6stnet/usr/sbin
 	mv debian/re6stnet/usr/bin/re6stnet debian/re6stnet/usr/sbin
-	install -Dpm 0644 debian/README.conf debian/re6stnet/etc/re6stnet/README
+	install -Dpm 0644 daemon/README.conf debian/re6stnet/etc/re6stnet/README
 	install -Dp daemon/network-manager debian/re6stnet$(NM)
 	for a in up down; do \
 	set debian/re6stnet/etc/network/if-$$a.d/re6stnet; \
