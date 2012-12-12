@@ -1,5 +1,6 @@
 #!/usr/bin/make -f
 # -*- makefile -*-
+# source package automatically created by stdeb 0.6.0+git
 MANPAGELIST := $(patsubst %.rst, %.1, $(wildcard docs/*.rst))
 
 # Uncomment this to turn on verbose mode.
@@ -7,6 +8,18 @@ MANPAGELIST := $(patsubst %.rst, %.1, $(wildcard docs/*.rst))
 
 INIT=debian/re6stnet/etc/init.d
 NM=/etc/NetworkManager/dispatcher.d/50re6stnet
+
+.PHONY: debian/changelog
+
+build-package: debian/changelog
+	dpkg-buildpackage -us -uc -b
+
+debian/changelog:
+	printf 're6stnet (0-%u.g%s) nexedi; urgency=low\n\n -- %s  %s\n' \
+	"`git rev-list --topo-order --count HEAD`" \
+	"`git rev-parse --short HEAD`" \
+	"`git var GIT_COMMITTER_IDENT |sed 's/\(.*>\) .*/\\1/'`" \
+	"`date -R`" >debian/changelog
 
 override_dh_auto_clean:
 	dh_auto_clean

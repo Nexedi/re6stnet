@@ -63,9 +63,16 @@ See also `setup.py` for Python dependencies.
 Installation
 ============
 
-re6stnet is distributed as an Python egg, and is also packaged for Debian.
+re6stnet is distributed as an Python egg, and is also packaged for DEB & RPM
+based distributions:
 
 See `re6st-registry` to set up a re6st network
 and `re6st-conf` to join an existing network.
 
 On Debian Squeeze, you will have to install `babeld` package from Wheezy.
+
+In order to build DEB snapshot package whose version is derived from current
+Git revision, the `debian/changelog` file must be generated automatically,
+that's why you can't use `dpkg-buildpackage` directly: run ``debian/rules``
+instead. RPM does not have this limitation: do `rpmbuild -bb re6stnet.spec``
+as usual.
