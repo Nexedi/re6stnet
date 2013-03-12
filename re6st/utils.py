@@ -127,17 +127,13 @@ def ipFromBin(ip, suffix=''):
     return socket.inet_ntop(socket.AF_INET6,
         struct.pack('>QQ', int(ip[:64], 2), int(ip[64:], 2)))
 
-def networkFromCa(ca_path):
-    # Get network prefix from ca.crt
-    with open(ca_path, 'r') as f:
-        ca = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
-        return bin(ca.get_serial_number())[3:]
+def networkFromCa(ca):
+    ca = crypto.load_certificate(crypto.FILETYPE_PEM, ca)
+    return bin(ca.get_serial_number())[3:]
 
-def subnetFromCert(cert_path):
-    # Get ip from cert.crt
-    with open(cert_path, 'r') as f:
-        cert = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
-        return cert.get_subject().CN
+def subnetFromCert(cert):
+    cert = crypto.load_certificate(crypto.FILETYPE_PEM, cert)
+    return cert.get_subject().CN
 
 def dump_address(address):
     return ';'.join(map(','.join, address))

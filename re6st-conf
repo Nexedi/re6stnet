@@ -17,6 +17,10 @@ def main():
     _ = parser.add_argument
     _('--registry', required=True, metavar='URL',
         help="HTTP URL of the server delivering certificates.")
+    _('--is-needed', action='store_true',
+        help="Exit immediately after asking the registry CA. Status code is"
+             " non-zero if we're already part of the network, which means"
+             " re6st is already running or we're behind a re6st router.")
     _('--ca-only', action='store_true',
         help='Only fetch CA from registry and exit.')
     _('-d', '--dir',
@@ -46,8 +50,16 @@ def main():
     s = xmlrpclib.ServerProxy(config.registry, allow_none=True)
 
     # Get CA
-    create(ca_path, s.getCa())
+    ca = s.getCa()
+    network = utils.networkFromCa(ca)
+    if config.is_needed:
+        route, err = subprocess.Popen(('ip', '-6', '-o', 'route', 'get',
+                                       utils.ipFromBin(network)),
+                                      stdout=subprocess.PIPE).communicate()
+        sys.exit(err or route and
+            utils.binFromIp(route.split()[8]).startswith(network))
 
+    create(ca_path, ca)
     if config.ca_only:
         sys.exit()
 
@@ -145,8 +157,8 @@ dh %s
 """ % (config.registry, ca_path, cert_path, key_path, dh_path))
         print "Sample configuration file created."
 
-    cn = utils.subnetFromCert(cert_path)
-    subnet = utils.networkFromCa(ca_path) + utils.binFromSubnet(cn)
+    cn = utils.subnetFromCert(cert)
+    subnet = network + utils.binFromSubnet(cn)
     print "Your subnet: %s/%u (CN=%s)" \
         % (utils.ipFromBin(subnet), len(subnet), cn)
 

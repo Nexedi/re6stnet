@@ -111,8 +111,10 @@ def getConfig():
 def main():
     # Get arguments
     config = getConfig()
-    network = utils.networkFromCa(config.ca)
-    prefix = utils.binFromSubnet(utils.subnetFromCert(config.cert))
+    with open(config.ca) as f:
+        network = utils.networkFromCa(f.read())
+    with open(config.cert) as f:
+        prefix = utils.binFromSubnet(utils.subnetFromCert(f.read()))
     config.openvpn_args += (
         '--ca', config.ca,
         '--cert', config.cert,
