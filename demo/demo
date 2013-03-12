@@ -193,7 +193,7 @@ if 1:
                     % (folder, VERBOSE, registry, args))
     re6stnet(registry, 'registry', '--ip ' + REGISTRY, registry='http://localhost/')
     re6stnet(machine1, 'm1', '-I%s' % m1_if_0.name)
-    re6stnet(machine2, 'm2', prefix_len=80)
+    re6stnet(machine2, 'm2', '--remote-gateway 10.1.1.1', prefix_len=80)
     re6stnet(machine3, 'm3', '-i%s' % m3_if_0.name)
     re6stnet(machine4, 'm4', '-i%s' % m4_if_0.name)
     re6stnet(machine5, 'm5', '-i%s' % m5_if_0.name)

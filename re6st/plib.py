@@ -39,15 +39,11 @@ def server(iface, max_clients, dh_path, pipe_fd, port, proto, encrypt, *args, **
         *args, **kw)
 
 
-def client(iface, server_address, encrypt, *args, **kw):
+def client(iface, address_list, encrypt, *args, **kw):
     remote = ['--nobind', '--client']
-    try:
-        for ip, port, proto in utils.address_list(server_address):
-            remote += '--remote', ip, port, \
-                'tcp-client' if proto == 'tcp' else proto
-    except ValueError, e:
-        logging.warning("Failed to parse node address %r (%s)",
-                        server_address, e)
+    for ip, port, proto in address_list:
+        remote += '--remote', ip, port, \
+            'tcp-client' if proto == 'tcp' else proto
     remote += args
     return openvpn(iface, encrypt, *remote, **kw)
 

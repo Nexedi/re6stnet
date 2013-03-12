@@ -8,19 +8,71 @@ RTF_CACHE = 0x01000000  # cache entry
 
 # Be careful the refresh interval should let the routes be established
 
-class Connection:
 
-    def __init__(self, address, write_pipe, timeout, iface, prefix, encrypt,
-            ovpn_args):
-        self.process = plib.client(iface, address, encrypt,
-            '--tls-remote', '%u/%u' % (int(prefix, 2), len(prefix)),
+class MultiGatewayManager(dict):
+
+    def __init__(self, gateway):
+        if gateway:
+            self._gw = gateway
+        else:
+            self.add = self.remove = lambda _: None
+
+    def _route(self, cmd, dest, gw):
+        cmd = 'ip', '-4', 'route', cmd, '%s/32' % dest, 'via', gw
+        logging.trace('%r', cmd)
+        subprocess.call(cmd)
+
+    def add(self, ip_list):
+        for dest in ip_list:
+            try:
+                self[dest][1] += 1
+            except KeyError:
+                gw = self._gw(dest)
+                self[dest] = [gw, 0]
+                self._route('add', dest, gw)
+
+    def remove(self, ip_list):
+        for dest in ip_list:
+            gw, count = self[dest]
+            if count:
+                self[dest][1] = count - 1
+            else:
+                del self[dest]
+                try:
+                    self._route('del', dest, gw)
+                except:
+                    pass
+
+
+class Connection(object):
+
+    def __init__(self, address, iface, prefix):
+        self.address_list = list(utils.parse_address(address))
+        self.iface = iface
+        self.routes = 0
+        self._prefix = prefix
+
+    def __iter__(self):
+        if not hasattr(self, '_remote_ip_set'):
+            self._remote_ip_set = set(info[4][0]
+                for ip, port, proto in self.address_list
+                for info in socket.getaddrinfo(ip, port, socket.AF_INET, 0,
+                    getattr(socket, 'IPPROTO_' + proto.upper())))
+        return iter(self._remote_ip_set)
+
+    def open(self, write_pipe, timeout, encrypt, ovpn_args):
+        self.process = plib.client(self.iface, self.address_list, encrypt,
+            '--tls-remote', '%u/%u' % (int(self._prefix, 2), len(self._prefix)),
             '--connect-retry-max', '3', '--tls-exit',
             '--ping-exit', str(timeout),
             '--route-up', '%s %u' % (plib.ovpn_client, write_pipe),
             *ovpn_args)
-        self.iface = iface
-        self.routes = 0
-        self._prefix = prefix
+
+    def close(self):
+        try:
+            self.process.stop()
+        except (AttributeError, OSError):
+            pass # we already polled an exited process
 
     def refresh(self):
         # Check that the connection is alive
@@ -35,7 +87,7 @@ class TunnelManager(object):
 
     def __init__(self, write_pipe, peer_db, openvpn_args, timeout,
                 refresh, client_count, iface_list, network, prefix,
-                address, ip_changed, encrypt):
+                address, ip_changed, encrypt, remote_gateway):
         self._write_pipe = write_pipe
         self._peer_db = peer_db
         self._connecting = set()
@@ -49,9 +101,10 @@ class TunnelManager(object):
         self._network = network
         self._iface_list = iface_list
         self._prefix = prefix
-        self._address = utils.address_str(address)
+        self._address = utils.dump_address(address)
         self._ip_changed = ip_changed
         self._encrypt = encrypt
+        self._gateway_manager = MultiGatewayManager(remote_gateway)
         self._served = set()
 
         self.sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
@@ -131,10 +184,8 @@ class TunnelManager(object):
                      int(prefix, 2), len(prefix))
         connection = self._connection_dict.pop(prefix)
         self.freeInterface(connection.iface)
-        try:
-            connection.process.stop()
-        except OSError:
-            pass # we already polled an exited process
+        connection.close()
+        self._gateway_manager.remove(connection)
         logging.trace('Connection with %u/%u killed',
                       int(prefix, 2), len(prefix))
 
@@ -146,8 +197,9 @@ class TunnelManager(object):
         logging.info('Establishing a connection with %u/%u',
                      int(prefix, 2), len(prefix))
         iface = self.getFreeInterface(prefix)
-        self._connection_dict[prefix] = Connection(address, self._write_pipe,
-            self._timeout, iface, prefix, self._encrypt, self._ovpn_args)
+        self._connection_dict[prefix] = c = Connection(address, iface, prefix)
+        self._gateway_manager.add(c)
+        c.open(self._write_pipe, self._timeout, self._encrypt, self._ovpn_args)
         self._peer_db.connecting(prefix, 1)
         return True
 
@@ -301,7 +353,7 @@ class TunnelManager(object):
     def _ovpn_route_up(self, common_name, ip):
         self._peer_db.connecting(utils.binFromSubnet(common_name), 0)
         if self._ip_changed:
-            self._address = utils.address_str(self._ip_changed(ip))
+            self._address = utils.dump_address(self._ip_changed(ip))
 
     def handlePeerEvent(self):
         msg, address = self.sock.recvfrom(1<<16)

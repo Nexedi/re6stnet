@@ -1,5 +1,5 @@
 #!/usr/bin/python
-import atexit, errno, logging, os, select, signal
+import atexit, errno, logging, os, random, select, signal
 import sqlite3, subprocess, sys, time, traceback
 from re6st import plib, utils, db, tunnel
 
@@ -97,6 +97,9 @@ def getConfig():
         help="Interval in seconds between two tunnel refresh: the worst"
              " tunnel is closed if the number of client tunnels has reached"
              " its maximum number (client-count).")
+    _('--remote-gateway', action='append', dest='gw_list',
+        help="Force each tunnel to be created through one the given gateways,"
+             " randomly.")
     _('--client', metavar='HOST,PORT,PROTO[;...]',
         help="Do not run any OpenVPN server, but only 1 OpenVPN client,"
              " with specified remotes. Any other option not required in this"
@@ -145,6 +148,8 @@ def main():
         else:
             pp = (1194, 'udp'), (1194, 'tcp')
         ip_changed = lambda ip: [(ip, str(port), proto) for port, proto in pp]
+        remote_gateway = config.gw_list and (lambda _:
+            random.choice(config.gw_list))
         forwarder = None
         if config.ip == 'upnp' or not config.ip:
             logging.info('Attempting automatic configuration via UPnP...')
@@ -207,7 +212,7 @@ def main():
             tunnel_manager = tunnel.TunnelManager(write_pipe, peer_db,
                 config.openvpn_args, timeout, config.tunnel_refresh,
                 config.client_count, config.iface_list, network, prefix,
-                address, ip_changed, config.encrypt)
+                address, ip_changed, config.encrypt, remote_gateway)
             tunnel_interfaces += tunnel_manager.new_iface_list
         else:
             tunnel_manager = write_pipe = None
@@ -230,7 +235,8 @@ def main():
             ip('addrlabel', 'prefix', my_network, 'label', '99')
             # prepare persistent interfaces
             if config.client:
-                cleanup.append(plib.client('re6stnet', config.client,
+                cleanup.append(plib.client('re6stnet',
+                    utils.parse_address(config.client),
                     config.encrypt, '--ping-restart', str(timeout),
                     *config.openvpn_args).stop)
             elif server_tunnels:

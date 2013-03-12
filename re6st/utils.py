@@ -139,14 +139,17 @@ def subnetFromCert(cert_path):
         cert = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
         return cert.get_subject().CN
 
-def address_str(address):
+def dump_address(address):
     return ';'.join(map(','.join, address))
 
-
-def address_list(address_list):
-    return list(tuple(address.split(','))
-        for address in address_list.split(';'))
-
+def parse_address(address_list):
+    for address in address_list.split(';'):
+        try:
+            ip, port, proto = address.split(',')
+            yield ip, str(port), proto
+        except ValueError, e:
+            logging.warning("Failed to parse node address %r (%s)",
+                            address, e)
 
 def binFromSubnet(subnet):
     p, l = subnet.split('/')
