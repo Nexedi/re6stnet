@@ -10,4 +10,5 @@ if os.environ['script_type'] == 'client-connect':
 # Write into pipe connect/disconnect events
 arg1 = sys.argv[1]
 if arg1 != 'None':
-    os.write(int(arg1), '%(script_type)s %(common_name)s\n' % os.environ)
+    os.write(int(arg1), '%(script_type)s %(common_name)s %(trusted_ip)s\n'
+                        % os.environ)
