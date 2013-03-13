@@ -9,7 +9,7 @@ def getConfig():
         description="Resilient virtual private network application.")
     _ = parser.add_argument
 
-    _('--ip',
+    _('--ip', action='append', default=[],
         help="IP address advertised to other nodes. Special values:\n"
              "- upnp: redirect ports when UPnP device is found\n"
              "- any: ask peers our IP\n"
@@ -153,7 +153,10 @@ def main():
         remote_gateway = config.gw_list and (lambda _:
             random.choice(config.gw_list))
         forwarder = None
-        if config.ip == 'upnp' or not config.ip:
+        if len(config.ip) > 1 and 'upnp' in config.ip or 'any' in config.ip:
+            sys.exit("error: argument --ip can be given only once with 'any'"
+                     " or 'upnp' value")
+        if 'upnp' in config.ip or not config.ip:
             logging.info('Attempting automatic configuration via UPnP...')
             try:
                 from re6st.upnpigd import Forwarder
@@ -168,8 +171,8 @@ def main():
                     forwarder.addRule(port, proto)
                 ip_changed = forwarder.checkExternalIp
                 address = ip_changed()
-        elif config.ip != 'any':
-            address = ip_changed(config.ip)
+        elif 'any' not in config.ip:
+            address = sum(map(ip_changed, config.ip), [])
             ip_changed = None
         for x in pp:
             server_tunnels.setdefault('re6stnet-' + x[1], x)
