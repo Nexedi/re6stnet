@@ -11,8 +11,6 @@
   one have to start the registry twice, the first time without
   the --private option
 
-- Put a section about how to build the package from the sources in the README
-
 - Babel limitations:
 
   - The metric does not take latency into account.
