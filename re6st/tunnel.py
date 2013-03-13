@@ -49,10 +49,13 @@ class Connection(object):
 
     def __iter__(self):
         if not hasattr(self, '_remote_ip_set'):
-            self._remote_ip_set = set(info[4][0]
-                for ip, port, proto in self.address_list
-                for info in socket.getaddrinfo(ip, port, socket.AF_INET, 0,
-                    getattr(socket, 'IPPROTO_' + proto.upper())))
+            self._remote_ip_set = set()
+            for ip, port, proto in self.address_list:
+                try:
+                    socket.inet_pton(socket.AF_INET, ip)
+                except socket.error:
+                    continue
+                self._remote_ip_set.add(ip)
         return iter(self._remote_ip_set)
 
     def open(self, write_pipe, timeout, encrypt, ovpn_args):
