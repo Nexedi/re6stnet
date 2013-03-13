@@ -88,7 +88,7 @@ on the same machine::
   re6st-registry --ca ca.crt --key ca.key --mailhost smtp.example.com
   re6st-conf --registry http://localhost/
 
-If `re6st-conf` is run in the directory containing CA files, ca.crt will
+If `re6st-conf` is run in the directory containing CA files, ca.crt will be
 overridden without harm.
 
 Note that the registry was started without specifying the re6st IP of the main

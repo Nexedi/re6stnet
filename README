@@ -63,7 +63,7 @@ See also `setup.py` for Python dependencies.
 Installation
 ============
 
-re6stnet is distributed as an Python egg, and is also packaged for DEB & RPM
+re6stnet is distributed as a Python egg, and is also packaged for DEB & RPM
 based distributions:
 
 See `re6st-registry` to set up a re6st network
