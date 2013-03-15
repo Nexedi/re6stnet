@@ -61,6 +61,7 @@ class Connection(object):
     def open(self, write_pipe, timeout, encrypt, ovpn_args):
         self.process = plib.client(self.iface, self.address_list, encrypt,
             '--tls-remote', '%u/%u' % (int(self._prefix, 2), len(self._prefix)),
+            '--resolv-retry', '0',
             '--connect-retry-max', '3', '--tls-exit',
             '--ping-exit', str(timeout),
             '--route-up', '%s %u' % (plib.ovpn_client, write_pipe),
