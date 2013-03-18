@@ -1,6 +1,7 @@
 #!/usr/bin/python
-import atexit, errno, logging, os, random, select, signal
+import atexit, errno, logging, os, select, signal
 import sqlite3, subprocess, sys, time, traceback
+from collections import deque
 from re6st import plib, utils, db, tunnel
 
 
@@ -99,7 +100,7 @@ def getConfig():
              " its maximum number (client-count).")
     _('--remote-gateway', action='append', dest='gw_list',
         help="Force each tunnel to be created through one the given gateways,"
-             " randomly.")
+             " in a round-robin fashion.")
     _('--client', metavar='HOST,PORT,PROTO[;...]',
         help="Do not run any OpenVPN server, but only 1 OpenVPN client,"
              " with specified remotes. Any other option not required in this"
@@ -150,8 +151,13 @@ def main():
         else:
             pp = (1194, 'udp'), (1194, 'tcp')
         ip_changed = lambda ip: [(ip, str(port), proto) for port, proto in pp]
-        remote_gateway = config.gw_list and (lambda _:
-            random.choice(config.gw_list))
+        if config.gw_list:
+          gw_list = deque(config.gw_list)
+          def remote_gateway(dest):
+            gw_list.rotate()
+            return gw_list[0]
+        else:
+          remote_gateway = None
         forwarder = None
         if len(config.ip) > 1 and 'upnp' in config.ip or 'any' in config.ip:
             sys.exit("error: argument --ip can be given only once with 'any'"
