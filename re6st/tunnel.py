@@ -262,21 +262,23 @@ class TunnelManager(object):
         elif count:
             # No route/tunnel to registry, which usually happens when starting
             # up. Select peers from cache for which we have no route.
+            new = 0
             for peer, address in self._peer_db.getPeerList():
                 if peer not in disconnected and self._makeTunnel(peer, address):
-                    count -= 1
-                    if not count:
-                        break
-            else:
-                if not (disconnected or self._served or self._connection_dict):
+                    new += 1
+                    if new == count:
+                        return
+            if not (new or disconnected):
+                if not (self._served or self._connection_dict):
                     # Startup without any good address in the cache.
                     peer = self._peer_db.getBootstrapPeer()
-                    if not (peer and self._makeTunnel(*peer)):
-                        # Failed to bootstrap ! Last change to connect is to
-                        # retry an address that already failed :(
-                        for peer in self._peer_db.getPeerList(1):
-                            if self._makeTunnel(*peer):
-                                break
+                    if peer and self._makeTunnel(*peer):
+                        return
+                # Failed to bootstrap ! Last change to connect is to
+                # retry an address that already failed :(
+                for peer in self._peer_db.getPeerList(1):
+                    if self._makeTunnel(*peer):
+                        break
 
     def _countRoutes(self):
         logging.debug('Starting to count the routes on each interface...')
