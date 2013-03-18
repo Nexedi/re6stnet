@@ -1,7 +1,5 @@
 #!/usr/bin/python -S
-# Is there something standard like Debian's start-stop-daemon ?
-
-import errno, os, subprocess, signal, sys, time
+import errno, glob, os, signal, socket, subprocess, sys, time
 
 DAEMON = "re6stnet"
 CONFDIR = "/etc/re6stnet"
@@ -9,47 +7,55 @@ CONFDIR = "/etc/re6stnet"
 os.environ["PATH"] = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 iface = sys.argv[1]
 action = sys.argv[2]
-pid_file = "/var/run/re6stnet-%s.pid" % iface
+lock_name = DAEMON + ':' + iface
 
 if action in ("up", "vpn-up"):
     os.chdir(CONFDIR)
     if os.path.exists("re6stnet.conf") and not subprocess.call(
        (DAEMON, "@re6stnet.conf", "--test", "main_interface != %r" % iface)):
-        pid_fd = os.open(pid_file, os.O_CREAT | os.O_WRONLY | os.O_EXCL, 0666)
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
         try:
-            pid = os.fork()
-            if not pid:
-                os.setsid()
-                os.execlp(DAEMON, DAEMON, "@re6stnet.conf")
-            os.write(pid_fd, str(pid))
-        except:
-            os.remove(pid_file)
-            raise
+            s.bind('\0' + lock_name)
+        except socket.error, e:
+            if e[0] != errno.EADDRINUSE:
+                raise
+            sys.stderr.write("daemon already started\n")
+            sys.exit()
+        if not os.fork():
+            os.setsid()
+            os.execlp(DAEMON, DAEMON, "@re6stnet.conf")
 
 elif action in ("down", "vpn-down"):
-    try:
-        pid = open(pid_file).read()
-        os.remove(pid_file)
-    except IOError, e:
-        if e.errno != errno.ENOENT:
-            raise
+    pattern = " @%s\n" % lock_name
+    with open("/proc/net/unix") as f:
+        for line in f:
+            if line.endswith(pattern):
+                sock_path = "socket:[%s]" % line.split()[-2]
+                break
+        else:
+            sys.exit()
+    pattern = "(%s)" % DAEMON
+    for path in glob.glob("/proc/*/stat"):
+        try:
+            pid = int(path[6:-5])
+            with open(path) as f:
+                stat = f.read().split()
+                if stat[1] == pattern and sock_path in (os.readlink(path)
+                        for path in glob.glob(path[:-4] + "fd/*")):
+                    break
+        except (EnvironmentError, ValueError):
+            pass
     else:
-        stat = open('/proc/%s/stat' % pid).read().split()
-        if stat[0] == pid and stat[1] == "(re6stnet)":
-            pid = int(pid)
-            def kill(sig):
-                try:
-                    os.kill(pid, sig)
-                except OSError, e:
-                    if e.errno == errno.ESRCH:
-                        sys.exit()
-                    raise
-            kill(signal.SIGTERM)
-            sleep = .1
-            while sleep < 5:
-                time.sleep(sleep)
-                kill(0)
-                sleep *= 1.5
-            # we waited for about 11 seconds
-            pid = -int(stat[4])
-            kill(signal.SIGKILL)
+        sys.exit()
+    try:
+        os.kill(pid, signal.SIGTERM)
+        sleep = .1
+        while sleep < 5:
+            time.sleep(sleep)
+            os.kill(pid, 0)
+            sleep *= 1.5
+        # we waited for about 11 seconds
+        os.kill(-int(stat[4]), signal.SIGKILL)
+    except OSError, e:
+        if e.errno != errno.ESRCH:
+            raise
