@@ -159,9 +159,15 @@ def main():
         else:
           remote_gateway = None
         forwarder = None
-        if len(config.ip) > 1 and 'upnp' in config.ip or 'any' in config.ip:
-            sys.exit("error: argument --ip can be given only once with 'any'"
-                     " or 'upnp' value")
+        if len(config.ip) > 1:
+            if 'upnp' in config.ip or 'any' in config.ip:
+                sys.exit("error: argument --ip can be given only once with"
+                         " 'any' or 'upnp' value")
+            logging.info("Multiple --ip passed: note that re6st does nothing to"
+                " make sure that incoming paquets are replied via the correct"
+                " gateway. So without manual network configuration, this can"
+                " not be used to accept server connections from multiple"
+                " gateways.")
         if 'upnp' in config.ip or not config.ip:
             logging.info('Attempting automatic configuration via UPnP...')
             try:
