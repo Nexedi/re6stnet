@@ -10,7 +10,7 @@
 # PATH should only include /usr/* if it runs after the mountnfs.sh script
 PATH=/sbin:/usr/sbin:/bin:/usr/bin
 NAME=#NAME#
-DESC=$NAME
+DESC="Resilient, Scalable, IPv6 Network application"
 DAEMON=#DAEMON_DIR#/$NAME
 CONFDIR=/etc/re6stnet
 PIDFILE=/var/run/$NAME.pid
@@ -35,9 +35,9 @@ do_start()
 	#   0 if daemon has been started
 	#   1 if daemon was already running
 	#   2 if daemon could not be started
-	set start-stop-daemon --start --quiet --pidfile $PIDFILE --exec $DAEMON
-	"$@" --test > /dev/null || return 1
-	"$@" --make-pidfile --background --chdir $CONFDIR -- @$NAME.conf || return 2
+	set start-stop-daemon --quiet --pidfile $PIDFILE
+	"$@" --stop --test --name $NAME && return 1
+	"$@" --start --make-pidfile --background --chdir $CONFDIR --exec $DAEMON -- @$NAME.conf || return 2
 }
 
 #
