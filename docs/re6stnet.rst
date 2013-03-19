@@ -48,6 +48,19 @@ re6stnet_subnet
 re6stnet_network
   the re6st network you belong to, written in CIDR notation
 
+If the `/etc/re6stnet/re6stnet.conf` configuration file exists, `re6stnet` is
+automatically started as a daemon. This is done is 2 different ways, depending
+on whether it is bound or not to a specific interface, by using the
+`main-interface` option:
+
+- If the option is not given (or if it is set to 'lo'), then it is automatically
+  started/stopped by ``systemd``\ (1). Debian package also provides SysV init
+  scripts.
+
+- Otherwise, it is automatically started/stopped when the related network
+  interface is enabled/disabled by ``NetworkManager``\ (8). Debian package also
+  provides `ifupdown` scripts.
+
 HOW TO
 ======
 
@@ -104,4 +117,5 @@ Its IP is the first unicast address::
 SEE ALSO
 ========
 
-``re6st-conf``\ (1), ``re6st-registry``\ (1), ``babeld``\ (8), ``openvpn``\ (8)
+``re6st-conf``\ (1), ``re6st-registry``\ (1), ``babeld``\ (8), ``openvpn``\ (8),
+``rdisc6``\ (8), ``req``\ (1)
