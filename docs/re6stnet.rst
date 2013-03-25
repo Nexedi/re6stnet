@@ -48,6 +48,9 @@ re6stnet_subnet
 re6stnet_network
   the re6st network you belong to, written in CIDR notation
 
+Starting re6st automatically
+----------------------------
+
 If the `/etc/re6stnet/re6stnet.conf` configuration file exists, `re6stnet` is
 automatically started as a daemon. This is done is 2 different ways, depending
 on whether it is bound or not to a specific interface, by using the
@@ -60,6 +63,26 @@ on whether it is bound or not to a specific interface, by using the
 - Otherwise, it is automatically started/stopped when the related network
   interface is enabled/disabled by ``NetworkManager``\ (8). Debian package also
   provides `ifupdown` scripts.
+
+Important note about NetworkManager
+-----------------------------------
+
+It is required to configure properly every connection defined in NetworkManager
+because default settings are wrong and conflict with re6st:
+
+- If re6st routes all your IPv6 traffic, using ``--table 0`` option, then make
+  sure to disable IPv6 in NetworkManager.
+
+- Otherwise, the following options must be set in [ipv6] section::
+
+   ignore-auto-routes=true
+   never-default=true
+
+  In applets, these options are usually named:
+
+  - Ignore automatically obtained routes (KDE & Gnome)
+  - Use only for resources on this connection (KDE)
+  - Use this connection only for resources on its network (Gnome)
 
 HOW TO
 ======
