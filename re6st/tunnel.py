@@ -263,13 +263,16 @@ class TunnelManager(object):
             # No route/tunnel to registry, which usually happens when starting
             # up. Select peers from cache for which we have no route.
             new = 0
+            bootstrap = True
             for peer, address in self._peer_db.getPeerList():
-                if peer not in disconnected and self._makeTunnel(peer, address):
-                    new += 1
-                    if new == count:
-                        return
+                if peer not in disconnected:
+                    bootstrap = False
+                    if self._makeTunnel(peer, address):
+                        new += 1
+                        if new == count:
+                            return
             if not (new or disconnected):
-                if not (self._served or self._connection_dict):
+                if bootstrap:
                     # Startup without any good address in the cache.
                     peer = self._peer_db.getBootstrapPeer()
                     if peer and self._makeTunnel(*peer):
