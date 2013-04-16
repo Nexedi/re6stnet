@@ -1,4 +1,4 @@
-import logging, random, socket, subprocess, time
+import logging, random, socket, subprocess, sys, time
 from collections import deque
 from itertools import chain
 from . import plib, utils
@@ -303,6 +303,31 @@ class TunnelManager(object):
                     if self._makeTunnel(*peer):
                         break
 
+    if sys.platform == 'cygwin':
+        def _iterRoutes(self):
+            routing_table = subprocess.check_output(
+                ('netsh', 'interface', 'ipv6', 'show', 'route', 'verbose'),
+                stderr=subprocess.OUTPUT)
+            for line in routing_table.splitlines():
+                fs = line.split(':', 1)
+                test = fs[0].startswith
+                if test('Prefix'):
+                    prefix, prefix_len = fs[1].split('/', 1)
+                elif test('Interface'):
+                    yield (fs[1].strip(),
+                           utils.binFromIp(prefix),
+                           int(prefix_len))
+    else:
+        def _iterRoutes(self):
+            with open('/proc/net/ipv6_route') as f:
+                routing_table = f.read()
+            for line in routing_table.splitlines():
+                line = line.split()
+                iface = line[-1]
+                if iface != 'lo' and not (int(line[-2], 16) & RTF_CACHE):
+                    yield (iface, bin(int(line[0], 16))[2:].rjust(128, '0'),
+                                  int(line[1], 16))
+
     def _countRoutes(self):
         logging.debug('Starting to count the routes on each interface...')
         del self._distant_peers[:]
@@ -311,17 +336,8 @@ class TunnelManager(object):
         a = len(self._network)
         b = a + len(self._prefix)
         other = []
-        with open('/proc/net/ipv6_route') as f:
-            self._last_routing_table = f.read()
-            for line in self._last_routing_table.splitlines():
-                line = line.split()
-                iface = line[-1]
-                if iface == 'lo' or int(line[-2], 16) & RTF_CACHE:
-                    continue
-                ip = bin(int(line[0], 16))[2:].rjust(128, '0')
-                if ip[:a] != self._network or ip[a:b] == self._prefix:
-                    continue
-                prefix_len = int(line[1], 16)
+        for iface, ip, prefix_len in self._iterRoutes():
+            if ip[:a] == self._network and ip[a:b] != self._prefix:
                 prefix = ip[a:prefix_len]
                 logging.trace('Route on iface %s detected to %s/%u',
                               iface, utils.ipFromBin(ip), prefix_len)
