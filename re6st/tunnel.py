@@ -58,14 +58,30 @@ class Connection(object):
                 self._remote_ip_set.add(ip)
         return iter(self._remote_ip_set)
 
-    def open(self, write_pipe, timeout, encrypt, ovpn_args):
-        self.process = plib.client(self.iface, self.address_list, encrypt,
+    def open(self, write_pipe, timeout, encrypt, ovpn_args, _retry=0):
+        self.process = plib.client(
+            self.iface, (self.address_list[_retry],), encrypt,
             '--tls-remote', '%u/%u' % (int(self._prefix, 2), len(self._prefix)),
             '--resolv-retry', '0',
             '--connect-retry-max', '3', '--tls-exit',
             '--ping-exit', str(timeout),
             '--route-up', '%s %u' % (plib.ovpn_client, write_pipe),
             *ovpn_args)
+        _retry += 1
+        self._retry = _retry < len(self.address_list) and (
+            write_pipe, timeout, encrypt, ovpn_args, _retry)
+
+    def connected(self, db):
+        try:
+            i = self._retry[-1] - 1
+            self._retry = None
+        except TypeError:
+            i = len(self.address_list) - 1
+        if i:
+            db.addPeer(self._prefix, utils.dump_address(
+                self.address_list[i:] + self.address_list[:i]), True)
+        else:
+            db.connecting(self._prefix, 0)
 
     def close(self):
         try:
@@ -78,7 +94,11 @@ class Connection(object):
         if self.process.poll() != None:
             logging.info('Connection with %s has failed with return code %s',
                          self._prefix, self.process.returncode)
-            return False
+            if not self._retry:
+                return False
+            logging.info('Retrying with alternate address')
+            self.close()
+            self.open(*self._retry)
         return True
 
 
@@ -367,7 +387,11 @@ class TunnelManager(object):
             self._gateway_manager.remove(trusted_ip)
 
     def _ovpn_route_up(self, common_name, ip):
-        self._peer_db.connecting(utils.binFromSubnet(common_name), 0)
+        prefix = utils.binFromSubnet(common_name)
+        try:
+            self._connection_dict[prefix].connected(self._peer_db)
+        except KeyError:
+            pass
         if self._ip_changed:
             self._address = utils.dump_address(self._ip_changed(ip))
 
