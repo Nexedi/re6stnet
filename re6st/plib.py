@@ -1,4 +1,4 @@
-import logging, errno, os
+import logging, errno, os, sys
 from . import utils
 
 here = os.path.realpath(os.path.dirname(__file__))
@@ -9,7 +9,7 @@ ovpn_log = None
 def openvpn(iface, encrypt, *args, **kw):
     args = ['openvpn',
         '--dev-type', 'tap',
-        '--dev', iface,
+        '--dev-node' if sys.platform == 'cygwin' else '--dev', iface,
         '--persist-tun',
         '--persist-key',
         '--script-security', '2',
