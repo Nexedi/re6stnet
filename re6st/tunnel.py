@@ -300,8 +300,8 @@ class TunnelManager(object):
                 iface = fs[1].strip()
             elif fs[0].startswith('Site Prefix Length'):
                 rttable.append([utils.binFromIp(prefix), int(prefix_len), iface])
-        return rttable                
-        
+        return rttable
+
     def _countRoutes(self):
         logging.debug('Starting to count the routes on each interface...')
         del self._distant_peers[:]
@@ -338,7 +338,7 @@ class TunnelManager(object):
             self._last_routing_table = self._get_win32_ipv6_route_table()
             for rtline in self._last_routing_table:
                 iface = rtline[2]
-                ip = rtline[0][2:].rjust(128, '0')
+                ip = rtline[0]
                 if ip[:a] != self._network or ip[a:b] == self._prefix:
                     continue
                 prefix_len = rtline[1]
