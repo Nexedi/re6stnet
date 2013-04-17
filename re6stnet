@@ -101,6 +101,8 @@ def getConfig():
     _('--remote-gateway', action='append', dest='gw_list',
         help="Force each tunnel to be created through one the given gateways,"
              " in a round-robin fashion.")
+    _('--disable-proto', action='append', choices=('udp', 'tcp'), default=[],
+        help="Do never try to create tunnels using given protocols.")
     _('--client', metavar='HOST,PORT,PROTO[;...]',
         help="Do not run any OpenVPN server, but only 1 OpenVPN client,"
              " with specified remotes. Any other option not required in this"
@@ -229,7 +231,8 @@ def main():
             tunnel_manager = tunnel.TunnelManager(write_pipe, peer_db,
                 config.openvpn_args, timeout, config.tunnel_refresh,
                 config.client_count, config.iface_list, network, prefix,
-                address, ip_changed, config.encrypt, remote_gateway)
+                address, ip_changed, config.encrypt, remote_gateway,
+                config.disable_proto)
             tunnel_interfaces += tunnel_manager.new_iface_list
         else:
             tunnel_manager = write_pipe = None

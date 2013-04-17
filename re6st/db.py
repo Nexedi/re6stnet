@@ -95,19 +95,28 @@ class PeerDB(object):
                 return bootpeer
             logging.warning('Buggy registry sent us our own address')
 
-    def addPeer(self, prefix, address, force=False):
+    def addPeer(self, prefix, address, set_preferred=False):
         logging.debug('Adding peer %s: %s', prefix, address)
         with self._db:
             q = self._db.execute
             try:
                 (a,), = q("SELECT address FROM peer WHERE prefix=?", (prefix,))
-                a = a != address if force else \
-                    set(a.split(';')) != set(address.split(';'))
+                if set_preferred:
+                    preferred = address.split(';')
+                    address = a
+                else:
+                    preferred = a.split(';')
+                def key(a):
+                    try:
+                        return preferred.index(a)
+                    except ValueError:
+                        return len(preferred)
+                address = ';'.join(sorted(address.split(';'), key=key))
             except ValueError:
                 q("DELETE FROM peer WHERE prefix IN (SELECT peer"
                   " FROM volatile.stat ORDER BY try, RANDOM() LIMIT ?,-1)",
                   (self._db_size,))
-                a = True
-            if a:
+                a = None
+            if a != address:
                 q("INSERT OR REPLACE INTO peer VALUES (?,?)", (prefix, address))
             q("INSERT OR REPLACE INTO volatile.stat VALUES (?,0)", (prefix,))
