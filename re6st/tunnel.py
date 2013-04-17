@@ -1,4 +1,4 @@
-import logging, random, socket, subprocess, time
+import logging, random, socket, subprocess, sys, time
 from collections import deque
 from itertools import chain
 from . import plib, utils
@@ -58,14 +58,30 @@ class Connection(object):
                 self._remote_ip_set.add(ip)
         return iter(self._remote_ip_set)
 
-    def open(self, write_pipe, timeout, encrypt, ovpn_args):
-        self.process = plib.client(self.iface, self.address_list, encrypt,
+    def open(self, write_pipe, timeout, encrypt, ovpn_args, _retry=0):
+        self.process = plib.client(
+            self.iface, (self.address_list[_retry],), encrypt,
             '--tls-remote', '%u/%u' % (int(self._prefix, 2), len(self._prefix)),
             '--resolv-retry', '0',
             '--connect-retry-max', '3', '--tls-exit',
             '--ping-exit', str(timeout),
             '--route-up', '%s %u' % (plib.ovpn_client, write_pipe),
             *ovpn_args)
+        _retry += 1
+        self._retry = _retry < len(self.address_list) and (
+            write_pipe, timeout, encrypt, ovpn_args, _retry)
+
+    def connected(self, db):
+        try:
+            i = self._retry[-1] - 1
+            self._retry = None
+        except TypeError:
+            i = len(self.address_list) - 1
+        if i:
+            db.addPeer(self._prefix, utils.dump_address(
+                self.address_list[i:] + self.address_list[:i]), True)
+        else:
+            db.connecting(self._prefix, 0)
 
     def close(self):
         try:
@@ -78,7 +94,11 @@ class Connection(object):
         if self.process.poll() != None:
             logging.info('Connection with %s has failed with return code %s',
                          self._prefix, self.process.returncode)
-            return False
+            if not self._retry:
+                return False
+            logging.info('Retrying with alternate address')
+            self.close()
+            self.open(*self._retry)
         return True
 
 
@@ -283,24 +303,30 @@ class TunnelManager(object):
                     if self._makeTunnel(*peer):
                         break
 
-    def _get_win32_ipv6_route_table(self):
-        cmd = ['netsh', 'interface ipv6 show route verbose']
-        rttable = []
-        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        s, _x = p.communicate()
-        if p.returncode != 0:
-            return [] # Or raise exception?
-        for line in s.splitlines():
-            fs = line.split(':', 1)
-            if fs == []:
-                continue
-            if fs[0].startswith('Prefix'):
-                prefix, prefix_len = fs[1].split('/', 1)
-            elif fs[0].startswith('Interface'):
-                iface = fs[1].strip()
-            elif fs[0].startswith('Site Prefix Length'):
-                rttable.append([utils.binFromIp(prefix), int(prefix_len), iface])
-        return rttable
+    if sys.platform == 'cygwin':
+        def _iterRoutes(self):
+            routing_table = subprocess.check_output(
+                ('netsh', 'interface', 'ipv6', 'show', 'route', 'verbose'),
+                stderr=subprocess.OUTPUT)
+            for line in routing_table.splitlines():
+                fs = line.split(':', 1)
+                test = fs[0].startswith
+                if test('Prefix'):
+                    prefix, prefix_len = fs[1].split('/', 1)
+                elif test('Interface'):
+                    yield (fs[1].strip(),
+                           utils.binFromIp(prefix),
+                           int(prefix_len))
+    else:
+        def _iterRoutes(self):
+            with open('/proc/net/ipv6_route') as f:
+                routing_table = f.read()
+            for line in routing_table.splitlines():
+                line = line.split()
+                iface = line[-1]
+                if iface != 'lo' and not (int(line[-2], 16) & RTF_CACHE):
+                    yield (iface, bin(int(line[0], 16))[2:].rjust(128, '0'),
+                                  int(line[1], 16))
 
     def _countRoutes(self):
         logging.debug('Starting to count the routes on each interface...')
@@ -310,38 +336,8 @@ class TunnelManager(object):
         a = len(self._network)
         b = a + len(self._prefix)
         other = []
-        try:
-            with open('/proc/net/ipv6_route') as f:
-                self._last_routing_table = f.read()
-                for line in self._last_routing_table.splitlines():
-                    line = line.split()
-                    iface = line[-1]
-                    if iface == 'lo' or int(line[-2], 16) & RTF_CACHE:
-                        continue
-                    ip = bin(int(line[0], 16))[2:].rjust(128, '0')
-                    if ip[:a] != self._network or ip[a:b] == self._prefix:
-                        continue
-                    prefix_len = int(line[1], 16)
-                    prefix = ip[a:prefix_len]
-                    logging.trace('Route on iface %s detected to %s/%u',
-                                  iface, utils.ipFromBin(ip), prefix_len)
-                    nexthop = self._iface_to_prefix.get(iface)
-                    if nexthop:
-                        self._connection_dict[nexthop].routes += 1
-                    if prefix in self._served or prefix in self._connection_dict:
-                        continue
-                    if iface in self._iface_list:
-                        other.append(prefix)
-                    else:
-                        self._distant_peers.append(prefix)
-        except IOError:
-            self._last_routing_table = self._get_win32_ipv6_route_table()
-            for rtline in self._last_routing_table:
-                iface = rtline[2]
-                ip = rtline[0]
-                if ip[:a] != self._network or ip[a:b] == self._prefix:
-                    continue
-                prefix_len = rtline[1]
+        for iface, ip, prefix_len in self._iterRoutes():
+            if ip[:a] == self._network and ip[a:b] != self._prefix:
                 prefix = ip[a:prefix_len]
                 logging.trace('Route on iface %s detected to %s/%u',
                               iface, utils.ipFromBin(ip), prefix_len)
@@ -407,7 +403,11 @@ class TunnelManager(object):
             self._gateway_manager.remove(trusted_ip)
 
     def _ovpn_route_up(self, common_name, ip):
-        self._peer_db.connecting(utils.binFromSubnet(common_name), 0)
+        prefix = utils.binFromSubnet(common_name)
+        try:
+            self._connection_dict[prefix].connected(self._peer_db)
+        except KeyError:
+            pass
         if self._ip_changed:
             self._address = utils.dump_address(self._ip_changed(ip))
 
