@@ -308,10 +308,11 @@ class TunnelManager(object):
             routing_table = subprocess.check_output(
                 ('netsh', 'interface', 'ipv6', 'show', 'route', 'verbose'),
                 stderr=subprocess.OUTPUT)
+            pname = 'Prefix' if platform.system()[10:11] == '5' else 'Destination Prefix'
             for line in routing_table.splitlines():
                 fs = line.split(':', 1)
                 test = fs[0].startswith
-                if test('Prefix'):
+                if test(pname):
                     prefix, prefix_len = fs[1].split('/', 1)
                 elif test('Interface'):
                     yield (fs[1].strip(),
