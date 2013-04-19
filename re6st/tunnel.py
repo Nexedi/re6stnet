@@ -1,4 +1,4 @@
-import logging, random, socket, subprocess, sys, time
+import logging, platform, random, socket, subprocess, sys, time
 from collections import deque
 from itertools import chain
 from . import plib, utils
