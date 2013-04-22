@@ -29,6 +29,7 @@ class PeerDB(object):
             try INTEGER NOT NULL DEFAULT 0)""")
         q("CREATE INDEX volatile.stat_try ON stat(try)")
         q("INSERT INTO volatile.stat (peer) SELECT prefix FROM peer")
+        q("PRAGMA foreign_keys = ON")
         try:
             a = q("SELECT value FROM config WHERE name='registry'").next()[0]
         except StopIteration:
