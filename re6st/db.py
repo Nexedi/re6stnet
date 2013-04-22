@@ -25,11 +25,10 @@ class PeerDB(object):
             value text)""")
         q('ATTACH DATABASE ":memory:" AS volatile')
         q("""CREATE TABLE volatile.stat (
-            peer TEXT PRIMARY KEY REFERENCES peer(prefix) ON DELETE CASCADE,
+            peer TEXT PRIMARY KEY,
             try INTEGER NOT NULL DEFAULT 0)""")
         q("CREATE INDEX volatile.stat_try ON stat(try)")
         q("INSERT INTO volatile.stat (peer) SELECT prefix FROM peer")
-        q("PRAGMA foreign_keys = ON")
         try:
             a = q("SELECT value FROM config WHERE name='registry'").next()[0]
         except StopIteration:
@@ -114,10 +113,13 @@ class PeerDB(object):
                         return len(preferred)
                 address = ';'.join(sorted(address.split(';'), key=key))
             except ValueError:
-                q("DELETE FROM peer WHERE prefix IN (SELECT peer"
-                  " FROM volatile.stat ORDER BY try, RANDOM() LIMIT ?,-1)",
-                  (self._db_size,))
-                a = None
+                a = q("SELECT peer FROM volatile.stat ORDER BY try, RANDOM()"
+                      " LIMIT ?,-1", (self._db_size,)).fetchall()
+                if a:
+                    qq = self._db.executemany
+                    qq("DELETE FROM peer WHERE prefix IN (?)", a)
+                    qq("DELETE FROM volatile.stat WHERE peer IN (?)", a)
+                # 'a != address' will evaluate to True because types differs
             if a != address:
                 q("INSERT OR REPLACE INTO peer VALUES (?,?)", (prefix, address))
             q("INSERT OR REPLACE INTO volatile.stat VALUES (?,0)", (prefix,))
