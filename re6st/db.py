@@ -84,15 +84,20 @@ class PeerDB(object):
         logging.info('Getting Boot peer...')
         try:
             bootpeer = self._proxy.getBootstrapPeer(self._prefix).data
-        except (socket.error, xmlrpclib.Fault), e:
+            p = subprocess.Popen(
+                ('openssl', 'rsautl', '-decrypt', '-inkey', self._key_path),
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+            out, err = p.communicate(bootpeer)
+            if p.returncode:
+                raise subprocess.CalledProcessError(p.returncode, err)
+            prefix, address = out.split()
+        except (socket.error, xmlrpclib.Fault, subprocess.CalledProcessError,
+                ValueError), e:
             logging.warning('Failed to bootstrap (%s)', e)
         else:
-            p = subprocess.Popen(('openssl', 'rsautl', '-decrypt', '-inkey', self._key_path),
-                    stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-            bootpeer = p.communicate(bootpeer)[0].split()
-            if bootpeer[0] != self._prefix:
-                self.addPeer(*bootpeer)
-                return bootpeer
+            if prefix != self._prefix:
+                self.addPeer(prefix, address)
+                return prefix, address
             logging.warning('Buggy registry sent us our own address')
 
     def addPeer(self, prefix, address, set_preferred=False):

@@ -405,10 +405,13 @@ class TunnelManager(object):
             return
         code = ord(msg[0])
         if code == 1: # answer
-            # TODO: do not fail if message contains garbage
             # We parse the message in a way to discard a truncated line.
             for peer in msg[1:].split('\n')[:-1]:
-                prefix, address = peer.split()
+                try:
+                    prefix, address = peer.split()
+                    int(prefix, 2)
+                except ValueError:
+                    break
                 if prefix != self._prefix:
                     self._peer_db.addPeer(prefix, address)
                     try:
