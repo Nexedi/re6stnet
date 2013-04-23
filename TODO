@@ -23,3 +23,5 @@
     use --main-interface option on it.
 
 - Is it useful that each node regenerates its own DH parameter ?
+
+- Filter non-routable IPs. Add an option not to do it.
