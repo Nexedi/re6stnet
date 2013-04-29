@@ -270,7 +270,7 @@ def main():
                 # WKRD: Removed this useless route now, since the kernel does
                 #       not even remove it on exit.
                 subprocess.call(if_rt)
-            if_rt[4] = my_subnet            
+            if_rt[4] = my_subnet
             cleanup.append(lambda: subprocess.call(if_rt))
             x = [my_network]
             if config.table:
@@ -287,13 +287,14 @@ def main():
                 call(if_rt)
                 if_rt += x[1:]
                 call(if_rt[:3] + ['add', 'proto', 'static'] + if_rt[4:])
-            ip('route', 'unreachable', *x)
 
             # adding tap-windows driver will break others, so we add
             # all drivers here
             if sys.platform == 'cygwin':
                 [ ip('vpntap', 'dev', x) for x in tunnel_interfaces ]
-                    
+            else:
+                ip('route', 'unreachable', *x)
+
             config.babel_args += config.iface_list
             cleanup.append(plib.router(subnet, config.hello, config.table,
                 os.path.join(config.log, 'babeld.log'),
