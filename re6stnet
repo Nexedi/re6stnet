@@ -292,6 +292,11 @@ def main():
                 call(if_rt[:3] + ['add', 'proto', 'static'] + if_rt[4:])
             ip('route', 'unreachable', *x)
 
+            # adding tap-windows driver will break others, so we add
+            # all drivers here
+            if sys.platform == 'cygwin':
+                [ ip('vpntap', 'dev', x) for x in tunnel_interfaces ]
+                    
             config.babel_args += config.iface_list
             cleanup.append(plib.router(subnet, config.hello, config.table,
                 os.path.join(config.log, 'babeld.log'),
@@ -305,11 +310,6 @@ def main():
             for cmd in config.daemon or ():
                 cleanup.append(utils.Popen(cmd, shell=True).stop)
 
-            # adding tap-windows driver will break others, so we add
-            # all drivers here
-            if sys.platform == 'cygwin':
-                [ ip('vpntap', 'dev', x) for x in tunnel_interfaces ]
-                    
             # main loop
             if tunnel_manager is None:
                 sys.exit(os.WEXITSTATUS(os.wait()[1]))
