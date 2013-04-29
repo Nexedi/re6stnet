@@ -271,7 +271,11 @@ def main():
                 #       not even remove it on exit.
                 subprocess.call(if_rt)
             if_rt[4] = my_subnet
-            cleanup.append(lambda: subprocess.call(if_rt))
+            if sys.platform == 'cygwin':
+                ip('route', my_subnet, 'dev', config.main_interface)
+            else:
+                cleanup.append(lambda: subprocess.call(if_rt))
+
             x = [my_network]
             if config.table:
                 x += 'table', str(config.table)
