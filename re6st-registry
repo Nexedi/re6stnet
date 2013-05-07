@@ -1,315 +1,120 @@
 #!/usr/bin/python
-import errno, logging, mailbox, os, random, select
-import smtplib, socket, sqlite3, string, subprocess, sys
-import threading, time, traceback, xmlrpclib
-from collections import deque
-from SimpleXMLRPCServer import SimpleXMLRPCServer, SimpleXMLRPCRequestHandler
-from email.mime.text import MIMEText
-from OpenSSL import crypto
-from re6st import tunnel, utils
+import errno, httplib, logging, select, socket
+from BaseHTTPServer import BaseHTTPRequestHandler
+from SocketServer import ThreadingTCPServer
+from urlparse import parse_qsl
+from re6st import registry, utils
 
 # To generate server ca and key with serial for 2001:db8:42::/48
-# openssl req -nodes -new -x509 -key ca.key -set_serial 0x120010db80042 -days 365 -out ca.crt
+#  openssl req -nodes -new -x509 -key ca.key -set_serial 0x120010db80042 -days 3650 -out ca.crt
 
 IPV6_V6ONLY = 26
 SOL_IPV6 = 41
 
 
-class RequestHandler(SimpleXMLRPCRequestHandler):
+class RequestHandler(BaseHTTPRequestHandler):
 
     def address_string(self):
         # Workaround for http://bugs.python.org/issue6085
         return self.client_address[0]
 
-    def _dispatch(self, method, params):
-        logging.debug('%s%r', method, params)
-        return self.server._dispatch(method, (self,) + params)
+    def do_GET(self):
+        try:
+            try:
+                path, query = self.path.split('?', 1)
+            except ValueError:
+                path = self.path
+                query = {}
+            else:
+                query = dict(parse_qsl(query, keep_blank_values=1,
+                                              strict_parsing=1))
+            _, path = path.split('/')
+            if not _ and path[0] != '_':
+                return self.server._handle_request(self, path, query)
+        except Exception:
+            logging.info(self.requestline, exc_info=1)
+        self.send_error(httplib.BAD_REQUEST)
 
-class SimpleXMLRPCServer4(SimpleXMLRPCServer):
+    def log_error(*args):
+        pass
+
+
+class HTTPServer4(ThreadingTCPServer):
 
     allow_reuse_address = True
+    daemon_threads = True
 
 
-class SimpleXMLRPCServer6(SimpleXMLRPCServer4):
+class HTTPServer6(HTTPServer4):
 
     address_family = socket.AF_INET6
 
     def server_bind(self):
         self.socket.setsockopt(SOL_IPV6, IPV6_V6ONLY, 1)
-        SimpleXMLRPCServer4.server_bind(self)
+        HTTPServer4.server_bind(self)
 
 
-class main(object):
+def main():
+    parser = utils.ArgParser(fromfile_prefix_chars='@',
+        description="re6stnet registry used to bootstrap nodes"
+                    " and deliver certificates.")
+    _ = parser.add_argument
+    _('--port', type=int, default=80,
+        help="Port on which the server will listen.")
+    _('-4', dest='bind4', default='0.0.0.0',
+        help="Bind server to this IPv4.")
+    _('-6', dest='bind6', default='::',
+        help="Bind server to this IPv6.")
+    _('--db', default='/var/lib/re6stnet/registry.db',
+        help="Path to SQLite database file. It is automatically initialized"
+             " if the file does not exist.")
+    _('--ca', required=True, help=parser._ca_help)
+    _('--key', required=True,
+            help="CA private key in .pem format.")
+    _('--mailhost', required=True,
+            help="SMTP host to send confirmation emails. For debugging"
+                 " purpose, it can also be an absolute or existing path to"
+                 " a mailbox file")
+    _('--private',
+            help="re6stnet IP of the node on which runs the registry."
+                 " Required for normal operation.")
+    _('--prefix-length', default=16, type=int,
+            help="Default length of allocated prefixes.")
+    _('--anonymous-prefix-length', type=int,
+            help="Length of allocated anonymous prefixes."
+                 " If 0 or unset, registration by email is required")
+    _('-l', '--logfile', default='/var/log/re6stnet/registry.log',
+            help="Path to logging file.")
+    _('-v', '--verbose', default=1, type=int,
+            help="Log level. 0 disables logging."
+                 " Use SIGUSR1 to reopen log.")
+    config = parser.parse_args()
 
-    def __init__(self):
-        self.cert_duration = 365 * 86400
-        self.time_out = 45000
-        self.refresh_interval = 600
-        self.last_refresh = time.time()
+    utils.setupLog(config.verbose, config.logfile)
 
+    server = registry.RegistryServer(config)
+    def requestHandler(request, client_address, _):
+        RequestHandler(request, client_address, server)
 
-        # Command line parsing
-        parser = utils.ArgParser(fromfile_prefix_chars='@',
-            description="re6stnet registry used to bootstrap nodes"
-                        " and deliver certificates.")
-        _ = parser.add_argument
-        _('--port', type=int, default=80,
-            help="Port on which the server will listen.")
-        _('-4', dest='bind4', default='0.0.0.0',
-            help="Bind server to this IPv4.")
-        _('-6', dest='bind6', default='::',
-            help="Bind server to this IPv6.")
-        _('--db', default='/var/lib/re6stnet/registry.db',
-            help="Path to SQLite database file. It is automatically initialized"
-                 " if the file does not exist.")
-        _('--ca', required=True, help=parser._ca_help)
-        _('--key', required=True,
-                help="CA private key in .pem format.")
-        _('--mailhost', required=True,
-                help="SMTP host to send confirmation emails. For debugging"
-                     " purpose, it can also be an absolute or existing path to"
-                     " a mailbox file")
-        _('--private',
-                help="re6stnet IP of the node on which runs the registry."
-                     " Required for normal operation.")
-        _('--prefix-length', default=16, type=int,
-                help="Default length of allocated prefixes.")
-        _('--anonymous-prefix-length', type=int,
-                help="Length of allocated anonymous prefixes."
-                     " If 0 or unset, registration by email is required")
-        _('-l', '--logfile', default='/var/log/re6stnet/registry.log',
-                help="Path to logging file.")
-        _('-v', '--verbose', default=1, type=int,
-                help="Log level. 0 disables logging."
-                     " Use SIGUSR1 to reopen log.")
-        self.config = parser.parse_args()
-
-        utils.setupLog(self.config.verbose, self.config.logfile)
-
-        if self.config.private:
-            self.sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
-        else:
-            logging.warning('You have declared no private address'
-                    ', either this is the first start, or you should'
-                    'check you configuration')
-
-        # Database initializing
-        utils.makedirs(os.path.dirname(self.config.db))
-        self.db = sqlite3.connect(self.config.db, isolation_level=None)
-        self.db.execute("""CREATE TABLE IF NOT EXISTS token (
-                        token text primary key not null,
-                        email text not null,
-                        prefix_len integer not null,
-                        date integer not null)""")
-        try:
-            self.db.execute("""CREATE TABLE cert (
-                               prefix text primary key not null,
-                               email text,
-                               cert text)""")
-        except sqlite3.OperationalError, e:
-            if e.args[0] != 'table cert already exists':
-                raise RuntimeError
-        else:
-            self.db.execute("INSERT INTO cert VALUES ('',null,null)")
-
-        # Loading certificates
-        with open(self.config.ca) as f:
-            self.ca = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
-        with open(self.config.key) as f:
-            self.key = crypto.load_privatekey(crypto.FILETYPE_PEM, f.read())
-        # Get vpn network prefix
-        self.network = bin(self.ca.get_serial_number())[3:]
-        logging.info("Network: %s/%u", utils.ipFromBin(self.network),
-                                       len(self.network))
-        self._email = self.ca.get_subject().emailAddress
-
-        # Starting server
-        server_list = []
-        if self.config.bind4:
-            server4 = SimpleXMLRPCServer4((self.config.bind4, self.config.port),
-                requestHandler=RequestHandler, allow_none=True)
-            server4.register_instance(self)
-            server_list.append(server4)
-        if self.config.bind6:
-            server6 = SimpleXMLRPCServer6((self.config.bind6, self.config.port),
-                requestHandler=RequestHandler, allow_none=True)
-            server6.register_instance(self)
-            server_list.append(server6)
-
-        if len(server_list) == 1:
-            server_list[0].serve_forever()
-        else:
-            while True:
-                try:
-                    r = select.select(server_list[:], [], [])[0]
-                except select.error as e:
-                    if e.args[0] != errno.EINTR:
-                        raise
-                else:
-                    for r in r:
-                        r._handle_request_noblock()
-
-    def requestToken(self, handler, email):
+    server_list = []
+    if config.bind4:
+        server_list.append(HTTPServer4((config.bind4, config.port),
+                                       requestHandler))
+    if config.bind6:
+        server_list.append(HTTPServer6((config.bind6, config.port),
+                                       requestHandler))
+    if server_list:
+        empty_list = []
         while True:
-            # Generating token
-            token = ''.join(random.sample(string.ascii_lowercase, 8))
-            args = token, email, self.config.prefix_length, int(time.time())
-            # Updating database
             try:
-                self.db.execute("INSERT INTO token VALUES (?,?,?,?)", args)
-                break
-            except sqlite3.IntegrityError:
-                pass
+                r = select.select(server_list[:], empty_list, empty_list)[0]
+            except select.error as e:
+                if e.args[0] != errno.EINTR:
+                    raise
+            else:
+                for r in r:
+                    r._handle_request_noblock()
 
-        # Creating and sending email
-        msg = MIMEText('Hello, your token to join re6st network is: %s\n'
-                       % token)
-        msg['Subject'] = '[re6stnet] Token Request'
-        if self._email:
-            msg['From'] = self._email
-        msg['To'] = email
-        if os.path.isabs(self.config.mailhost) or \
-           os.path.isfile(self.config.mailhost):
-            m = mailbox.mbox(self.config.mailhost)
-            try:
-                m.add(msg)
-            finally:
-                m.close()
-        else:
-            s = smtplib.SMTP(self.config.mailhost)
-            s.sendmail(self._email, email, msg.as_string())
-            s.quit()
-
-    def _getPrefix(self, prefix_len):
-        max_len = 128 - len(self.network)
-        assert 0 < prefix_len <= max_len
-        try:
-            prefix, = self.db.execute("""SELECT prefix FROM cert WHERE length(prefix) <= ? AND cert is null
-                                         ORDER BY length(prefix) DESC""", (prefix_len,)).next()
-        except StopIteration:
-            logging.error('No more free /%u prefix available', prefix_len)
-            raise
-        while len(prefix) < prefix_len:
-            self.db.execute("UPDATE cert SET prefix = ? WHERE prefix = ?", (prefix + '1', prefix))
-            prefix += '0'
-            self.db.execute("INSERT INTO cert VALUES (?,null,null)", (prefix,))
-        if len(prefix) < max_len or '1' in prefix:
-            return prefix
-        self.db.execute("UPDATE cert SET cert = 'reserved' WHERE prefix = ?", (prefix,))
-        return self._getPrefix(prefix_len)
-
-    def requestCertificate(self, handler, token, cert_req):
-        try:
-            req = crypto.load_certificate_request(crypto.FILETYPE_PEM, cert_req)
-            with self.db:
-                if token is None:
-                    prefix_len = self.config.anonymous_prefix_length
-                    if not prefix_len:
-                        return
-                    email = None
-                else:
-                    try:
-                        token, email, prefix_len, _ = self.db.execute(
-                            "SELECT * FROM token WHERE token = ?",
-                            (token,)).next()
-                    except StopIteration:
-                        return
-                    self.db.execute("DELETE FROM token WHERE token = ?", (token,))
-
-                # Get a new prefix
-                prefix = self._getPrefix(prefix_len)
-
-                # Create certificate
-                cert = crypto.X509()
-                cert.set_serial_number(0) # required for libssl < 1.0
-                cert.gmtime_adj_notBefore(0)
-                cert.gmtime_adj_notAfter(self.cert_duration)
-                cert.set_issuer(self.ca.get_subject())
-                subject = req.get_subject()
-                subject.CN = "%u/%u" % (int(prefix, 2), prefix_len)
-                cert.set_subject(subject)
-                cert.set_pubkey(req.get_pubkey())
-                cert.sign(self.key, 'sha1')
-                cert = crypto.dump_certificate(crypto.FILETYPE_PEM, cert)
-
-                # Insert certificate into db
-                self.db.execute("UPDATE cert SET email = ?, cert = ? WHERE prefix = ?", (email, cert, prefix))
-
-            return cert
-        except Exception:
-            f = traceback.format_exception(*sys.exc_info())
-            logging.error('%s%s', f.pop(), ''.join(f))
-            raise
-
-    def getCa(self, handler):
-        return crypto.dump_certificate(crypto.FILETYPE_PEM, self.ca)
-
-    def getPrivateAddress(self, handler):
-        return self.config.private
-
-    def getBootstrapPeer(self, handler, client_prefix):
-        cert, = self.db.execute("SELECT cert FROM cert WHERE prefix = ?",
-                (client_prefix,)).next()
-        address = self.config.private, tunnel.PORT
-        self.sock.sendto('\2', address)
-        peer = None
-        while select.select([self.sock], [], [], peer is None)[0]:
-            msg = self.sock.recv(1<<16)
-            if msg[0] == '\1':
-                try:
-                    peer = msg[1:].split('\n')[-2]
-                except IndexError:
-                    peer = ''
-        if peer is None:
-            raise EnvironmentError("Timeout while querying [%s]:%u" % address)
-        if not peer or peer.split()[0] == client_prefix:
-            raise LookupError("No bootstrap peer found")
-        logging.info("Sending bootstrap peer: %s", peer)
-        r, w = os.pipe()
-        try:
-            threading.Thread(target=os.write, args=(w, cert)).start()
-            p = subprocess.Popen(('openssl', 'rsautl', '-encrypt', '-certin', '-inkey', '/proc/self/fd/%u' % r),
-                stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-            return xmlrpclib.Binary(p.communicate(peer)[0])
-        finally:
-            os.close(r)
-            os.close(w)
-
-    def topology(self, handler):
-        if handler.client_address[0] in ('127.0.0.1', '::'):
-            is_registry = utils.binFromIp(self.config.private
-                )[len(self.network):].startswith
-            peers = deque('%u/%u' % (int(x, 2), len(x))
-                for x, in self.db.execute("SELECT prefix FROM cert")
-                if is_registry(x))
-            assert len(peers) == 1
-            cookie = hex(random.randint(0, 1<<32))[2:]
-            graph = dict.fromkeys(peers)
-            asked = 0
-            while True:
-                r, w, _ = select.select([self.sock],
-                    [self.sock] if peers else [], [], 1)
-                if r:
-                    answer = self.sock.recv(1<<16)
-                    if answer[0] == '\xfe':
-                        answer = answer[1:].split('\n')[:-1]
-                        if len(answer) >= 3 and answer[0] == cookie:
-                            x = answer[3:]
-                            assert answer[1] not in x, (answer, graph)
-                            graph[answer[1]] = x[:int(answer[2])]
-                            x = set(x).difference(graph)
-                            peers += x
-                            graph.update(dict.fromkeys(x))
-                if w:
-                    x = utils.binFromSubnet(peers.popleft())
-                    x = utils.ipFromBin(self.network + x)
-                    try:
-                        self.sock.sendto('\xff%s\n' % cookie, (x, tunnel.PORT))
-                    except socket.error:
-                        pass
-                elif not r:
-                    break
-            return graph
 
 if __name__ == "__main__":
     main()
