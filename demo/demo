@@ -278,8 +278,9 @@ if len(sys.argv) > 1:
             elif self.path == '/tunnel.html':
                 other = 'route'
                 gv = registry.Popen(('python', '-c', r"""if 1:
-                    import math, xmlrpclib
-                    g = xmlrpclib.ServerProxy('http://localhost/').topology()
+                    import math
+                    from re6st.registry import RegistryClient
+                    g = eval(RegistryClient('http://localhost/').topology())
                     print 'digraph {'
                     a = 2 * math.pi / len(g)
                     z = 4
@@ -293,7 +294,7 @@ if len(sys.argv) > 1:
                         for p in p or ():
                             print '"%s" -> "%s";' % (n, title(p))
                     print '}'
-                """), stdout=subprocess.PIPE).communicate()[0]
+                """), stdout=subprocess.PIPE, cwd="..").communicate()[0]
                 if gv:
                     svg = subprocess.Popen(('neato', '-Tsvg'),
                         stdin=subprocess.PIPE, stdout=subprocess.PIPE,

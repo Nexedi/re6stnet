@@ -1,6 +1,5 @@
-import logging, sqlite3, socket, subprocess, xmlrpclib, time
-from urllib import splittype, splithost, splitport
-import utils
+import logging, sqlite3, socket, subprocess, time
+from . import utils
 
 
 class PeerDB(object):
@@ -10,7 +9,7 @@ class PeerDB(object):
         self._prefix = prefix
         self._db_size = db_size
         self._key_path = key_path
-        self._proxy = xmlrpclib.ServerProxy(registry)
+        self._registry = registry
 
         logging.info('Initialize cache ...')
         self._db = sqlite3.connect(db_path, isolation_level=None)
@@ -37,7 +36,7 @@ class PeerDB(object):
             retry = 1
             while True:
                 try:
-                    a = self._proxy.getPrivateAddress()
+                    a = self._registry.getPrivateAddress(self._prefix)
                     break
                 except socket.error, e:
                     logging.warning(e)
@@ -83,16 +82,9 @@ class PeerDB(object):
     def getBootstrapPeer(self):
         logging.info('Getting Boot peer...')
         try:
-            bootpeer = self._proxy.getBootstrapPeer(self._prefix).data
-            p = subprocess.Popen(
-                ('openssl', 'rsautl', '-decrypt', '-inkey', self._key_path),
-                stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-            out, err = p.communicate(bootpeer)
-            if p.returncode:
-                raise subprocess.CalledProcessError(p.returncode, err)
-            prefix, address = out.split()
-        except (socket.error, xmlrpclib.Fault, subprocess.CalledProcessError,
-                ValueError), e:
+            bootpeer = self._registry.getBootstrapPeer(self._prefix)
+            prefix, address = utils.decrypt(self._key_path, bootpeer).split()
+        except (socket.error, subprocess.CalledProcessError, ValueError), e:
             logging.warning('Failed to bootstrap (%s)', e)
         else:
             if prefix != self._prefix:
