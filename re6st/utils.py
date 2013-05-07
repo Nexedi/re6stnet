@@ -132,6 +132,9 @@ def networkFromCa(ca):
 def subnetFromCert(cert):
     return cert.get_subject().CN
 
+def notAfter(cert):
+    return time.mktime(time.strptime(cert.get_notAfter(),'%Y%m%d%H%M%SZ'))
+
 def dump_address(address):
     return ';'.join(map(','.join, address))
 

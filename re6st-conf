@@ -1,5 +1,5 @@
 #!/usr/bin/python
-import argparse, atexit, errno, os, subprocess, sqlite3, sys
+import argparse, atexit, errno, os, subprocess, sqlite3, sys, time
 from OpenSSL import crypto
 from re6st import registry, utils
 
@@ -139,7 +139,11 @@ def main():
     os.ftruncate(cert_fd, len(cert))
     os.close(cert_fd)
 
-    print "Certificate setup complete."
+    cert = loadCert(cert)
+    not_after = utils.notAfter(cert)
+    print("Setup complete. Certificate is valid until %s"
+          " and will be automatically renewed after %s" % (
+        time.ctime(not_after), time.ctime(not_after - registry.RENEW_PERIOD)))
 
     if not os.path.lexists(conf_path):
         create(conf_path, """\
@@ -160,7 +164,7 @@ dh %s
 """ % (config.registry, ca_path, cert_path, key_path, dh_path))
         print "Sample configuration file created."
 
-    cn = utils.subnetFromCert(loadCert(cert))
+    cn = utils.subnetFromCert(cert)
     subnet = network + utils.binFromSubnet(cn)
     print "Your subnet: %s/%u (CN=%s)" \
         % (utils.ipFromBin(subnet), len(subnet), cn)

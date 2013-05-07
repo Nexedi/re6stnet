@@ -4,8 +4,10 @@ import sqlite3, subprocess, sys, time, traceback
 from collections import deque
 from OpenSSL import crypto
 from re6st import db, plib, tunnel, utils
-from re6st.registry import RegistryClient
+from re6st.registry import RegistryClient, RENEW_PERIOD
 
+class ReexecException(Exception):
+    pass
 
 def getConfig():
     parser = utils.ArgParser(fromfile_prefix_chars='@',
@@ -112,6 +114,8 @@ def getConfig():
 
     return parser.parse_args()
 
+def renew(*args):
+    raise ReexecException("Restart to renew certificate")
 
 def main():
     # Get arguments
@@ -143,6 +147,24 @@ def main():
 
     signal.signal(signal.SIGHUP, lambda *args: sys.exit(-1))
     signal.signal(signal.SIGTERM, lambda *args: sys.exit())
+
+    registry = RegistryClient(config.registry, config.key, ca)
+    while True:
+        next_renew = utils.notAfter(cert) - RENEW_PERIOD
+        if time.time() < next_renew:
+            break
+        pem = registry.renewCertificate(prefix)
+        if not pem or pem == crypto.dump_certificate(crypto.FILETYPE_PEM, cert):
+            logging.warning("Certificate not renewed. Will retry tomorrow.")
+            next_renew = time.time() + 86400
+            break
+        cert = crypto.load_certificate(crypto.FILETYPE_PEM, pem)
+        path = config.cert + '.new'
+        with open(path, 'w') as f:
+            f.write(pem)
+        os.rename(path, config.cert)
+        logging.info("Certificate renewed until %s",
+                     time.ctime(utils.notAfter(cert)))
 
     if config.max_clients is None:
         config.max_clients = config.client_count * 2
@@ -232,7 +254,6 @@ def main():
             # Create and open read_only pipe to get server events
             r_pipe, write_pipe = os.pipe()
             read_pipe = os.fdopen(r_pipe)
-            registry = RegistryClient(config.registry, config.key, ca)
             peer_db = db.PeerDB(db_path, registry, config.key, prefix)
             tunnel_manager = tunnel.TunnelManager(write_pipe, peer_db,
                 config.openvpn_args, timeout, config.tunnel_refresh,
@@ -313,7 +334,12 @@ def main():
 
             # main loop
             if tunnel_manager is None:
-                sys.exit(os.WEXITSTATUS(os.wait()[1]))
+                signal.signal(signal.SIGALRM, renew)
+                signal.alarm(int(next_renew - time.time()))
+                try:
+                    sys.exit(os.WEXITSTATUS(os.wait()[1]))
+                finally:
+                    signal.alarm(0)
             cleanup += tunnel_manager.delInterfaces, tunnel_manager.killAll
             while True:
                 next = tunnel_manager.next_refresh
@@ -333,6 +359,8 @@ def main():
                 t = time.time()
                 if t >= tunnel_manager.next_refresh:
                     tunnel_manager.refresh()
+                    if t >= next_renew:
+                        renew()
                 if forwarder and t >= forwarder.next_refresh:
                     forwarder.refresh()
         finally:
@@ -344,16 +372,18 @@ def main():
     except sqlite3.Error:
         logging.exception("Restarting with empty cache")
         os.rename(db_path, db_path + '.bak')
-        try:
-            sys.exitfunc()
-        finally:
-            os.execvp(sys.argv[0], sys.argv)
+    except ReexecException, e:
+        logging.info(e)
     except KeyboardInterrupt:
         return 0
     except Exception:
         f = traceback.format_exception(*sys.exc_info())
         logging.error('%s%s', f.pop(), ''.join(f))
         sys.exit(1)
+    try:
+        sys.exitfunc()
+    finally:
+        os.execvp(sys.argv[0], sys.argv)
 
 if __name__ == "__main__":
     main()
