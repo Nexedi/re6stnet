@@ -222,6 +222,7 @@ def main():
         # Init db and tunnels
         tunnel_interfaces = server_tunnels.keys()
         timeout = 4 * config.hello
+        cleanup = []
         if config.client_count and not config.client:
             required('registry')
             # Create and open read_only pipe to get server events
@@ -233,11 +234,11 @@ def main():
                 config.client_count, config.iface_list, network, prefix,
                 address, ip_changed, config.encrypt, remote_gateway,
                 config.disable_proto)
+            cleanup.append(tunnel_manager.sock.close)
             tunnel_interfaces += tunnel_manager.new_iface_list
         else:
             tunnel_manager = write_pipe = None
 
-        cleanup = []
         try:
             # Source address selection is defined by RFC 6724, and in most
             # applications, it usually works  thanks to rule 5 (prefer outgoing
