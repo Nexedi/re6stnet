@@ -1,4 +1,4 @@
-import argparse, errno, logging, os, shlex, signal, socket
+import argparse, calendar, errno, logging, os, shlex, signal, socket
 import struct, subprocess, textwrap, threading, time
 
 logging_levels = logging.WARNING, logging.INFO, logging.DEBUG, 5
@@ -131,6 +131,9 @@ def networkFromCa(ca):
 
 def subnetFromCert(cert):
     return cert.get_subject().CN
+
+def notAfter(cert):
+    return calendar.timegm(time.strptime(cert.get_notAfter(),'%Y%m%d%H%M%SZ'))
 
 def dump_address(address):
     return ';'.join(map(','.join, address))

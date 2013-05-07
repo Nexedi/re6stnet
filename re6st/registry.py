@@ -8,6 +8,7 @@ from urllib import splittype, splithost, splitport, urlencode
 from . import tunnel, utils
 
 HMAC_HEADER = "Re6stHMAC"
+RENEW_PERIOD = 30 * 86400
 
 
 class getcallargs(type):
@@ -190,28 +191,38 @@ class RegistryServer(object):
                             (token,)).next()
                     except StopIteration:
                         return
-                    self.db.execute("DELETE FROM token WHERE token = ?", (token,))
-
-                # Get a new prefix
+                    self.db.execute("DELETE FROM token WHERE token = ?",
+                                    (token,))
                 prefix = self._getPrefix(prefix_len)
+                self.db.execute("UPDATE cert SET email = ? WHERE prefix = ?",
+                                (email, prefix))
+                return self._createCertificate(prefix, req.get_subject(),
+                                                       req.get_pubkey())
 
-                # Create certificate
-                cert = crypto.X509()
-                cert.set_serial_number(0) # required for libssl < 1.0
-                cert.gmtime_adj_notBefore(0)
-                cert.gmtime_adj_notAfter(self.cert_duration)
-                cert.set_issuer(self.ca.get_subject())
-                subject = req.get_subject()
-                subject.CN = "%u/%u" % (int(prefix, 2), prefix_len)
-                cert.set_subject(subject)
-                cert.set_pubkey(req.get_pubkey())
-                cert.sign(self.key, 'sha1')
-                cert = crypto.dump_certificate(crypto.FILETYPE_PEM, cert)
+    def _createCertificate(self, client_prefix, subject, pubkey):
+        cert = crypto.X509()
+        cert.set_serial_number(0) # required for libssl < 1.0
+        cert.gmtime_adj_notBefore(0)
+        cert.gmtime_adj_notAfter(self.cert_duration)
+        cert.set_issuer(self.ca.get_subject())
+        subject.CN = "%u/%u" % (int(client_prefix, 2), len(client_prefix))
+        cert.set_subject(subject)
+        cert.set_pubkey(pubkey)
+        cert.sign(self.key, 'sha1')
+        cert = crypto.dump_certificate(crypto.FILETYPE_PEM, cert)
+        self.db.execute("UPDATE cert SET cert = ? WHERE prefix = ?",
+                        (cert, client_prefix))
+        return cert
 
-                # Insert certificate into db
-                self.db.execute("UPDATE cert SET email = ?, cert = ? WHERE prefix = ?", (email, cert, prefix))
-
-                return cert
+    def renewCertificate(self, cn):
+        with self.lock:
+            with self.db:
+                pem = self._getCert(cn)
+                cert = crypto.load_certificate(crypto.FILETYPE_PEM, pem)
+                if utils.notAfter(cert) - RENEW_PERIOD < time.time():
+                    pem = self._createCertificate(cn, cert.get_subject(),
+                                                      cert.get_pubkey())
+                return pem
 
     def getCa(self):
         return crypto.dump_certificate(crypto.FILETYPE_PEM, self.ca)
