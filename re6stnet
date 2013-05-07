@@ -117,6 +117,31 @@ def getConfig():
 def renew(*args):
     raise ReexecException("Restart to renew certificate")
 
+def maybe_renew(path, cert, info, renew):
+    while True:
+        next_renew = utils.notAfter(cert) - RENEW_PERIOD
+        if time.time() < next_renew:
+            return cert, next_renew
+        try:
+            pem = renew()
+            if not pem or pem == crypto.dump_certificate(
+                  crypto.FILETYPE_PEM, cert):
+                exc_info = 0
+                break
+            cert = crypto.load_certificate(crypto.FILETYPE_PEM, pem)
+        except Exception:
+            exc_info = 1
+            break
+        new_path = path + '.new'
+        with open(new_path, 'w') as f:
+            f.write(pem)
+        os.rename(new_path, path)
+        logging.info("%s renewed until %s",
+            info, time.ctime(utils.notAfter(cert)))
+    logging.error("%s not renewed. Will retry tomorrow.",
+                  info, exc_info=exc_info)
+    return cert, time.time() + 86400
+
 def main():
     # Get arguments
     config = getConfig()
@@ -149,22 +174,11 @@ def main():
     signal.signal(signal.SIGTERM, lambda *args: sys.exit())
 
     registry = RegistryClient(config.registry, config.key, ca)
-    while True:
-        next_renew = utils.notAfter(cert) - RENEW_PERIOD
-        if time.time() < next_renew:
-            break
-        pem = registry.renewCertificate(prefix)
-        if not pem or pem == crypto.dump_certificate(crypto.FILETYPE_PEM, cert):
-            logging.warning("Certificate not renewed. Will retry tomorrow.")
-            next_renew = time.time() + 86400
-            break
-        cert = crypto.load_certificate(crypto.FILETYPE_PEM, pem)
-        path = config.cert + '.new'
-        with open(path, 'w') as f:
-            f.write(pem)
-        os.rename(path, config.cert)
-        logging.info("Certificate renewed until %s",
-                     time.ctime(utils.notAfter(cert)))
+    cert, next_renew = maybe_renew(config.cert, cert, "Certificate",
+                                   lambda: registry.renewCertificate(prefix))
+    ca, ca_renew = maybe_renew(config.ca, ca, "CA Certificate", registry.getCa)
+    if next_renew > ca_renew:
+        next_renew = ca_renew
 
     if config.max_clients is None:
         config.max_clients = config.client_count * 2
