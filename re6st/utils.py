@@ -1,5 +1,6 @@
-import argparse, errno, logging, os, shlex, signal, socket
-import struct, subprocess, textwrap, threading, time
+import argparse, errno, logging, os, select, shlex, signal, socket
+import struct, subprocess, sys, textwrap, thread, threading, time
+from .compat import socketpair
 
 logging_levels = logging.WARNING, logging.INFO, logging.DEBUG, 5
 
@@ -104,6 +105,58 @@ class Popen(subprocess.Popen):
         t.cancel()
         return r
 
+
+class SelectableJob(threading.Thread):
+
+    def __init__(self, func=None):
+        super(SelectableJob, self).__init__()
+        self.daemon = True
+        self.__master, self.__slave = socketpair()
+        if func is not None:
+            self.release(func)
+        self.start()
+
+    @property
+    def fileno(self):
+        return self.__master.fileno
+
+    def run(self):
+        try:
+            while self.__slave.recv(1):
+                try:
+                    self.__result = self.__func()
+                except:
+                    self.__result = sys.exc_info()
+                    self.__slave.send('\1')
+                else:
+                    self.__slave.send('\0')
+        finally:
+            self.__slave.close()
+
+    def read(self):
+        t = self.__master.recv(1)
+        r = self.__result
+        del self.__result
+        if t == '\0':
+            return r
+        raise r[0], r[1], r[2]
+
+    def release(self, func=None):
+        if func is None:
+            self.__master.close()
+        else:
+            self.__func = func
+            self.__master.send('\0')
+
+
+def select_no_eintr(rlist, wlist=[], elist=[], wakeup=None):
+    while True:
+        try:
+            return select.select(rlist, wlist, elist, wakeup and
+                                 max(0, wakeup - time.time()))
+        except select.error as e:
+            if e.args[0] != errno.EINTR:
+                raise
 
 def makedirs(path):
     try:

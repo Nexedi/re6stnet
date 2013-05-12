@@ -1,6 +1,6 @@
 #!/usr/bin/python
-import atexit, errno, logging, os, select, signal
-import sqlite3, subprocess, sys, time, traceback
+import atexit, logging, os, signal, sqlite3
+import subprocess, sys, threading, time, traceback
 from collections import deque
 from OpenSSL import crypto
 from re6st import db, plib, tunnel, utils
@@ -113,9 +113,6 @@ def getConfig():
              " mode is ignored (e.g. client-count, max-clients, etc.)")
 
     return parser.parse_args()
-
-def renew(*args):
-    raise ReexecException("Restart to renew certificate")
 
 def maybe_renew(path, cert, info, renew):
     while True:
@@ -348,33 +345,29 @@ def main():
 
             # main loop
             if tunnel_manager is None:
-                signal.signal(signal.SIGALRM, renew)
-                signal.alarm(int(next_renew - time.time()))
-                try:
-                    sys.exit(os.WEXITSTATUS(os.wait()[1]))
-                finally:
-                    signal.alarm(0)
+                wait = utils.SelectableJob(os.wait)
+                cleanup.append(wait.release)
+                if utils.select_no_eintr([wait], wakeup=next_renew)[0]:
+                    sys.exit(os.WEXITSTATUS(wait.read()[1]))
+                raise ReexecException("Restart to renew certificate")
             cleanup += tunnel_manager.delInterfaces, tunnel_manager.killAll
             while True:
-                next = tunnel_manager.next_refresh
+                wakeup = tunnel_manager.next_refresh
                 if forwarder:
-                    next = min(next, forwarder.next_refresh)
-                r = [read_pipe, tunnel_manager.sock]
-                try:
-                    r = select.select(r, [], [], max(0, next - time.time()))[0]
-                except select.error as e:
-                    if e.args[0] != errno.EINTR:
-                        raise
-                    continue
+                    wakeup = min(wakeup, forwarder.next_refresh)
+                r = utils.select_no_eintr([read_pipe, tunnel_manager.sock],
+                                          wakeup=wakeup)[0]
                 if read_pipe in r:
                     tunnel_manager.handleTunnelEvent(read_pipe.readline())
                 if tunnel_manager.sock in r:
                     tunnel_manager.handlePeerEvent()
+                # IDEA: Use SelectableJob(os.wait) to wake up as soon as a
+                #       tunnel is closed, thus avoiding to wake up for nothing.
                 t = time.time()
                 if t >= tunnel_manager.next_refresh:
                     tunnel_manager.refresh()
                     if t >= next_renew:
-                        renew()
+                        raise ReexecException("Restart to renew certificate")
                 if forwarder and t >= forwarder.next_refresh:
                     forwarder.refresh()
         finally:
