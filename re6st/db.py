@@ -5,7 +5,8 @@ from . import utils
 class PeerDB(object):
 
     # internal ip = temp arg/attribute
-    def __init__(self, db_path, registry, key_path, prefix, db_size=200):
+    def __init__(self, db_path, registry, key_path, network, prefix,
+                       db_size=200):
         self._prefix = prefix
         self._db_size = db_size
         self._key_path = key_path
@@ -31,20 +32,28 @@ class PeerDB(object):
         try:
             a = q("SELECT value FROM config WHERE name='registry'").next()[0]
         except StopIteration:
-            logging.info("Private IP of registry not in cache."
-                         " Asking registry via its public IP ...")
-            retry = 1
-            while True:
-                try:
-                    a = self._registry.getPrivateAddress(self._prefix)
-                    break
-                except socket.error, e:
-                    logging.warning(e)
-                    time.sleep(retry)
-                    retry = min(60, retry * 2)
-            q("INSERT INTO config VALUES ('registry',?)", (a,))
-        self.registry_ip = utils.binFromIp(a)
+            a = self._updateRegistryIP()
+        else:
+            self.registry_ip = utils.binFromIp(a)
+            if not self.registry_ip.startswith(network):
+                a = self._updateRegistryIP()
         logging.info("Cache initialized. Registry IP is %s", a)
+
+    def _updateRegistryIP(self):
+        logging.info("Asking registry its private IP...")
+        retry = 1
+        while True:
+            try:
+                a = self._registry.getPrivateAddress(self._prefix)
+                break
+            except socket.error, e:
+                logging.warning(e)
+                time.sleep(retry)
+                retry = min(60, retry * 2)
+        self._db.execute("INSERT OR REPLACE INTO config VALUES ('registry',?)",
+                         (a,))
+        self.registry_ip = utils.binFromIp(a)
+        return a
 
     def log(self):
         if logging.getLogger().isEnabledFor(5):
