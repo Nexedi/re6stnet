@@ -5,6 +5,7 @@ IPTABLES = 'iptables'
 SCREEN = 'screen'
 VERBOSE = 4
 REGISTRY='10.0.0.2'
+CA_DAYS = 1000
 
 #                       registry
 #                           |.2
@@ -154,6 +155,10 @@ gateway1.screen('miniupnpd -d -f miniupnpd.conf -P miniupnpd.pid -a 10.1.1.1'
                 ' -i %s' % g1_if_0_name)
 if 1:
     import sqlite3
+    os.path.exists('ca.crt') or subprocess.check_call(
+        "openssl req -nodes -new -x509 -key registry/ca.key -out ca.crt"
+        " -subj /CN=re6st.example.com/emailAddress=re6st@example.com"
+        " -set_serial 0x120010db80042 -days %u" % CA_DAYS, shell=True)
     db_path = 'registry/registry.db'
     registry.screen('../re6st-registry @registry/re6st-registry.conf --db %s'
         ' --mailhost %s -v%u' % (db_path, os.path.abspath('mbox'), VERBOSE))
