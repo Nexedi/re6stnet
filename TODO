@@ -25,3 +25,6 @@
 - Is it useful that each node regenerates its own DH parameter ?
 
 - Filter non-routable IPs. Add an option not to do it.
+
+- Abort in case of import child process failure (babel, openvpn server,
+  openvpn client if run with --client).

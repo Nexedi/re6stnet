@@ -1,6 +1,6 @@
 #!/usr/bin/python
 import atexit, errno, logging, os, select, signal
-import sqlite3, subprocess, sys, time, traceback
+import sqlite3, subprocess, sys, time, threading
 from collections import deque
 from OpenSSL import crypto
 from re6st import db, plib, tunnel, utils
@@ -65,12 +65,14 @@ def getConfig():
              " hello interval for Babel to re-establish connection with a"
              " node for which the direct connection has been cut.")
     _('--table', type=int, default=42,
-        help="Use given table id. Set 0 to use the main table, if:\n"
-             "- you are a gateway of this network (the default route will be"
-             "  exported)\n"
-             "- or you want to use the default route of this network for all"
-             " communications (in this case, make sure you don't already have"
-             " a default route).\n")
+        help="Use given table id. Set 0 to use the main table, if you want to"
+             " access internet via this network (in this case, make sure you"
+             " don't already have a default route). Don't use this option with"
+             " --gateway (main table is automatically used).")
+    _('--gateway', action='store_true',
+        help="Act as a gateway for this network (the default route will be"
+             " exported). Do never use it if you don't know what it means.")
+
     _ = parser.add_argument_group('tunnelling').add_argument
     _('-O', dest='openvpn_args', metavar='ARG', action='append', default=[],
         help="Extra arguments to forward to both server and client OpenVPN"
@@ -319,7 +321,9 @@ def main():
             if_rt[4] = my_subnet
             cleanup.append(lambda: subprocess.call(if_rt))
             x = [my_network]
-            if config.table:
+            if config.gateway:
+                config.table = 0
+            elif config.table:
                 x += 'table', str(config.table)
                 try:
                     ip('rule', 'from', *x)
@@ -333,6 +337,25 @@ def main():
                 call(if_rt)
                 if_rt += x[1:]
                 call(if_rt[:3] + ['add', 'proto', 'static'] + if_rt[4:])
+            else:
+                def check_no_default_route():
+                    try:
+                        while True:
+                            for route in call(('ip', '-6', 'route', 'show',
+                                               'default')).splitlines():
+                                if ' proto 42 ' not in route:
+                                    logging.fatal("Detected default route (%s)"
+                                        " whereas you specified --table=0."
+                                        " Fix your configuration.", route)
+                                    return
+                            time.sleep(60)
+                    except:
+                        utils.log_exception()
+                    finally:
+                        exit(1)
+                t = threading.Thread(target=check_no_default_route)
+                t.daemon = True
+                t.start()
             ip('route', 'unreachable', *x)
 
             config.babel_args += config.iface_list
@@ -350,10 +373,6 @@ def main():
 
             # main loop
             if tunnel_manager is None:
-                t = threading.Thread(target=lambda:
-                    exit(os.WEXITSTATUS(os.wait()[1])))
-                t.daemon = True
-                t.start()
                 time.sleep(max(0, next_renew - time.time()))
                 raise ReexecException("Restart to renew certificate")
             cleanup += tunnel_manager.delInterfaces, tunnel_manager.killAll
@@ -393,8 +412,7 @@ def main():
     except KeyboardInterrupt:
         return 0
     except Exception:
-        f = traceback.format_exception(*sys.exc_info())
-        logging.error('%s%s', f.pop(), ''.join(f))
+        utils.log_exception()
         sys.exit(1)
     try:
         sys.exitfunc()

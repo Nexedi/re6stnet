@@ -1,5 +1,5 @@
 import argparse, calendar, errno, logging, os, shlex, signal, socket
-import struct, subprocess, textwrap, threading, time
+import struct, subprocess, sys, textwrap, threading, time, traceback
 
 logging_levels = logging.WARNING, logging.INFO, logging.DEBUG, 5
 
@@ -43,6 +43,10 @@ def setupLog(log_level, filename=None, **kw):
         logging.disable(logging.CRITICAL)
     logging.addLevelName(5, 'TRACE')
     logging.trace = lambda *args, **kw: logging.log(5, *args, **kw)
+
+def log_exception():
+    f = traceback.format_exception(*sys.exc_info())
+    logging.error('%s%s', f.pop(), ''.join(f))
 
 
 class HelpFormatter(argparse.ArgumentDefaultsHelpFormatter):
