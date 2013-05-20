@@ -161,7 +161,7 @@ def decrypt(key_path, data):
         stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     out, err = p.communicate(data)
     if p.returncode:
-        raise subprocess.CalledProcessError(p.returncode, err)
+        raise subprocess.CalledProcessError(p.returncode, 'openssl', err)
     return out
 
 def encrypt(cert, data):
@@ -176,5 +176,5 @@ def encrypt(cert, data):
         os.close(r)
         os.close(w)
     if p.returncode:
-        raise subprocess.CalledProcessError(p.returncode, err)
+        raise subprocess.CalledProcessError(p.returncode, 'openssl', err)
     return out
