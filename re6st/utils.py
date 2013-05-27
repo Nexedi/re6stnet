@@ -1,6 +1,5 @@
-import argparse, errno, logging, os, shlex, signal, socket
-import struct, subprocess, textwrap, threading, time
-from OpenSSL import crypto
+import argparse, calendar, errno, logging, os, shlex, signal, socket
+import struct, subprocess, sys, textwrap, threading, time, traceback
 
 logging_levels = logging.WARNING, logging.INFO, logging.DEBUG, 5
 
@@ -44,6 +43,10 @@ def setupLog(log_level, filename=None, **kw):
         logging.disable(logging.CRITICAL)
     logging.addLevelName(5, 'TRACE')
     logging.trace = lambda *args, **kw: logging.log(5, *args, **kw)
+
+def log_exception():
+    f = traceback.format_exception(*sys.exc_info())
+    logging.error('%s%s', f.pop(), ''.join(f))
 
 
 class HelpFormatter(argparse.ArgumentDefaultsHelpFormatter):
@@ -128,12 +131,13 @@ def ipFromBin(ip, suffix=''):
         struct.pack('>QQ', int(ip[:64], 2), int(ip[64:], 2)))
 
 def networkFromCa(ca):
-    ca = crypto.load_certificate(crypto.FILETYPE_PEM, ca)
     return bin(ca.get_serial_number())[3:]
 
 def subnetFromCert(cert):
-    cert = crypto.load_certificate(crypto.FILETYPE_PEM, cert)
     return cert.get_subject().CN
+
+def notAfter(cert):
+    return calendar.timegm(time.strptime(cert.get_notAfter(),'%Y%m%d%H%M%SZ'))
 
 def dump_address(address):
     return ';'.join(map(','.join, address))
@@ -150,3 +154,27 @@ def parse_address(address_list):
 def binFromSubnet(subnet):
     p, l = subnet.split('/')
     return bin(int(p))[2:].rjust(int(l), '0')
+
+def decrypt(key_path, data):
+    p = subprocess.Popen(
+        ('openssl', 'rsautl', '-decrypt', '-inkey', key_path),
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    out, err = p.communicate(data)
+    if p.returncode:
+        raise subprocess.CalledProcessError(p.returncode, 'openssl', err)
+    return out
+
+def encrypt(cert, data):
+    r, w = os.pipe()
+    try:
+        threading.Thread(target=os.write, args=(w, cert)).start()
+        p = subprocess.Popen(('openssl', 'rsautl', '-encrypt', '-certin',
+                              '-inkey', '/proc/self/fd/%u' % r),
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        out, err = p.communicate(data)
+    finally:
+        os.close(r)
+        os.close(w)
+    if p.returncode:
+        raise subprocess.CalledProcessError(p.returncode, 'openssl', err)
+    return out

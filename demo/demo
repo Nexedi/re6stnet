@@ -5,6 +5,7 @@ IPTABLES = 'iptables'
 SCREEN = 'screen'
 VERBOSE = 4
 REGISTRY='10.0.0.2'
+CA_DAYS = 1000
 
 #                       registry
 #                           |.2
@@ -154,6 +155,10 @@ gateway1.screen('miniupnpd -d -f miniupnpd.conf -P miniupnpd.pid -a 10.1.1.1'
                 ' -i %s' % g1_if_0_name)
 if 1:
     import sqlite3
+    os.path.exists('ca.crt') or subprocess.check_call(
+        "openssl req -nodes -new -x509 -key registry/ca.key -out ca.crt"
+        " -subj /CN=re6st.example.com/emailAddress=re6st@example.com"
+        " -set_serial 0x120010db80042 -days %u" % CA_DAYS, shell=True)
     db_path = 'registry/registry.db'
     registry.screen('../re6st-registry @registry/re6st-registry.conf --db %s'
         ' --mailhost %s -v%u' % (db_path, os.path.abspath('mbox'), VERBOSE))
@@ -189,7 +194,7 @@ if 1:
             p.communicate(str(token[0]))
             os.remove(dh_path)
             os.remove(folder + '/ca.crt')
-        node.screen('../re6stnet @%s/re6stnet.conf --table 0 -v%u --registry %s %s'
+        node.screen('../re6stnet @%s/re6stnet.conf -v%u --registry %s %s'
                     % (folder, VERBOSE, registry, args))
     re6stnet(registry, 'registry', '--ip ' + REGISTRY, registry='http://localhost/')
     re6stnet(machine1, 'm1', '-I%s' % m1_if_0.name)
@@ -278,8 +283,9 @@ if len(sys.argv) > 1:
             elif self.path == '/tunnel.html':
                 other = 'route'
                 gv = registry.Popen(('python', '-c', r"""if 1:
-                    import math, xmlrpclib
-                    g = xmlrpclib.ServerProxy('http://localhost/').topology()
+                    import math
+                    from re6st.registry import RegistryClient
+                    g = eval(RegistryClient('http://localhost/').topology())
                     print 'digraph {'
                     a = 2 * math.pi / len(g)
                     z = 4
@@ -293,7 +299,7 @@ if len(sys.argv) > 1:
                         for p in p or ():
                             print '"%s" -> "%s";' % (n, title(p))
                     print '}'
-                """), stdout=subprocess.PIPE).communicate()[0]
+                """), stdout=subprocess.PIPE, cwd="..").communicate()[0]
                 if gv:
                     svg = subprocess.Popen(('neato', '-Tsvg'),
                         stdin=subprocess.PIPE, stdout=subprocess.PIPE,

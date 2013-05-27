@@ -1,16 +1,16 @@
-import logging, sqlite3, socket, subprocess, xmlrpclib, time
-from urllib import splittype, splithost, splitport
-import utils
+import logging, sqlite3, socket, subprocess, time
+from . import utils
 
 
 class PeerDB(object):
 
     # internal ip = temp arg/attribute
-    def __init__(self, db_path, registry, key_path, prefix, db_size=200):
+    def __init__(self, db_path, registry, key_path, network, prefix,
+                       db_size=200):
         self._prefix = prefix
         self._db_size = db_size
         self._key_path = key_path
-        self._proxy = xmlrpclib.ServerProxy(registry)
+        self._registry = registry
 
         logging.info('Initialize cache ...')
         self._db = sqlite3.connect(db_path, isolation_level=None)
@@ -25,27 +25,35 @@ class PeerDB(object):
             value text)""")
         q('ATTACH DATABASE ":memory:" AS volatile')
         q("""CREATE TABLE volatile.stat (
-            peer TEXT PRIMARY KEY REFERENCES peer(prefix) ON DELETE CASCADE,
+            peer TEXT PRIMARY KEY,
             try INTEGER NOT NULL DEFAULT 0)""")
         q("CREATE INDEX volatile.stat_try ON stat(try)")
         q("INSERT INTO volatile.stat (peer) SELECT prefix FROM peer")
         try:
             a = q("SELECT value FROM config WHERE name='registry'").next()[0]
         except StopIteration:
-            logging.info("Private IP of registry not in cache."
-                         " Asking registry via its public IP ...")
-            retry = 1
-            while True:
-                try:
-                    a = self._proxy.getPrivateAddress()
-                    break
-                except socket.error, e:
-                    logging.warning(e)
-                    time.sleep(retry)
-                    retry = min(60, retry * 2)
-            q("INSERT INTO config VALUES ('registry',?)", (a,))
-        self.registry_ip = utils.binFromIp(a)
+            a = self._updateRegistryIP()
+        else:
+            self.registry_ip = utils.binFromIp(a)
+            if not self.registry_ip.startswith(network):
+                a = self._updateRegistryIP()
         logging.info("Cache initialized. Registry IP is %s", a)
+
+    def _updateRegistryIP(self):
+        logging.info("Asking registry its private IP...")
+        retry = 1
+        while True:
+            try:
+                a = self._registry.getPrivateAddress(self._prefix)
+                break
+            except socket.error, e:
+                logging.warning(e)
+                time.sleep(retry)
+                retry = min(60, retry * 2)
+        self._db.execute("INSERT OR REPLACE INTO config VALUES ('registry',?)",
+                         (a,))
+        self.registry_ip = utils.binFromIp(a)
+        return a
 
     def log(self):
         if logging.getLogger().isEnabledFor(5):
@@ -83,31 +91,41 @@ class PeerDB(object):
     def getBootstrapPeer(self):
         logging.info('Getting Boot peer...')
         try:
-            bootpeer = self._proxy.getBootstrapPeer(self._prefix).data
-        except (socket.error, xmlrpclib.Fault), e:
+            bootpeer = self._registry.getBootstrapPeer(self._prefix)
+            prefix, address = utils.decrypt(self._key_path, bootpeer).split()
+        except (socket.error, subprocess.CalledProcessError, ValueError), e:
             logging.warning('Failed to bootstrap (%s)', e)
         else:
-            p = subprocess.Popen(('openssl', 'rsautl', '-decrypt', '-inkey', self._key_path),
-                    stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-            bootpeer = p.communicate(bootpeer)[0].split()
-            if bootpeer[0] != self._prefix:
-                self.addPeer(*bootpeer)
-                return bootpeer
+            if prefix != self._prefix:
+                self.addPeer(prefix, address)
+                return prefix, address
             logging.warning('Buggy registry sent us our own address')
 
-    def addPeer(self, prefix, address, force=False):
+    def addPeer(self, prefix, address, set_preferred=False):
         logging.debug('Adding peer %s: %s', prefix, address)
         with self._db:
             q = self._db.execute
             try:
                 (a,), = q("SELECT address FROM peer WHERE prefix=?", (prefix,))
-                a = a != address if force else \
-                    set(a.split(';')) != set(address.split(';'))
+                if set_preferred:
+                    preferred = address.split(';')
+                    address = a
+                else:
+                    preferred = a.split(';')
+                def key(a):
+                    try:
+                        return preferred.index(a)
+                    except ValueError:
+                        return len(preferred)
+                address = ';'.join(sorted(address.split(';'), key=key))
             except ValueError:
-                q("DELETE FROM peer WHERE prefix IN (SELECT peer"
-                  " FROM volatile.stat ORDER BY try, RANDOM() LIMIT ?,-1)",
-                  (self._db_size,))
-                a = True
-            if a:
+                a = q("SELECT peer FROM volatile.stat ORDER BY try, RANDOM()"
+                      " LIMIT ?,-1", (self._db_size,)).fetchall()
+                if a:
+                    qq = self._db.executemany
+                    qq("DELETE FROM peer WHERE prefix IN (?)", a)
+                    qq("DELETE FROM volatile.stat WHERE peer IN (?)", a)
+                # 'a != address' will evaluate to True because types differs
+            if a != address:
                 q("INSERT OR REPLACE INTO peer VALUES (?,?)", (prefix, address))
             q("INSERT OR REPLACE INTO volatile.stat VALUES (?,0)", (prefix,))

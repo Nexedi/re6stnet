@@ -41,8 +41,8 @@ class MultiGatewayManager(dict):
 
 class Connection(object):
 
-    def __init__(self, address, iface, prefix):
-        self.address_list = list(utils.parse_address(address))
+    def __init__(self, address_list, iface, prefix):
+        self.address_list = address_list
         self.iface = iface
         self.routes = 0
         self._prefix = prefix
@@ -78,8 +78,7 @@ class Connection(object):
         except TypeError:
             i = len(self.address_list) - 1
         if i:
-            db.addPeer(self._prefix, utils.dump_address(
-                self.address_list[i:] + self.address_list[:i]), True)
+            db.addPeer(self._prefix, ','.join(self.address_list[i]), True)
         else:
             db.connecting(self._prefix, 0)
 
@@ -106,7 +105,7 @@ class TunnelManager(object):
 
     def __init__(self, write_pipe, peer_db, openvpn_args, timeout,
                 refresh, client_count, iface_list, network, prefix,
-                address, ip_changed, encrypt, remote_gateway):
+                address, ip_changed, encrypt, remote_gateway, disable_proto):
         self._write_pipe = write_pipe
         self._peer_db = peer_db
         self._connecting = set()
@@ -125,6 +124,7 @@ class TunnelManager(object):
         self._encrypt = encrypt
         self._gateway_manager = MultiGatewayManager(remote_gateway) \
                                 if remote_gateway else None
+        self._disable_proto = disable_proto
         self._served = set()
 
         self.sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
@@ -216,6 +216,11 @@ class TunnelManager(object):
         if prefix in self._served or prefix in self._connection_dict:
             return False
         assert prefix != self._prefix, self.__dict__
+        address = [x for x in utils.parse_address(address)
+                     if x[2] not in self._disable_proto]
+        self._peer_db.connecting(prefix, 1)
+        if not address:
+            return False
         logging.info('Establishing a connection with %u/%u',
                      int(prefix, 2), len(prefix))
         iface = self.getFreeInterface(prefix)
@@ -224,7 +229,6 @@ class TunnelManager(object):
             for ip in c:
                 self._gateway_manager.add(ip, True)
         c.open(self._write_pipe, self._timeout, self._encrypt, self._ovpn_args)
-        self._peer_db.connecting(prefix, 1)
         return True
 
     def _makeNewTunnels(self, route_counted):
@@ -435,10 +439,13 @@ class TunnelManager(object):
             return
         code = ord(msg[0])
         if code == 1: # answer
-            # TODO: do not fail if message contains garbage
             # We parse the message in a way to discard a truncated line.
             for peer in msg[1:].split('\n')[:-1]:
-                prefix, address = peer.split()
+                try:
+                    prefix, address = peer.split()
+                    int(prefix, 2)
+                except ValueError:
+                    break
                 if prefix != self._prefix:
                     self._peer_db.addPeer(prefix, address)
                     try:

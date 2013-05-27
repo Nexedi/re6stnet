@@ -1,7 +1,7 @@
 #!/usr/bin/python
-import argparse, atexit, errno, os, subprocess, sqlite3, sys, xmlrpclib
+import argparse, atexit, errno, os, subprocess, sqlite3, sys, time
 from OpenSSL import crypto
-from re6st import utils
+from re6st import registry, utils
 
 def create(path, text=None, mode=0666):
     fd = os.open(path, os.O_CREAT | os.O_WRONLY | os.O_TRUNC, mode)
@@ -9,6 +9,9 @@ def create(path, text=None, mode=0666):
         os.write(fd, text)
     finally:
         os.close(fd)
+
+def loadCert(pem):
+    return crypto.load_certificate(crypto.FILETYPE_PEM, pem)
 
 def main():
     parser = argparse.ArgumentParser(
@@ -47,11 +50,11 @@ def main():
     dh_path = 'dh2048.pem'
 
     # Establish connection with server
-    s = xmlrpclib.ServerProxy(config.registry, allow_none=True)
+    s = registry.RegistryClient(config.registry)
 
     # Get CA
     ca = s.getCa()
-    network = utils.networkFromCa(ca)
+    network = utils.networkFromCa(loadCert(ca))
     if config.is_needed:
         route, err = subprocess.Popen(('ip', '-6', '-o', 'route', 'get',
                                        utils.ipFromBin(network)),
@@ -72,7 +75,7 @@ def main():
     req = crypto.X509Req()
     try:
         with open(cert_path) as f:
-            cert = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
+            cert = loadCert(f.read())
         components = dict(cert.get_subject().get_components())
         components.pop('CN', None)
     except IOError, e:
@@ -136,7 +139,12 @@ def main():
     os.ftruncate(cert_fd, len(cert))
     os.close(cert_fd)
 
-    print "Certificate setup complete."
+    cert = loadCert(cert)
+    not_after = utils.notAfter(cert)
+    print("Setup complete. Certificate is valid until %s UTC"
+          " and will be automatically renewed after %s UTC" % (
+        time.asctime(time.gmtime(not_after)),
+        time.asctime(time.gmtime(not_after - registry.RENEW_PERIOD))))
 
     if not os.path.lexists(conf_path):
         create(conf_path, """\
