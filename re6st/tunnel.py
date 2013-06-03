@@ -246,6 +246,8 @@ class TunnelManager(object):
             self._countRoutes()
         disconnected = self._disconnected
         if disconnected is not None:
+            logging.info("No route to registry (%u neighbours, %u distant"
+                         " peers)", len(disconnected), len(distant_peers))
             # We aren't the registry node and we have no tunnel to or from it,
             # so it looks like we are not connected to the network, and our
             # neighbours are in the same situation.
@@ -290,6 +292,8 @@ class TunnelManager(object):
             bootstrap = True
             for peer, address in self._peer_db.getPeerList():
                 if peer not in disconnected:
+                    logging.info("Try to bootstrap using peer %u/%u",
+                                 int(peer, 2), len(peer))
                     bootstrap = False
                     if self._makeTunnel(peer, address):
                         new += 1
