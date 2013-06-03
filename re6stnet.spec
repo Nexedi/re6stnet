@@ -12,7 +12,7 @@ Requires:  iproute
 Requires:  openssl
 Requires:  openvpn
 Requires:  python = 2.7
-Requires:  pyOpenSSL
+Requires:  pyOpenSSL >= 0.13
 
 %description
 
