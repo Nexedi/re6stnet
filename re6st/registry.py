@@ -179,12 +179,7 @@ class RegistryServer(object):
         req = crypto.load_certificate_request(crypto.FILETYPE_PEM, req)
         with self.lock:
             with self.db:
-                if token is None:
-                    prefix_len = self.config.anonymous_prefix_length
-                    if not prefix_len:
-                        return
-                    email = None
-                else:
+                if token:
                     try:
                         token, email, prefix_len, _ = self.db.execute(
                             "SELECT * FROM token WHERE token = ?",
@@ -193,6 +188,11 @@ class RegistryServer(object):
                         return
                     self.db.execute("DELETE FROM token WHERE token = ?",
                                     (token,))
+                else:
+                    prefix_len = self.config.anonymous_prefix_length
+                    if not prefix_len:
+                        return
+                    email = None
                 prefix = self._getPrefix(prefix_len)
                 self.db.execute("UPDATE cert SET email = ? WHERE prefix = ?",
                                 (email, prefix))
