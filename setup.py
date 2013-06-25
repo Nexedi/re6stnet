@@ -38,7 +38,7 @@ setup(
             'ovpn-client',
         ],
     },
-    install_requires = ['pyOpenSSL', 'miniupnpc'],
+    install_requires = ['pyOpenSSL >= 0.13', 'miniupnpc'],
     #dependency_links = [
     #    "http://miniupnp.free.fr/files/download.php?file=miniupnpc-1.7.20120714.tar.gz#egg=miniupnpc-1.7",
     #    ],

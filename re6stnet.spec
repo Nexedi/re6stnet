@@ -11,8 +11,8 @@ Requires:  babeld >= 1.3.1
 Requires:  iproute
 Requires:  openssl
 Requires:  openvpn
-Requires:  python = 2.7
-Requires:  pyOpenSSL
+Requires:  python >= 2.7
+Requires:  pyOpenSSL >= 0.13
 
 %description
 
