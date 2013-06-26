@@ -481,6 +481,6 @@ class TunnelManager(object):
                            for x in (self._connection_dict, self._served)
                            for x in x)
                 try:
-                    self.sock.sendto(''.join(msg), address)
+                    self.sock.sendto(''.join(msg), address[:2])
                 except socket.error, e:
                     pass
