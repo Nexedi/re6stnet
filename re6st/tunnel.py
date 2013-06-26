@@ -468,7 +468,7 @@ class TunnelManager(object):
                 msg.append(encode(self._peer_db.getPeerList().next()))
             if msg:
                 try:
-                    self.sock.sendto('\1' + ''.join(msg), address)
+                    self.sock.sendto('\1' + ''.join(msg), address[:2])
                 except socket.error, e:
                     logging.info('Failed to reply to %s (%s)', address, e)
         elif code == 255:

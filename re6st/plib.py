@@ -13,6 +13,7 @@ def openvpn(iface, encrypt, *args, **kw):
         '--persist-tun',
         '--persist-key',
         '--script-security', '2',
+        '--mute-replay-warnings',
         '--up', ovpn_client,
         #'--user', 'nobody', '--group', 'nogroup',
         ] + list(args)
