@@ -361,11 +361,7 @@ def main():
                 t.daemon = True
                 # t.start()
 
-            # adding tap-windows driver will break others, so we add
-            # all drivers here
-            if sys.platform == 'cygwin':
-                [ ip('vpntap', 'dev', x) for x in tunnel_interfaces ]
-            else:
+            if not sys.platform == 'cygwin':
                 ip('route', 'unreachable', *x)
 
             config.babel_args += config.iface_list
