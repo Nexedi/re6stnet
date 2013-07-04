@@ -5,9 +5,6 @@ here = os.path.realpath(os.path.dirname(__file__))
 ovpn_server = os.path.join(here, 'ovpn-server')
 ovpn_client = os.path.join(here, 'ovpn-client')
 ovpn_log = None
-if sys.platform == 'cygwin':
-    ovpn_server = 'ovpn-cygwin.bat %s' % ovpn_server
-    ovpn_client = 'ovpn-cygwin.bat %s' % ovpn_client
 
 def openvpn(iface, encrypt, *args, **kw):
     args = ['openvpn',
