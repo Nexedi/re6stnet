@@ -10,7 +10,7 @@ def openvpn(iface, encrypt, *args, **kw):
     args = ['openvpn',
         '--dev-type', 'tap',
         '--dev-node' if sys.platform == 'cygwin' else '--dev', iface,
-        '--persist-tun',
+        '' if sys.platform == 'cygwin' else '--persist-tun',
         '--persist-key',
         '--script-security', '2',
         '--mute-replay-warnings',
