@@ -64,6 +64,7 @@ class Connection(object):
             '--tls-remote', '%u/%u' % (int(self._prefix, 2), len(self._prefix)),
             '--resolv-retry', '0',
             '--connect-retry-max', '3', '--tls-exit',
+            '--remap-usr1', 'SIGTERM',
             '--ping-exit', str(timeout),
             '--route-up', '%s %u' % (plib.ovpn_client, write_pipe),
             *ovpn_args)
