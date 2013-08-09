@@ -134,6 +134,11 @@ def maybe_renew(path, cert, info, renew):
         new_path = path + '.new'
         with open(new_path, 'w') as f:
             f.write(pem)
+        try:
+          s = os.stat(path)
+          os.chown(new_path, s.st_uid, s.st_gid)
+        except OSError:
+          pass
         os.rename(new_path, path)
         logging.info("%s renewed until %s UTC",
             info, time.asctime(time.gmtime(utils.notAfter(cert))))
