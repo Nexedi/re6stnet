@@ -2,8 +2,9 @@ import logging, errno, os, sys
 from . import utils
 
 here = os.path.realpath(os.path.dirname(__file__))
-ovpn_server = os.path.join(here, 'ovpn-server')
-ovpn_client = os.path.join(here, 'ovpn-client')
+script_ext = '.exe' if sys.platform == 'cygwin' else ''
+ovpn_server = os.path.join(here, 'ovpn-server' + script_ext)
+ovpn_client = os.path.join(here, 'ovpn-client' + script_ext)
 ovpn_log = None
 
 def openvpn(iface, encrypt, *args, **kw):
