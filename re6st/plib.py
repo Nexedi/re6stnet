@@ -1,8 +1,12 @@
-import logging, errno, os, sys
+import logging, errno, os, subprocess, sys
 from . import utils
 
 here = os.path.realpath(os.path.dirname(__file__))
-script_ext = '.exe' if sys.platform == 'cygwin' else ''
+if sys.platform == 'cygwin':
+    here = subprocess.check_output(['cygpath', '-m', here]).strip()
+    script_ext = '.exe'
+else:
+    script_ext = ''
 ovpn_server = os.path.join(here, 'ovpn-server' + script_ext)
 ovpn_client = os.path.join(here, 'ovpn-client' + script_ext)
 ovpn_log = None
