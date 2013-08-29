@@ -313,36 +313,21 @@ class TunnelManager(object):
 
     if sys.platform == 'cygwin':
         def _iterRoutes(self):
-            interface_dict = {}
-            interfaces = subprocess.check_output(
-                ('netsh', 'interface', 'ipv6', 'show', 'interface'),
-                stderr=subprocess.STDOUT)
-            for line in interfaces.splitlines():
-                if not line == '':
-                    fs = line.split(None, 4)
-                    if fs[0].isdigit():
-                        interface_dict[fs[0].strip()] = fs[4].strip()
-            routing_table = subprocess.check_output(
-                ('netsh', 'interface', 'ipv6', 'show', 'route', 'verbose'),
-                stderr=subprocess.STDOUT)
             # Before Vista
             if platform.system()[10:11] == '5':
-                pname = 'Prefix'
-                ifname = lambda a : a
-            # From Vista later
+                args = ('netsh', 'interface', 'ipv6', 'show', 'route', 'verbose')
             else:
-                pname = 'Destination Prefix'
-                ifname = interface_dict.get
+                args = ('ipwin', 'ipv6', 'show', 'route', 'verbose')
+            routing_table = subprocess.check_output(args, stderr=subprocess.STDOUT)
             for line in routing_table.splitlines():
                 fs = line.split(':', 1)
                 test = fs[0].startswith
-                if test(pname):
+                if test('Prefix'):
                     prefix, prefix_len = fs[1].split('/', 1)
                 elif test('Interface'):
-                    yield (ifname(fs[1].strip()),
-                        utils.binFromIp(prefix.strip()),
-                        int(prefix_len))
-
+                    yield (fs[1].strip(),
+                           utils.binFromIp(prefix.strip()),
+                           int(prefix_len))
     else:
         def _iterRoutes(self):
             with open('/proc/net/ipv6_route') as f:
