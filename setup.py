@@ -36,6 +36,8 @@ setup(
         're6st': [
             'ovpn-server',
             'ovpn-client',
+            'ovpn-server.exe',
+            'ovpn-client.exe',
         ],
     },
     install_requires = ['pyOpenSSL >= 0.13', 'miniupnpc'],
