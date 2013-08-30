@@ -170,7 +170,7 @@ def main():
     utils.makedirs(config.state)
     db_path = os.path.join(config.state, 'peers.db')
     if config.ovpnlog:
-        plib.ovpn_log = config.log
+        plib.ovpn_log = subprocess.check_output(['cygpath', '-m', config.log]).strip()
 
     signal.signal(signal.SIGHUP, lambda *args: sys.exit(-1))
     signal.signal(signal.SIGTERM, lambda *args:
