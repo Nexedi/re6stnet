@@ -2,7 +2,6 @@
 
 int main(int argc, char *argv[])
 {
-  char *p;
   int pd;
   char buf[512];
   int n;
@@ -22,8 +21,8 @@ int main(int argc, char *argv[])
     return 1;
   }
 
-  pd = strtol(argv[1], &p, 10);
-  if (! (*p == 0)) {
+  pd = open(argv[1], 1);
+  if (pd == -1) {
     fprintf(stderr, "invalid pipe %s\n", argv[1]);
     return 1;
   }

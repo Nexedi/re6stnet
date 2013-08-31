@@ -65,7 +65,7 @@ class Connection(object):
             '--resolv-retry', '0',
             '--connect-retry-max', '3', '--tls-exit',
             '--ping-exit', str(timeout),
-            '--route-up', '%s %u' % (plib.ovpn_client, write_pipe),
+            '--route-up', '%s /proc/%u/fd/%u' % (plib.ovpn_client, os.getpid(), write_pipe),
             *ovpn_args)
         _retry += 1
         self._retry = _retry < len(self.address_list) and (
