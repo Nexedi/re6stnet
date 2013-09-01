@@ -178,3 +178,12 @@ def encrypt(cert, data):
     if p.returncode:
         raise subprocess.CalledProcessError(p.returncode, 'openssl', err)
     return out
+
+def get_pipename(pipe_id):
+    if pipe_id is not None:
+        path = '/proc/%u' % os.getpid()
+        with open(os.path.join(path, 'winpid'), 'r') as f:
+            winpid = f.readline()
+        r = os.path.realpath('%s/fd/%s' % (path, pipe_id)).split('/')
+        r[1] = winpid
+        return '/'.join(r)

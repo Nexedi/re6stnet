@@ -1,20 +1,12 @@
+#include <windows.h>
 #include <stdio.h>
-/*
-if os.environ['script_type'] == 'client-connect':
-    # Send client its external ip address
-    with open(sys.argv[2], 'w') as f:
-        f.write('push "setenv-safe external_ip %s"\n'
-                % os.environ['trusted_ip'])
 
-# Write into pipe connect/disconnect events
-arg1 = sys.argv[1]
-if arg1 != 'None':
-    os.write(int(arg1), '%(script_type)s %(common_name)s %(trusted_ip)s\n'
-                        % os.environ)
-*/
+HANDLE open_pipe(const char *pname);
+
 int main(int argc, char *argv[])
 {
-  int pd;
+  HANDLE pd;
+  DWORD m;
   char buf[512];
   int n;
   char *s, *s1, *s2;
@@ -66,12 +58,6 @@ int main(int argc, char *argv[])
   if (strcmp(argv[1], "None") == 0)
     return 0;
 
-  pd = open(argv[1], 1);
-  if (pd == -1) {
-    fprintf(stderr, "invalid pipe %s\n", argv[1]);
-    return 1;
-  }
-
   /* %(script_type)s %(common_name)s %(OPENVPN_external_ip)s */
   s1 = (char*)getenv("common_name");
   if (s1 == NULL) {
@@ -85,10 +71,18 @@ int main(int argc, char *argv[])
     return 1;
   }
 
-  if (write(pd, buf, n) == -1) {
-    fprintf(stderr, "write pipe failed\n");
+  pd = open_pipe(argv[1]);
+  if (pd == NULL) {
+    fprintf(stderr, "invalid pipe %s\n", argv[1]);
     return 1;
   }
 
+  if (!WriteFile(pd, buf, n, &m, NULL)) {
+    fprintf(stderr, "write pipe failed\n");
+    CloseHandle(pd);
+    return 1;
+  }
+
+  CloseHandle(pd);
   return 0;
 }

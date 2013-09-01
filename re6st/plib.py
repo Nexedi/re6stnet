@@ -31,7 +31,7 @@ def openvpn(iface, encrypt, *args, **kw):
 
 
 def server(iface, max_clients, dh_path, pipe_fd, port, proto, encrypt, *args, **kw):
-    client_script = '%s /proc/%u/fd/%s' % (ovpn_server, os.getpid(), pipe_fd)
+    client_script = '%s %s' % (ovpn_server, utils.get_pipename(pipe_fd))
     if pipe_fd is not None:
         args = ('--client-disconnect', client_script) + args
     return openvpn(iface, encrypt,
