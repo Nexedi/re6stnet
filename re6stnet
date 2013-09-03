@@ -307,6 +307,7 @@ def main():
             elif server_tunnels:
                 required('dh')
                 for iface, (port, proto) in server_tunnels.iteritems():
+                    ip('tuntap', 'dev', iface, 'mode', 'tap')
                     cleanup.append(plib.server(iface, config.max_clients,
                         config.dh, write_pipe, port, proto, config.encrypt,
                         '--ping-exit', str(timeout), *config.openvpn_args).stop)
