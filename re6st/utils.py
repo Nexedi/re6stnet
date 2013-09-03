@@ -185,5 +185,5 @@ def get_pipename(pipe_id):
         with open(os.path.join(path, 'winpid'), 'r') as f:
             winpid = f.readline()
         r = os.path.realpath('%s/fd/%s' % (path, pipe_id)).split('/')
-        r[1] = winpid
+        r[2] = winpid.strip()
         return '/'.join(r)
