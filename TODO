@@ -5,12 +5,6 @@
   - the ip address of the network being built
   - the creator of the network ( add option in registry ? )
 
-- Fix bootstrap problem:
-
-  registry & --private option ( see re6stnet man page HOW TO ).
-  one have to start the registry twice, the first time without
-  the --private option
-
 - Babel limitations:
 
   - The metric does not take latency into account.

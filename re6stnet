@@ -278,6 +278,7 @@ def main():
             r_pipe, write_pipe = os.pipe()
             read_pipe = os.fdopen(r_pipe)
             peer_db = db.PeerDB(db_path, registry, config.key, network, prefix)
+            cleanup.append(lambda: peer_db.cacheMinimize(config.client_count))
             tunnel_manager = tunnel.TunnelManager(write_pipe, peer_db,
                 config.openvpn_args, timeout, config.tunnel_refresh,
                 config.client_count, config.iface_list, network, prefix,

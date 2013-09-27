@@ -75,9 +75,6 @@ def main():
             help="SMTP host to send confirmation emails. For debugging"
                  " purpose, it can also be an absolute or existing path to"
                  " a mailbox file")
-    _('--private',
-            help="re6stnet IP of the node on which runs the registry."
-                 " Required for normal operation.")
     _('--prefix-length', default=16, type=int,
             help="Default length of allocated prefixes.")
     _('--anonymous-prefix-length', type=int,

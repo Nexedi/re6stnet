@@ -30,24 +30,27 @@ class getcallargs(type):
 class RegistryServer(object):
 
     __metaclass__ = getcallargs
+    _peers = 0, ()
 
     def __init__(self, config):
         self.config = config
         self.cert_duration = 365 * 86400
         self.lock = threading.Lock()
         self.sessions = {}
-
-        if self.config.private:
-            self.sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
-        else:
-            logging.warning('You have declared no private address'
-                    ', either this is the first start, or you should'
-                    'check you configuration')
+        self.sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
 
         # Database initializing
         utils.makedirs(os.path.dirname(self.config.db))
         self.db = sqlite3.connect(self.config.db, isolation_level=None,
                                                   check_same_thread=False)
+        self.db.execute("""CREATE TABLE IF NOT EXISTS config (
+                        name text primary key,
+                        value text)""")
+        try:
+            (self.prefix,), = self.db.execute(
+                "SELECT value FROM config WHERE name='prefix'")
+        except ValueError:
+            self.prefix = None
         self.db.execute("""CREATE TABLE IF NOT EXISTS token (
                         token text primary key not null,
                         email text not null,
@@ -157,7 +160,7 @@ class RegistryServer(object):
             s.sendmail(self._email, email, msg.as_string())
             s.quit()
 
-    def _getPrefix(self, prefix_len):
+    def _newPrefix(self, prefix_len):
         max_len = 128 - len(self.network)
         assert 0 < prefix_len <= max_len
         try:
@@ -173,7 +176,7 @@ class RegistryServer(object):
         if len(prefix) < max_len or '1' in prefix:
             return prefix
         self.db.execute("UPDATE cert SET cert = 'reserved' WHERE prefix = ?", (prefix,))
-        return self._getPrefix(prefix_len)
+        return self._newPrefix(prefix_len)
 
     def requestCertificate(self, token, req):
         req = crypto.load_certificate_request(crypto.FILETYPE_PEM, req)
@@ -193,9 +196,13 @@ class RegistryServer(object):
                     if not prefix_len:
                         return
                     email = None
-                prefix = self._getPrefix(prefix_len)
+                prefix = self._newPrefix(prefix_len)
                 self.db.execute("UPDATE cert SET email = ? WHERE prefix = ?",
                                 (email, prefix))
+                if self.prefix is None:
+                    self.prefix = prefix
+                    self.db.execute(
+                        "INSERT INTO config VALUES ('prefix',?)", (prefix,))
                 return self._createCertificate(prefix, req.get_subject(),
                                                        req.get_pubkey())
 
@@ -227,37 +234,51 @@ class RegistryServer(object):
     def getCa(self):
         return crypto.dump_certificate(crypto.FILETYPE_PEM, self.ca)
 
+    def getPrefix(self, cn):
+        return self.prefix
+
     def getPrivateAddress(self, cn):
-        return self.config.private
+        # BBB: Deprecated by getPrefix.
+        return utils.ipFromBin(self.network + self.prefix)
 
     def getBootstrapPeer(self, cn):
         with self.lock:
             cert = self._getCert(cn)
-            address = self.config.private, tunnel.PORT
+            age, peers = self._peers
+            if time.time() < age or not peers:
+                peers = [x[1] for x in utils.iterRoutes(self.network)]
+                random.shuffle(peers)
+                self._peers = time.time() + 60, peers
+            peer = peers.pop()
+            if peer == cn:
+                # Very unlikely (e.g. peer restarted with empty cache),
+                # so don't bother looping over above code
+                # (in case 'peers' is empty).
+                peer = self.prefix
+            address = utils.ipFromBin(self.network + peer), tunnel.PORT
             self.sock.sendto('\2', address)
-            peer = None
-            while select.select([self.sock], [], [], peer is None)[0]:
+            start = time.time()
+            timeout = 1
+            # Loop because there may be answers from previous requests.
+            while select.select([self.sock], [], [], timeout)[0]:
                 msg = self.sock.recv(1<<16)
                 if msg[0] == '\1':
                     try:
-                        peer = msg[1:].split('\n')[-2]
-                    except IndexError:
-                        peer = ''
-        if peer is None:
-            raise EnvironmentError("Timeout while querying [%s]:%u" % address)
-        if not peer or peer.split()[0] == cn:
-            raise LookupError("No bootstrap peer found")
-        logging.info("Sending bootstrap peer: %s", peer)
-        return utils.encrypt(cert, peer)
+                        msg = msg[1:msg.index('\n')]
+                    except ValueError:
+                        continue
+                    if msg.split()[0] == peer:
+                        break
+                timeout = max(0, time.time() - start)
+            else:
+                raise EnvironmentError("Timeout while querying [%s]:%u"
+                                       % address)
+        logging.info("Sending bootstrap peer: %s", msg)
+        return utils.encrypt(cert, msg)
 
     def topology(self):
         with self.lock:
-            is_registry = utils.binFromIp(self.config.private
-                )[len(self.network):].startswith
-            peers = deque('%u/%u' % (int(x, 2), len(x))
-                for x, in self.db.execute("SELECT prefix FROM cert")
-                if is_registry(x))
-            assert len(peers) == 1
+            peers = deque(('%u/%u' % (int(self.prefix, 2), len(self.prefix)),))
             cookie = hex(random.randint(0, 1<<32))[2:]
             graph = dict.fromkeys(peers)
             asked = 0

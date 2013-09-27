@@ -1,10 +1,8 @@
 import logging, random, socket, subprocess, time
 from collections import deque
-from itertools import chain
 from . import plib, utils
 
 PORT = 326
-RTF_CACHE = 0x01000000  # cache entry
 
 # Be careful the refresh interval should let the routes be established
 
@@ -278,8 +276,6 @@ class TunnelManager(object):
                     count -= self._makeTunnel(peer, address)
                 else:
                     ip = utils.ipFromBin(self._network + peer)
-                    # TODO: Send at least 1 address. This helps the registry
-                    #       node filling its cache when building a new network.
                     try:
                         self.sock.sendto('\2', (ip, PORT))
                     except socket.error, e:
@@ -317,36 +313,21 @@ class TunnelManager(object):
         del self._distant_peers[:]
         for conn in self._connection_dict.itervalues():
             conn.routes = 0
-        a = len(self._network)
-        b = a + len(self._prefix)
         other = []
-        with open('/proc/net/ipv6_route') as f:
-            self._last_routing_table = f.read()
-            for line in self._last_routing_table.splitlines():
-                line = line.split()
-                iface = line[-1]
-                if iface == 'lo' or int(line[-2], 16) & RTF_CACHE:
-                    continue
-                ip = bin(int(line[0], 16))[2:].rjust(128, '0')
-                if ip[:a] != self._network or ip[a:b] == self._prefix:
-                    continue
-                prefix_len = int(line[1], 16)
-                prefix = ip[a:prefix_len]
-                logging.trace('Route on iface %s detected to %s/%u',
-                              iface, utils.ipFromBin(ip), prefix_len)
-                nexthop = self._iface_to_prefix.get(iface)
-                if nexthop:
-                    self._connection_dict[nexthop].routes += 1
-                if prefix in self._served or prefix in self._connection_dict:
-                    continue
-                if iface in self._iface_list:
-                    other.append(prefix)
-                else:
-                    self._distant_peers.append(prefix)
-        is_registry = self._peer_db.registry_ip[a:].startswith
-        if is_registry(self._prefix) or any(is_registry(peer)
-              for peer in chain(self._distant_peers, other,
-                                self._served, self._connection_dict)):
+        for iface, prefix in utils.iterRoutes(self._network, self._prefix):
+            assert iface != 'lo', (iface, prefix)
+            nexthop = self._iface_to_prefix.get(iface)
+            if nexthop:
+                self._connection_dict[nexthop].routes += 1
+            if prefix in self._served or prefix in self._connection_dict:
+                continue
+            if iface in self._iface_list:
+                other.append(prefix)
+            else:
+                self._distant_peers.append(prefix)
+        registry = self._peer_db.registry_prefix
+        if registry == self._prefix or any(registry in x for x in (
+              self._distant_peers, other, self._served, self._connection_dict)):
             self._disconnected = None
             # XXX: When there is no new peer to connect when looking at routes
             #      coming from tunnels, we'd like to consider those discovered
@@ -410,37 +391,34 @@ class TunnelManager(object):
             return
         code = ord(msg[0])
         if code == 1: # answer
-            # We parse the message in a way to discard a truncated line.
-            for peer in msg[1:].split('\n')[:-1]:
-                try:
-                    prefix, address = peer.split()
-                    int(prefix, 2)
-                except ValueError:
-                    break
+            # Old versions may send additional and obsolete addresses.
+            # Ignore them, as well as truncated lines.
+            try:
+                prefix, address = msg[1:msg.index('\n')].split()
+                int(prefix, 2)
+            except ValueError:
+                pass
+            else:
                 if prefix != self._prefix:
                     self._peer_db.addPeer(prefix, address)
                     try:
                         self._connecting.remove(prefix)
                     except KeyError:
-                        continue
-                    self._makeTunnel(prefix, address)
+                        pass
+                    else:
+                        self._makeTunnel(prefix, address)
         elif code == 2: # request
-            encode = '%s %s\n'.__mod__
             if self._address:
-                msg = [encode((self._prefix, self._address))]
-            else: # I don't know my IP yet!
-                msg = []
-            # Add an extra random peer, mainly for the registry.
-            if random.randint(0, self._peer_db.getPeerCount()):
-                msg.append(encode(self._peer_db.getPeerList().next()))
-            if msg:
+                msg = '\1%s %s\n' % (self._prefix, self._address)
                 try:
-                    self.sock.sendto('\1' + ''.join(msg), address[:2])
+                    self.sock.sendto(msg, address[:2])
                 except socket.error, e:
                     logging.info('Failed to reply to %s (%s)', address, e)
+            #else: # I don't know my IP yet!
         elif code == 255:
             # the registry wants to know the topology for debugging purpose
-            if utils.binFromIp(address[0]) == self._peer_db.registry_ip:
+            if utils.binFromIp(address[0])[len(self._network):].startswith(
+                  self._peer_db.registry_prefix):
                 msg = ['\xfe%s%u/%u\n%u\n' % (msg[1:],
                     int(self._prefix, 2), len(self._prefix),
                     len(self._connection_dict))]
