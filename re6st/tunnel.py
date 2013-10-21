@@ -311,34 +311,6 @@ class TunnelManager(object):
                     if self._makeTunnel(*peer):
                         break
 
-    if sys.platform == 'cygwin':
-        def _iterRoutes(self):
-            # Before Vista
-            if platform.system()[10:11] == '5':
-                args = ('netsh', 'interface', 'ipv6', 'show', 'route', 'verbose')
-            else:
-                args = ('ipwin', 'ipv6', 'show', 'route', 'verbose')
-            routing_table = subprocess.check_output(args, stderr=subprocess.STDOUT)
-            for line in routing_table.splitlines():
-                fs = line.split(':', 1)
-                test = fs[0].startswith
-                if test('Prefix'):
-                    prefix, prefix_len = fs[1].split('/', 1)
-                elif test('Interface'):
-                    yield (fs[1].strip(),
-                           utils.binFromIp(prefix.strip()),
-                           int(prefix_len))
-    else:
-        def _iterRoutes(self):
-            with open('/proc/net/ipv6_route') as f:
-                routing_table = f.read()
-            for line in routing_table.splitlines():
-                line = line.split()
-                iface = line[-1]
-                if iface != 'lo' and not (int(line[-2], 16) & RTF_CACHE):
-                    yield (iface, bin(int(line[0], 16))[2:].rjust(128, '0'),
-                                  int(line[1], 16))
-
     def _countRoutes(self):
         logging.debug('Starting to count the routes on each interface...')
         del self._distant_peers[:]

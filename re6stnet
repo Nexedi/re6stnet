@@ -361,7 +361,7 @@ def main():
                         exit(1)
                 t = threading.Thread(target=check_no_default_route)
                 t.daemon = True
-                # t.start()
+                t.start()
 
             if not sys.platform == 'cygwin':
                 ip('route', 'unreachable', *x)
