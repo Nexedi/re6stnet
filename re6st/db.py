@@ -31,29 +31,24 @@ class PeerDB(object):
         q("INSERT INTO volatile.stat (peer) SELECT prefix FROM peer")
         try:
             a = q("SELECT value FROM config WHERE name='registry'").next()[0]
-        except StopIteration:
-            a = self._updateRegistryIP()
-        else:
-            self.registry_ip = utils.binFromIp(a)
-            if not self.registry_ip.startswith(network):
-                a = self._updateRegistryIP()
-        logging.info("Cache initialized. Registry IP is %s", a)
-
-    def _updateRegistryIP(self):
-        logging.info("Asking registry its private IP...")
-        retry = 1
-        while True:
-            try:
-                a = self._registry.getPrivateAddress(self._prefix)
-                break
-            except socket.error, e:
-                logging.warning(e)
-                time.sleep(retry)
-                retry = min(60, retry * 2)
-        self._db.execute("INSERT OR REPLACE INTO config VALUES ('registry',?)",
-                         (a,))
-        self.registry_ip = utils.binFromIp(a)
-        return a
+            int(a, 2)
+        except (StopIteration, ValueError):
+            logging.info("Asking registry its private IP...")
+            retry = 1
+            while True:
+                try:
+                    a = self._registry.getPrefix(self._prefix)
+                    int(a, 2)
+                    break
+                except socket.error, e:
+                    logging.warning(e)
+                    time.sleep(retry)
+                    retry = min(60, retry * 2)
+            q("INSERT OR REPLACE INTO config VALUES ('registry',?)", (a,))
+            self._db.commit()
+        self.registry_prefix = a
+        logging.info("Cache initialized. Prefix of registry node is %s/%u",
+                     int(a, 2), len(a))
 
     def log(self):
         if logging.getLogger().isEnabledFor(5):
@@ -63,6 +58,19 @@ class PeerDB(object):
                     " WHERE prefix=peer ORDER BY prefix"):
                 logging.trace("- %s: %s%s", prefix, address,
                               ' (blacklisted)' if _try else '')
+
+    def cacheMinimize(self, size):
+        with self._db:
+            self._cacheMinimize(size)
+
+    def _cacheMinimize(self, size):
+        a = self._db.execute(
+            "SELECT peer FROM volatile.stat ORDER BY try, RANDOM() LIMIT ?,-1",
+            (size,)).fetchall()
+        if a:
+            q = self._db.executemany
+            q("DELETE FROM peer WHERE prefix IN (?)", a)
+            q("DELETE FROM volatile.stat WHERE peer IN (?)", a)
 
     def connecting(self, prefix, connecting):
         self._db.execute("UPDATE volatile.stat SET try=? WHERE peer=?",
@@ -119,13 +127,8 @@ class PeerDB(object):
                         return len(preferred)
                 address = ';'.join(sorted(address.split(';'), key=key))
             except ValueError:
-                a = q("SELECT peer FROM volatile.stat ORDER BY try, RANDOM()"
-                      " LIMIT ?,-1", (self._db_size,)).fetchall()
-                if a:
-                    qq = self._db.executemany
-                    qq("DELETE FROM peer WHERE prefix IN (?)", a)
-                    qq("DELETE FROM volatile.stat WHERE peer IN (?)", a)
-                # 'a != address' will evaluate to True because types differs
+                self._cacheMinimize(self._db_size)
+                a = None
             if a != address:
                 q("INSERT OR REPLACE INTO peer VALUES (?,?)", (prefix, address))
             q("INSERT OR REPLACE INTO volatile.stat VALUES (?,0)", (prefix,))

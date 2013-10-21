@@ -117,25 +117,20 @@ certificates, as follows: translate the significant part to hexadecimal
               -days 365 -out ca.crt
 
 The CA email will be used as sender for mails containing tokens.
-
-Now start the registry in order to setup the main re6st node, which should be
-on the same machine::
+The registry can now be started::
 
   re6st-registry --ca ca.crt --key ca.key --mailhost smtp.example.com
+
+Like the registry, the first registered node should be always up because its
+presence is used by all other nodes to garantee they are connected to the
+network. It is therefore recommended to run it on the same machine as the
+registry::
+
   re6st-conf --registry http://localhost/
 
 If `re6st-conf` is run in the directory containing CA files, ca.crt will be
-overridden without harm.
-
-Note that the registry was started without specifying the re6st IP of the main
-node, because it was not known yet. For your network to work, it has to be
-restarted with appropriate --private option.
-
-Let's suppose your first node is allocated subnet 2001:db8:42::/64.
-Its IP is the first unicast address::
-
-  re6st-registry --private 2001:db8:42::1 ...
-  re6stnet --registry http://localhost/ --ip re6st.example.com ...
+overridden without harm. See previous section for more information to create
+a node.
 
 TROUBLESHOOTING
 ===============

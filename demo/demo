@@ -33,6 +33,29 @@ def _add_interface(node, iface):
     return Node__add_interface(node, iface)
 nemu.Node._add_interface = _add_interface
 
+def get_addr_data():
+    ipdata = backticks([IP_PATH, "-o", "addr", "list"])
+
+    byidx = {}
+    bynam = {}
+    for line in ipdata.split("\n"):
+        if line == "":
+            continue
+        match = re.search(r'^(\d+):\s+(\S+?)(:?)\s+(.*)', line)
+        if not match:
+            raise RuntimeError("Invalid `ip' command output")
+        idx = int(match.group(1))
+        name = match.group(2)
+        # <patch>
+        if name not in bynam:
+            bynam[name] = byidx[idx] = []
+            if match.group(3): # BBB: old iproute also shows link info
+                continue
+        # </patch>
+        bynam[name].append(_parse_ip_addr(match.group(4)))
+    return byidx, bynam
+nemu.iproute.get_addr_data.func_code = get_addr_data.func_code
+
 # create nodes
 for name in """internet=I registry=R
                           gateway1=g1 machine1=1 machine2=2

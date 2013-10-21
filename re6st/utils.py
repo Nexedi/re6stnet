@@ -199,6 +199,33 @@ def iterRoutes(network, exclude_prefix=None):
             if prefix and prefix != exclude_prefix:
                 yield iface, prefix
 
+if 1:
+    def _iterRoutes():
+        with open('/proc/net/ipv6_route') as f:
+            routing_table = f.read()
+        for line in routing_table.splitlines():
+            line = line.split()
+            iface = line[-1]
+            if 0 < int(line[5], 16) < 1 << 31: # positive metric
+                yield (iface, bin(int(line[0], 16))[2:].rjust(128, '0'),
+                              int(line[1], 16))
+
+_iterRoutes.__doc__ = """Iterates over all routes
+
+    Amongst all returned routes starting with re6st prefix:
+    - one is the local one with our prefix
+    - any route with null prefix will be ignored
+    - other are reachable routes installed by babeld
+    """
+
+def iterRoutes(network, exclude_prefix=None):
+    a = len(network)
+    for iface, ip, prefix_len in _iterRoutes():
+        if ip[:a] == network:
+            prefix = ip[a:prefix_len]
+            if prefix and prefix != exclude_prefix:
+                yield iface, prefix
+
 def decrypt(key_path, data):
     p = subprocess.Popen(
         ('openssl', 'rsautl', '-decrypt', '-inkey', key_path),
