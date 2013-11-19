@@ -5,7 +5,8 @@ if os.environ['script_type'] == 'up':
     # OpenVPN unsets PATH before calling hooks
     # which is equivalent to set /bin:/usr/bin
     os.environ['PATH'] = '/bin:/sbin:/usr/bin:/usr/sbin'
-    os.execlp('ip', 'ip', 'link', 'set', os.environ['dev'], 'up')
+    os.execlp('ip', 'ip', 'link', 'set', os.environ['dev'], 'up',
+              'mtu', os.environ['tun_mtu'])
 
 # Write into pipe external ip address received
 os.write(int(sys.argv[1]), '%(script_type)s %(common_name)s %(OPENVPN_external_ip)s\n' % os.environ)
