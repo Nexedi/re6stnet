@@ -5,6 +5,7 @@ from collections import deque
 from OpenSSL import crypto
 from re6st import db, plib, tunnel, utils
 from re6st.registry import RegistryClient, RENEW_PERIOD
+from re6st.utils import exit
 
 class ReexecException(Exception):
     pass
@@ -148,10 +149,6 @@ def maybe_renew(path, cert, info, renew):
                   info, exc_info=exc_info)
     return cert, time.time() + 86400
 
-def exit(status):
-    exit.status = status
-    os.kill(os.getpid(), signal.SIGTERM)
-
 def main():
     # Get arguments
     config = getConfig()
@@ -179,9 +176,8 @@ def main():
     if config.ovpnlog:
         plib.ovpn_log = config.log
 
-    signal.signal(signal.SIGHUP, lambda *args: sys.exit(-1))
-    signal.signal(signal.SIGTERM, lambda *args:
-        sys.exit(getattr(exit, 'status', None)))
+    exit.signal(0, signal.SIGINT, signal.SIGTERM)
+    exit.signal(-1, signal.SIGHUP, signal.SIGUSR2)
 
     registry = RegistryClient(config.registry, config.key, ca)
     cert, next_renew = maybe_renew(config.cert, cert, "Certificate",
@@ -299,6 +295,7 @@ def main():
             tunnel_manager = write_pipe = None
 
         try:
+            exit.acquire()
             # Source address selection is defined by RFC 6724, and in most
             # applications, it usually works  thanks to rule 5 (prefer outgoing
             # interface). But here, it rarely applies because we use several
@@ -358,21 +355,23 @@ def main():
                 call(if_rt[:3] + ['add', 'proto', 'static'] + if_rt[4:])
             else:
                 def check_no_default_route():
+                    for route in call(('ip', '-6', 'route', 'show',
+                                        'default')).splitlines():
+                        if ' proto 42 ' not in route:
+                            sys.exit("Detected default route (%s)"
+                                " whereas you specified --table=0."
+                                " Fix your configuration." % route)
+                check_no_default_route()
+                def check_no_default_route_thread():
                     try:
                         while True:
-                            for route in call(('ip', '-6', 'route', 'show',
-                                               'default')).splitlines():
-                                if ' proto 42 ' not in route:
-                                    logging.fatal("Detected default route (%s)"
-                                        " whereas you specified --table=0."
-                                        " Fix your configuration.", route)
-                                    return
                             time.sleep(60)
+                            check_no_default_route()
                     except:
                         utils.log_exception()
                     finally:
-                        exit(1)
-                t = threading.Thread(target=check_no_default_route)
+                        exit.kill_main(1)
+                t = threading.Thread(target=check_no_default_route_thread)
                 t.daemon = True
                 t.start()
             ip('route', 'unreachable', *x)
@@ -384,17 +383,21 @@ def main():
                 config.babel_pidfile, tunnel_interfaces,
                 *config.babel_args).stop)
             if config.up:
+                exit.release()
                 r = os.system(config.up)
                 if r:
                     sys.exit(r)
+                exit.acquire()
             for cmd in config.daemon or ():
                 cleanup.append(utils.Popen(cmd, shell=True).stop)
 
             # main loop
             if tunnel_manager is None:
+                exit.release()
                 time.sleep(max(0, next_renew - time.time()))
                 raise ReexecException("Restart to renew certificate")
             cleanup += tunnel_manager.delInterfaces, tunnel_manager.killAll
+            exit.release()
             while True:
                 next = tunnel_manager.next_refresh
                 if forwarder:
@@ -418,18 +421,20 @@ def main():
                 if forwarder and t >= forwarder.next_refresh:
                     forwarder.refresh()
         finally:
+            # XXX: We have a possible race condition if a signal is handled at
+            #      the beginning of this clause, just before the following line.
+            exit.acquire(0) # inhibit signals
             while cleanup:
                 try:
                     cleanup.pop()()
                 except:
                     pass
+            exit.release()
     except sqlite3.Error:
         logging.exception("Restarting with empty cache")
         os.rename(db_path, db_path + '.bak')
     except ReexecException, e:
         logging.info(e)
-    except KeyboardInterrupt:
-        return 0
     except Exception:
         utils.log_exception()
         sys.exit(1)

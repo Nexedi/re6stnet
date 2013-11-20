@@ -159,11 +159,11 @@ class TunnelManager(object):
         while iface_list:
           self._tuntap(iface_list.pop())
 
-    def getFreeInterface(self, prefix):
+    def _getFreeInterface(self, prefix):
         try:
-          iface = self._free_iface_list.pop()
+            iface = self._free_iface_list.pop()
         except IndexError:
-          iface = self._tuntap()
+            iface = self._tuntap()
         self._iface_to_prefix[iface] = prefix
         return iface
 
@@ -222,8 +222,9 @@ class TunnelManager(object):
             return False
         logging.info('Establishing a connection with %u/%u',
                      int(prefix, 2), len(prefix))
-        iface = self.getFreeInterface(prefix)
-        self._connection_dict[prefix] = c = Connection(address, iface, prefix)
+        with utils.exit:
+            iface = self._getFreeInterface(prefix)
+            self._connection_dict[prefix] = c = Connection(address, iface, prefix)
         if self._gateway_manager is not None:
             for ip in c:
                 self._gateway_manager.add(ip, True)
