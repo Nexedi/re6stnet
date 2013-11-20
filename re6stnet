@@ -107,8 +107,10 @@ def getConfig():
     _('--remote-gateway', action='append', dest='gw_list',
         help="Force each tunnel to be created through one the given gateways,"
              " in a round-robin fashion.")
-    _('--disable-proto', action='append', choices=('udp', 'tcp'), default=[],
-        help="Do never try to create tunnels using given protocols.")
+    _('--disable-proto', action='append', choices=('none', 'udp', 'tcp'),
+        default=['udp'],
+        help="Do never try to create tunnels using given protocols."
+             " 'none' has precedence over other options.")
     _('--client', metavar='HOST,PORT,PROTO[;...]',
         help="Do not run any OpenVPN server, but only 1 OpenVPN client,"
              " with specified remotes. Any other option not required in this"
@@ -192,6 +194,8 @@ def main():
     if config.max_clients is None:
         config.max_clients = config.client_count * 2
 
+    if 'none' in config.disable_proto:
+        config.disable_proto = ()
     address = []
     server_tunnels = {}
     if config.client:
@@ -199,8 +203,13 @@ def main():
     elif config.max_clients:
         if config.pp:
             pp = [(int(port), proto) for port, proto in config.pp]
+            for port, proto in pp:
+                if proto in config.disable_proto:
+                    sys.exit("error: conflicting options --disable-proto %s"
+                             " and --pp %u %s" % (proto, port, proto))
         else:
-            pp = (1194, 'udp'), (1194, 'tcp')
+            pp = [x for x in ((1194, 'udp'), (1194, 'tcp'))
+                    if x[1] not in config.disable_proto]
         ip_changed = lambda ip: [(ip, str(port), proto) for port, proto in pp]
         if config.gw_list:
           gw_list = deque(config.gw_list)
@@ -306,10 +315,14 @@ def main():
             ip('addrlabel', 'prefix', my_network, 'label', '99')
             # prepare persistent interfaces
             if config.client:
+                address_list = [x for x in utils.parse_address(config.client)
+                                  if x[2] not in config.disable_proto]
+                if not address_list:
+                    sys.exit("error: --disable_proto option disables"
+                             " all addresses given by --client")
                 cleanup.append(plib.client('re6stnet',
-                    utils.parse_address(config.client),
-                    config.encrypt, '--ping-restart', str(timeout),
-                    *config.openvpn_args).stop)
+                    address_list, config.encrypt, '--ping-restart',
+                    str(timeout), *config.openvpn_args).stop)
             elif server_tunnels:
                 required('dh')
                 for iface, (port, proto) in server_tunnels.iteritems():

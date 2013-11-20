@@ -156,8 +156,6 @@ ca %s
 cert %s
 key %s
 dh %s
-# for udp only:
-#pp 1194 udp
 # increase re6stnet verbosity:
 #verbose 3
 # enable OpenVPN logging:
