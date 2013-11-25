@@ -116,6 +116,9 @@ def getConfig():
         help="Do not run any OpenVPN server, but only 1 OpenVPN client,"
              " with specified remotes. Any other option not required in this"
              " mode is ignored (e.g. client-count, max-clients, etc.)")
+    _('--neighbour', metavar='CN', action='append', default=[],
+        help="List of peers that should be reachable directly, by creating"
+             " tunnels if necesssary.")
 
     return parser.parse_args()
 
@@ -288,7 +291,7 @@ def main():
                 config.openvpn_args, timeout, config.tunnel_refresh,
                 config.client_count, config.iface_list, network, prefix,
                 address, ip_changed, config.encrypt, remote_gateway,
-                config.disable_proto)
+                config.disable_proto, config.neighbour)
             cleanup.append(tunnel_manager.sock.close)
             tunnel_interfaces += tunnel_manager.new_iface_list
         else:

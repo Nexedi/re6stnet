@@ -104,7 +104,8 @@ class TunnelManager(object):
 
     def __init__(self, write_pipe, peer_db, openvpn_args, timeout,
                 refresh, client_count, iface_list, network, prefix,
-                address, ip_changed, encrypt, remote_gateway, disable_proto):
+                address, ip_changed, encrypt, remote_gateway, disable_proto,
+                neighbour_list=()):
         self._write_pipe = write_pipe
         self._peer_db = peer_db
         self._connecting = set()
@@ -124,6 +125,7 @@ class TunnelManager(object):
         self._gateway_manager = MultiGatewayManager(remote_gateway) \
                                 if remote_gateway else None
         self._disable_proto = disable_proto
+        self._neighbour_set = set(map(utils.binFromSubnet, neighbour_list))
         self._served = set()
 
         self.sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
@@ -135,7 +137,6 @@ class TunnelManager(object):
         self._next_tunnel_refresh = time.time()
 
         self._client_count = client_count
-        self._refresh_count = 1
         self.new_iface_list = deque('re6stnet' + str(i)
             for i in xrange(1, self._client_count + 1))
         self._free_iface_list = []
@@ -190,13 +191,17 @@ class TunnelManager(object):
             if not self._connection_dict[prefix].refresh():
                 self._kill(prefix)
 
+    def _tunnelScore(self, prefix):
+        n = self._connection_dict[prefix].routes
+        return (prefix in self._neighbour_set, n) if n else ()
+
     def _removeSomeTunnels(self):
         # Get the candidates to killing
-        candidates = sorted(self._connection_dict, key=lambda p:
-                self._connection_dict[p].routes)
-        for prefix in candidates[0: max(0, len(self._connection_dict) -
-                self._client_count + self._refresh_count)]:
-            self._kill(prefix)
+        count = len(self._connection_dict) - self._client_count + 1
+        if count > 0:
+            for prefix in sorted(self._connection_dict,
+                                 key=self._tunnelScore)[:count]:
+                self._kill(prefix)
 
     def _kill(self, prefix):
         logging.info('Killing the connection with %u/%u...',
@@ -267,9 +272,14 @@ class TunnelManager(object):
         if disconnected is None:
             # Normal operation. Choose peers to connect to by looking at the
             # routing table.
+            neighbour_set = self._neighbour_set.intersection(distant_peers)
             while count and distant_peers:
-                i = random.randrange(0, len(distant_peers))
-                peer = distant_peers[i]
+                if neighbour_set:
+                    peer = neighbour_set.pop()
+                    i = distant_peers.index(peer)
+                else:
+                    i = random.randrange(0, len(distant_peers))
+                    peer = distant_peers[i]
                 distant_peers[i] = distant_peers[-1]
                 del distant_peers[-1]
                 address = self._peer_db.getAddress(peer)
