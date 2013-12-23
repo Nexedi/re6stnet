@@ -1,5 +1,13 @@
 import argparse, calendar, errno, logging, os, shlex, signal, socket
 import struct, subprocess, sys, textwrap, threading, time, traceback
+try:
+    subprocess.CalledProcessError(0, '', '')
+except TypeError: # BBB: Python < 2.7
+    def __init__(self, returncode, cmd, output=None):
+        self.returncode = returncode
+        self.cmd = cmd
+        self.output = output
+    subprocess.CalledProcessError.__init__ = __init__
 
 logging_levels = logging.WARNING, logging.INFO, logging.DEBUG, 5
 
