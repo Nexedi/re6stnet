@@ -16,7 +16,7 @@ class MultiGatewayManager(dict):
         if gw:
             cmd = 'ip', '-4', 'route', cmd, '%s/32' % dest, 'via', gw
             logging.trace('%r', cmd)
-            subprocess.call(cmd)
+            subprocess.check_call(cmd)
 
     def add(self, dest, route):
         try:
@@ -150,7 +150,7 @@ class TunnelManager(object):
             action = 'add'
         args = 'ip', 'tuntap', action, 'dev', iface, 'mode', 'tap'
         logging.debug('%r', args)
-        subprocess.call(args)
+        subprocess.check_call(args)
         return iface
 
     def delInterfaces(self):

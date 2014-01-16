@@ -369,7 +369,11 @@ def main():
                     try:
                         while True:
                             time.sleep(60)
-                            check_no_default_route()
+                            try:
+                                check_no_default_route()
+                            except OSError, e:
+                                if e.errno != errno.ENOMEM:
+                                    raise
                     except:
                         utils.log_exception()
                     finally:

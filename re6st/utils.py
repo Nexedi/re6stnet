@@ -147,6 +147,14 @@ exit = exit()
 
 class Popen(subprocess.Popen):
 
+    def __init__(self, *args, **kw):
+      try:
+          super(Popen, self).__init__(*args, **kw)
+      except OSError, e:
+          if e.errno != errno.ENOMEM:
+            raise
+          self.returncode = -1
+
     def stop(self):
         self.terminate()
         t = threading.Timer(5, self.kill)
@@ -230,9 +238,8 @@ def iterRoutes(network, exclude_prefix=None):
                 yield iface, prefix
 
 def decrypt(key_path, data):
-    p = subprocess.Popen(
-        ('openssl', 'rsautl', '-decrypt', '-inkey', key_path),
-        stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    p = Popen(('openssl', 'rsautl', '-decrypt', '-inkey', key_path),
+              stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     out, err = p.communicate(data)
     if p.returncode:
         raise subprocess.CalledProcessError(p.returncode, 'openssl', err)
@@ -242,9 +249,9 @@ def encrypt(cert, data):
     r, w = os.pipe()
     try:
         threading.Thread(target=os.write, args=(w, cert)).start()
-        p = subprocess.Popen(('openssl', 'rsautl', '-encrypt', '-certin',
+        p = Popen(('openssl', 'rsautl', '-encrypt', '-certin',
                               '-inkey', '/proc/self/fd/%u' % r),
-            stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+                  stdin=subprocess.PIPE, stdout=subprocess.PIPE)
         out, err = p.communicate(data)
     finally:
         os.close(r)
