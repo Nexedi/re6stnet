@@ -182,8 +182,17 @@ class TunnelManager(object):
             self._next_tunnel_refresh = time.time() + self._refresh_time
             self._peer_db.log()
         self._makeNewTunnels(remove)
-        if remove and self._free_iface_list:
-            self._tuntap(self._free_iface_list.pop())
+        # XXX: Commented code is an attempt to clean up unused interfaces but
+        #      it is too aggressive. Sometimes _makeNewTunnels only asks address
+        #      (and the tunnel is created when we have an answer), so when the
+        #      maximum number of tunnels is reached, taps are recreated all the
+        #      time.
+        #      Also, babeld does not leave ipv6 membership for deleted taps,
+        #      causing a memory leak in the kernel (capped by sysctl
+        #      net.core.optmem_max), and after some time, new neighbours fail
+        #      to see each other.
+        #if remove and self._free_iface_list:
+        #    self._tuntap(self._free_iface_list.pop())
         self.next_refresh = time.time() + 5
 
     def _cleanDeads(self):
