@@ -102,7 +102,8 @@ class PeerDB(object):
             bootpeer = self._registry.getBootstrapPeer(self._prefix)
             prefix, address = utils.decrypt(self._key_path, bootpeer).split()
         except (socket.error, subprocess.CalledProcessError, ValueError), e:
-            logging.warning('Failed to bootstrap (%s)', e)
+            logging.warning('Failed to bootstrap (%s)',
+                            e if bootpeer else 'no peer returned')
         else:
             if prefix != self._prefix:
                 self.addPeer(prefix, address)

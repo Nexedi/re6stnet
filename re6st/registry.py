@@ -271,8 +271,8 @@ class RegistryServer(object):
                         break
                 timeout = max(0, time.time() - start)
             else:
-                raise EnvironmentError("Timeout while querying [%s]:%u"
-                                       % address)
+                logging.info("Timeout while querying [%s]:%u", *address)
+                return
         logging.info("Sending bootstrap peer: %s", msg)
         return utils.encrypt(cert, msg)
 
