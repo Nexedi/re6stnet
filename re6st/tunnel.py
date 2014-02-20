@@ -147,11 +147,13 @@ class TunnelManager(object):
     def _tuntap(self, iface=None):
         if iface:
             self.new_iface_list.appendleft(iface)
-            action = 'del'
+            action = '--rmtun'
         else:
             iface = self.new_iface_list.popleft()
-            action = 'add'
-        args = 'ip', 'tuntap', action, 'dev', iface, 'mode', 'tap'
+            action = '--mktun'
+        # BBB: do not use 'ip tuntap' which is not available on old dists
+        args = ('openvpn', action, '--verb', '0',
+                '--dev', iface, '--dev-type', 'tap')
         logging.debug('%r', args)
         subprocess.check_call(args)
         return iface
