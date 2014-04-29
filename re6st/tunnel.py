@@ -412,8 +412,14 @@ class TunnelManager(object):
 
     def handlePeerEvent(self):
         msg, address = self.sock.recvfrom(1<<16)
-        if not (msg or utils.binFromIp(address[0]).startswith(self._network)):
+        if address[0] == '::1':
+          sender = None
+        else:
+          sender = utils.binFromIp(address[0])
+          if not sender.startswith(self._network):
             return
+        if not msg:
+          return
         code = ord(msg[0])
         if code == 1: # answer
             # Old versions may send additional and obsolete addresses.
@@ -442,7 +448,7 @@ class TunnelManager(object):
             #else: # I don't know my IP yet!
         elif code == 255:
             # the registry wants to know the topology for debugging purpose
-            if utils.binFromIp(address[0])[len(self._network):].startswith(
+            if not sender or sender[len(self._network):].startswith(
                   self.peer_db.registry_prefix):
                 msg = ['\xfe%s%u/%u\n%u\n' % (msg[1:],
                     int(self._prefix, 2), len(self._prefix),
