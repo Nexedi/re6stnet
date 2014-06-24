@@ -7,7 +7,7 @@ Release:   %(git rev-list --topo-order --count HEAD).g%(git rev-parse --short HE
 License:   GPLv2+
 Group:     Applications/Internet
 BuildArch: noarch
-Requires:  babeld >= 1.3.1
+Requires:  babeld = 1.5.0-nxd1
 Requires:  iproute
 Requires:  openssl
 Requires:  openvpn

@@ -59,6 +59,7 @@ def router(subnet, hello_interval, table, log_path, state_path, pidfile,
             '-S', state_path,
             '-I', pidfile,
             '-s',
+            '-C', 'default max-rtt-penalty 5000 rtt-max 500',
             '-C', 'redistribute local deny',
             '-C', 'redistribute ip %s/%u eq %u' % (s, n, n),
             '-C', 'redistribute deny']
@@ -67,7 +68,7 @@ def router(subnet, hello_interval, table, log_path, state_path, pidfile,
     else:
         cmd[-2:-2] = '-C', 'redistribute ip ::/0 eq 0'
     for iface in tunnel_interfaces:
-        cmd += '-C', 'interface %s rxcost 512' % iface
+        cmd += '-C', 'interface %s legacy-rxcost 512' % iface
     cmd += args
     # WKRD: babeld fails to start if pidfile already exists
     try:
