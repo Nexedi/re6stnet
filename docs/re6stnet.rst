@@ -146,6 +146,9 @@ A common failure is caused by a misconfigured firewall:
   any TCP/UDP port in IPv4. Server processes only listen to ports specified
   by ``--pp`` option.
 
+- re6st nodes use UDP port 326 to communicate.
+  It must be open on all re6st IPv6.
+
 - OpenVPN always aborts due to inactivity timeout when Babel paquets are
   filtered. UDP port 6696 must be open on link-local IPv6 of all interfaces
   managed by Babel.
