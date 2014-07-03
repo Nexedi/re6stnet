@@ -321,7 +321,7 @@ class RegistryClient(object):
         host, port = splitport(host)
         self._conn = dict(http=httplib.HTTPConnection,
                           https=httplib.HTTPSConnection,
-                          )[scheme](host, port)
+                          )[scheme](host, port, timeout=60)
         self._path = path.rstrip('/')
 
     def __getattr__(self, name):
