@@ -197,6 +197,7 @@ def main():
         config.disable_proto = ()
     address = []
     server_tunnels = {}
+    forwarder = None
     if config.client:
         config.babel_args.append('re6stnet')
     elif config.max_clients:
@@ -217,7 +218,6 @@ def main():
             return gw_list[0]
         else:
           remote_gateway = None
-        forwarder = None
         if len(config.ip) > 1:
             if 'upnp' in config.ip or 'any' in config.ip:
                 sys.exit("error: argument --ip can be given only once with"
@@ -247,6 +247,8 @@ def main():
             ip_changed = None
         for x in pp:
             server_tunnels.setdefault('re6stnet-' + x[1], x)
+    else:
+        ip_changed = remote_gateway = None
 
     def call(cmd):
         logging.debug('%r', cmd)
