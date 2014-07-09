@@ -1,14 +1,16 @@
 #!/usr/bin/python -S
 import os, sys
 
-if os.environ['script_type'] == 'client-connect':
+script_type = os.environ['script_type']
+external_ip = lambda: os.getenv('trusted_ip') or os.environ['trusted_ip6']
+
+if script_type == 'client-connect':
     # Send client its external ip address
     with open(sys.argv[2], 'w') as f:
-        f.write('push "setenv-safe external_ip %s"\n'
-                % os.environ['trusted_ip'])
+        f.write('push "setenv-safe external_ip %s"\n' % external_ip())
 
 # Write into pipe connect/disconnect events
 arg1 = sys.argv[1]
 if arg1 != 'None':
-    os.write(int(arg1), '%(script_type)s %(common_name)s %(trusted_ip)s\n'
-                        % os.environ)
+    os.write(int(arg1), '%s %s %s\n' % (
+        script_type, os.environ['common_name'], external_ip()))

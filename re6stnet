@@ -1,5 +1,5 @@
 #!/usr/bin/python
-import atexit, errno, logging, os, select, signal
+import atexit, errno, logging, os, select, signal, socket
 import sqlite3, subprocess, sys, time, threading
 from collections import deque
 from OpenSSL import crypto
@@ -84,7 +84,7 @@ def getConfig():
         help='Specify that tunnels should be encrypted.')
     _('--pp', nargs=2, action='append', metavar=('PORT', 'PROTO'),
         help="Port and protocol to be announced to other peers, ordered by"
-             " preference. For each protocol (either udp or tcp), start one"
+             " preference. For each protocol (udp, tcp, udp6, tcp6), start one"
              " openvpn server on the first given port."
              " (default: --pp 1194 udp --pp 1194 tcp)")
     _('--dh',
@@ -108,8 +108,8 @@ def getConfig():
     _('--remote-gateway', action='append', dest='gw_list',
         help="Force each tunnel to be created through one the given gateways,"
              " in a round-robin fashion.")
-    _('--disable-proto', action='append', choices=('none', 'udp', 'tcp'),
-        default=['udp'],
+    _('--disable-proto', action='append',
+        choices=('none', 'udp', 'tcp', 'udp6', 'tcp6'), default=['udp', 'udp6'],
         help="Do never try to create tunnels using given protocols."
              " 'none' has precedence over other options.")
     _('--client', metavar='HOST,PORT,PROTO[;...]',
@@ -195,7 +195,11 @@ def main():
 
     if 'none' in config.disable_proto:
         config.disable_proto = ()
-    address = []
+    if not config.table:
+        # Make sure we won't tunnel over re6st.
+        config.disable_proto = tuple(set(('tcp6', 'udp6')).union(
+            config.disable_proto))
+    address = ()
     server_tunnels = {}
     forwarder = None
     if config.client:
@@ -210,7 +214,18 @@ def main():
         else:
             pp = [x for x in ((1194, 'udp'), (1194, 'tcp'))
                     if x[1] not in config.disable_proto]
-        ip_changed = lambda ip: [(ip, str(port), proto) for port, proto in pp]
+        def ip_changed(ip):
+            for family, proto_list in ((socket.AF_INET, ('tcp', 'udp')),
+                                       (socket.AF_INET6, ('tcp6', 'udp6'))):
+                try:
+                    socket.inet_pton(family, ip)
+                    break
+                except socket.error:
+                    pass
+            else:
+                family = None
+            return family, [(ip, str(port), proto) for port, proto in pp
+                            if not family or proto in proto_list]
         if config.gw_list:
           gw_list = deque(config.gw_list)
           def remote_gateway(dest):
@@ -241,9 +256,9 @@ def main():
                 for port, proto in pp:
                     forwarder.addRule(port, proto)
                 ip_changed = forwarder.checkExternalIp
-                address = ip_changed()
+                address = ip_changed(),
         elif 'any' not in config.ip:
-            address = sum(map(ip_changed, config.ip), [])
+            address = map(ip_changed, config.ip)
             ip_changed = None
         for x in pp:
             server_tunnels.setdefault('re6stnet-' + x[1], x)

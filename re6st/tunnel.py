@@ -1,5 +1,5 @@
 import logging, random, socket, subprocess, time
-from collections import deque
+from collections import defaultdict, deque
 from . import plib, utils
 
 PORT = 326
@@ -120,7 +120,12 @@ class TunnelManager(object):
         self._network = network
         self._iface_list = iface_list
         self._prefix = prefix
-        self._address = utils.dump_address(address)
+        address_dict = defaultdict(list)
+        for family, address in address:
+            address_dict[family] += address
+        self._address = dict((family, utils.dump_address(address))
+                             for family, address in address_dict.iteritems()
+                             if address)
         self._ip_changed = ip_changed
         self._gateway_manager = MultiGatewayManager(remote_gateway) \
                                 if remote_gateway else None
@@ -408,7 +413,9 @@ class TunnelManager(object):
         except KeyError:
             pass
         if self._ip_changed:
-            self._address = utils.dump_address(self._ip_changed(ip))
+            family, address = self._ip_changed(ip)
+            if address:
+                self._address[family] = utils.dump_address(address)
 
     def handlePeerEvent(self):
         msg, address = self.sock.recvfrom(1<<16)
@@ -440,7 +447,8 @@ class TunnelManager(object):
                         self._makeTunnel(prefix, address)
         elif code == 2: # request
             if self._address:
-                msg = '\1%s %s\n' % (self._prefix, self._address)
+                msg = '\1%s %s\n' % (self._prefix,
+                    ';'.join(self._address.itervalues()))
                 try:
                     self.sock.sendto(msg, address[:2])
                 except socket.error, e:

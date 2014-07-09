@@ -35,7 +35,7 @@ def server(iface, max_clients, dh_path, pipe_fd, port, proto, encrypt, *args, **
         '--dh', dh_path,
         '--max-clients', str(max_clients),
         '--port', str(port),
-        '--proto', 'tcp-server' if proto == 'tcp' else proto,
+        '--proto', proto + '-server' if proto in ('tcp', 'tcp6') else proto,
         *args, **kw)
 
 
@@ -43,7 +43,7 @@ def client(iface, address_list, encrypt, *args, **kw):
     remote = ['--nobind', '--client']
     for ip, port, proto in address_list:
         remote += '--remote', ip, port, \
-            'tcp-client' if proto == 'tcp' else proto
+            proto + '-client' if proto in ('tcp', 'tcp6') else proto
     remote += args
     return openvpn(iface, encrypt, *remote, **kw)
 
