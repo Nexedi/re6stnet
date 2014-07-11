@@ -29,13 +29,16 @@ class Forwarder(object):
         return wraps(wrapped)(wrapper)
 
     def checkExternalIp(self, ip=None):
-        if not ip:
+        if ip:
+            try:
+                socket.inet_aton(ip)
+            except socket.error:
+                ip = None
+        else:
             ip = self.refresh()
-            if not ip:
-                return socket.AF_INET, ()
         # If port is None, we assume we're not NATed.
         return socket.AF_INET, [(ip, str(port or local), proto)
-                                for local, proto, port in self._rules]
+            for local, proto, port in self._rules] if ip else ()
 
     def addRule(self, local_port, proto):
         self._rules.append([local_port, proto, None])
