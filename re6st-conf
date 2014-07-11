@@ -145,9 +145,12 @@ def main():
     cert = loadCert(cert)
     not_after = utils.notAfter(cert)
     print("Setup complete. Certificate is valid until %s UTC"
-          " and will be automatically renewed after %s UTC" % (
+          " and will be automatically renewed after %s UTC.\n"
+          "Do not forget to backup to your private key (%s) or"
+          " you will lose your assigned subnet." % (
         time.asctime(time.gmtime(not_after)),
-        time.asctime(time.gmtime(not_after - registry.RENEW_PERIOD))))
+        time.asctime(time.gmtime(not_after - registry.RENEW_PERIOD)),
+        key_path))
 
     if not os.path.lexists(conf_path):
         create(conf_path, """\
