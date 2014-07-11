@@ -200,8 +200,9 @@ def dump_address(address):
 def parse_address(address_list):
     for address in address_list.split(';'):
         try:
-            ip, port, proto = address.split(',')
-            yield ip, str(port), proto
+            a = ip, port, proto = address.split(',')
+            int(port)
+            yield a
         except ValueError, e:
             logging.warning("Failed to parse node address %r (%s)",
                             address, e)

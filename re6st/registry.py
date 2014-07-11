@@ -281,7 +281,6 @@ class RegistryServer(object):
             peers = deque(('%u/%u' % (int(self.prefix, 2), len(self.prefix)),))
             cookie = hex(random.randint(0, 1<<32))[2:]
             graph = dict.fromkeys(peers)
-            asked = 0
             while True:
                 r, w, _ = select.select([self.sock],
                     [self.sock] if peers else [], [], 1)
