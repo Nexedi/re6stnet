@@ -58,7 +58,7 @@ def router(subnet, hello_interval, table, log_path, state_path, pidfile,
             '-S', state_path,
             '-I', pidfile,
             '-s',
-            '-C', 'default max-rtt-penalty 5000 rtt-max 500',
+            '-C', 'default max-rtt-penalty 5000 rtt-max 500 rtt-decay 125',
             '-C', 'redistribute local deny',
             '-C', 'redistribute ip %s/%u eq %u' % (s, n, n),
             '-C', 'redistribute deny']
