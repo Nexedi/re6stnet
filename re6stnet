@@ -285,13 +285,14 @@ def main():
 
     try:
         subnet = network + prefix
-        my_ip = '%s/%s' % (utils.ipFromBin(subnet, '1'), len(subnet))
+        my_ip = utils.ipFromBin(subnet, '1')
         my_subnet = '%s/%u' % (utils.ipFromBin(subnet), len(subnet))
         my_network = "%s/%u" % (utils.ipFromBin(network), len(network))
         os.environ['re6stnet_ip'] = my_ip
         os.environ['re6stnet_iface'] = config.main_interface
         os.environ['re6stnet_subnet'] = my_subnet
         os.environ['re6stnet_network'] = my_network
+        my_ip += '/%s' % len(subnet)
 
         # Init db and tunnels
         tunnel_interfaces = server_tunnels.keys()
