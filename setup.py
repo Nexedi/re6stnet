@@ -2,6 +2,30 @@
 """
 
 from setuptools import setup, find_packages
+from setuptools.command import sdist as _sdist, build_py as _build_py
+from distutils import log
+from re6st import version
+
+version = {"__file__": "re6st/version.py"}
+execfile(version["__file__"], version)
+
+def copy_file(self, infile, outfile, *args, **kw):
+    if infile == version["__file__"]:
+        if not self.dry_run:
+            log.info("generating %s -> %s", infile, outfile)
+            with open(outfile, "wb") as f:
+                for x in sorted(version.iteritems()):
+                    if not x[0].startswith("_"):
+                        f.write("%s = %r\n" % x)
+        return outfile, 1
+    cls, = self.__class__.__bases__
+    return cls.copy_file(self, infile, outfile, *args, **kw)
+
+class build_py(_build_py.build_py):
+    copy_file = copy_file
+
+class sdist(_sdist.sdist):
+    copy_file = copy_file
 
 classifiers = """\
 Environment :: Console
@@ -16,7 +40,7 @@ Topic :: System :: Networking
 
 setup(
     name = 're6stnet',
-    version = '0.1',
+    version = version["version"],
     description = __doc__.strip(),
     author = 'Nexedi',
     author_email = 're6stnet@erp5.org',
@@ -43,4 +67,5 @@ setup(
     #    "http://miniupnp.free.fr/files/download.php?file=miniupnpc-1.7.20120714.tar.gz#egg=miniupnpc-1.7",
     #    ],
     zip_safe = False,
+    cmdclass=dict(build_py=build_py, sdist=sdist),
 )

@@ -1,9 +1,10 @@
 %define _builddir %(pwd)
+%define ver %(python re6st/version.py)
 
 Summary:   resilient, scalable, IPv6 network application
 Name:      re6stnet
-Version:   0
-Release:   %(git rev-list --topo-order --count HEAD).g%(git rev-parse --short HEAD)
+Version:   %(set %ver; echo ${1%%-*})
+Release:   %(set %ver; echo ${1#*-})
 License:   GPLv2+
 Group:     Applications/Internet
 BuildArch: noarch
@@ -63,5 +64,5 @@ if [ $1 -ge 1 ] ; then
 fi
 
 %changelog
-* Fri Dec 10 2012 Julien Muchembled <jm@nexedi.com>
+* Mon Dec 10 2012 Julien Muchembled <jm@nexedi.com>
 - Initial package

@@ -1,6 +1,6 @@
 import logging, random, socket, subprocess, time
 from collections import defaultdict, deque
-from . import plib, utils
+from . import plib, utils, version
 
 PORT = 326
 
@@ -417,6 +417,12 @@ class TunnelManager(object):
             if address:
                 self._address[family] = utils.dump_address(address)
 
+    def _sendto(self, to, msg):
+        try:
+            return self.sock.sendto(msg, to[:2])
+        except socket.error, e:
+            logging.info('Failed to send message to %s (%s)', to, e)
+
     def handlePeerEvent(self):
         msg, address = self.sock.recvfrom(1<<16)
         if address[0] == '::1':
@@ -447,13 +453,11 @@ class TunnelManager(object):
                         self._makeTunnel(prefix, address)
         elif code == 2: # request
             if self._address:
-                msg = '\1%s %s\n' % (self._prefix,
-                    ';'.join(self._address.itervalues()))
-                try:
-                    self.sock.sendto(msg, address[:2])
-                except socket.error, e:
-                    logging.info('Failed to reply to %s (%s)', address, e)
+                self._sendto(address, '\1%s %s\n' % (self._prefix,
+                    ';'.join(self._address.itervalues())))
             #else: # I don't know my IP yet!
+        elif code == 3:
+            self._sendto(address, '\4' + version.version)
         elif code == 255:
             # the registry wants to know the topology for debugging purpose
             if not sender or sender[len(self._network):].startswith(

@@ -3,7 +3,7 @@ import atexit, errno, logging, os, select, signal, socket
 import sqlite3, subprocess, sys, time, threading
 from collections import deque
 from OpenSSL import crypto
-from re6st import db, plib, tunnel, utils
+from re6st import db, plib, tunnel, utils, version
 from re6st.registry import RegistryClient, RENEW_PERIOD
 from re6st.utils import exit
 
@@ -14,6 +14,7 @@ def getConfig():
     parser = utils.ArgParser(fromfile_prefix_chars='@',
         description="Resilient virtual private network application.")
     _ = parser.add_argument
+    _('-V', '--version', action='version', version=version.version)
 
     _('--ip', action='append', default=[],
         help="IP address advertised to other nodes. Special values:\n"
