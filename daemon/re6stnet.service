@@ -4,7 +4,7 @@ ConditionPathExists=/etc/re6stnet/re6stnet.conf
 
 [Service]
 WorkingDirectory=/etc/re6stnet
-# systemd plans to implement "something like ConditionExec= or ExecStartPre= without failure state" (cf its TODO file)
+# systemd plans to "introduce ExecCondition= in services" (cf its TODO file)
 ExecStart=/bin/sh -c 'set re6stnet @re6stnet.conf; "$@" --test main_interface==\"lo\" || exec "$@"'
 Restart=on-failure
 StandardOutput=null
