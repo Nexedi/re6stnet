@@ -148,20 +148,21 @@ exit = exit()
 class Popen(subprocess.Popen):
 
     def __init__(self, *args, **kw):
-      try:
-          super(Popen, self).__init__(*args, **kw)
-      except OSError, e:
-          if e.errno != errno.ENOMEM:
-            raise
-          self.returncode = -1
+        try:
+            super(Popen, self).__init__(*args, **kw)
+        except OSError, e:
+            if e.errno != errno.ENOMEM:
+                raise
+            self.returncode = -1
 
     def stop(self):
-        self.terminate()
-        t = threading.Timer(5, self.kill)
-        t.start()
-        r = self.wait()
-        t.cancel()
-        return r
+        if self.pid:
+            self.terminate()
+            t = threading.Timer(5, self.kill)
+            t.start()
+            r = self.wait()
+            t.cancel()
+            return r
 
 
 def makedirs(path):
