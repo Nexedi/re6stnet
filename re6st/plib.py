@@ -23,11 +23,19 @@ def openvpn(iface, encrypt, *args, **kw):
     logging.debug('%r', args)
     return utils.Popen(args, **kw)
 
+# tested in a LAN with a switch and wired/wireless interfaces (mtu 1500)
+ovpn_link_mtu_dict = {'udp': 1490, 'udp6': 1450}
 
 def server(iface, max_clients, dh_path, pipe_fd, port, proto, encrypt, *args, **kw):
     client_script = '%s %s' % (ovpn_server, pipe_fd)
     if pipe_fd is not None:
         args = ('--client-disconnect', client_script) + args
+    try:
+        args = ('--link-mtu', str(ovpn_link_mtu_dict[proto]),
+                # mtu-disc ignored for udp6 due to a bug in OpenVPN
+                '--mtu-disc', 'yes') + args
+    except KeyError:
+        proto += '-server'
     return openvpn(iface, encrypt,
         '--tls-server',
         '--mode', 'server',
@@ -35,14 +43,20 @@ def server(iface, max_clients, dh_path, pipe_fd, port, proto, encrypt, *args, **
         '--dh', dh_path,
         '--max-clients', str(max_clients),
         '--port', str(port),
-        '--proto', proto + '-server' if proto in ('tcp', 'tcp6') else proto,
+        '--proto', proto,
         *args, **kw)
 
 
 def client(iface, address_list, encrypt, *args, **kw):
     remote = ['--nobind', '--client']
+    # XXX: We'd like to pass <connection> sections at command-line.
+    link_mtu = set()
     for ip, port, proto in address_list:
         remote += '--remote', ip, port, proto
+        link_mtu.add(ovpn_link_mtu_dict.get(proto))
+    link_mtu, = link_mtu
+    if link_mtu:
+        remote += '--link-mtu', str(link_mtu), '--mtu-disc', 'yes'
     remote += args
     return openvpn(iface, encrypt, *remote, **kw)
 
