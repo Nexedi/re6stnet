@@ -426,13 +426,18 @@ class TunnelManager(object):
     def handlePeerEvent(self):
         msg, address = self.sock.recvfrom(1<<16)
         if address[0] == '::1':
-          sender = None
+            sender = None
         else:
-          sender = utils.binFromIp(address[0])
-          if not sender.startswith(self._network):
-            return
+            try:
+                sender = utils.binFromIp(address[0])
+            except socket.error, e:
+                # inet_pton does not parse '<ipv6>%<iface>'
+                logging.warning('ignored message from %r (%s)', address, e)
+                return
+            if not sender.startswith(self._network):
+                return
         if not msg:
-          return
+            return
         code = ord(msg[0])
         if code == 1: # answer
             # Old versions may send additional and obsolete addresses.
