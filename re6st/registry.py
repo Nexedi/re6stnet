@@ -81,7 +81,7 @@ class RegistryServer(object):
     def _handle_request(self, request, method, kw):
         m = getattr(self, method)
         if method in ('topology',) and \
-           request.client_address[0] not in ('127.0.0.1', '::'):
+           request.client_address[0] not in ('127.0.0.1', '::1'):
             return request.send_error(httplib.FORBIDDEN)
         key = m.getcallargs(**kw).get('cn')
         if key:
