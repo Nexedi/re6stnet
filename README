@@ -57,8 +57,8 @@ Requirements
 See also `setup.py` for Python dependencies.
 
 .. _Babel: http://www.pps.univ-paris-diderot.fr/~jch/software/babel/
-   _Nemu: http://code.google.com/p/nemu/
-   _miniupnpd: http://miniupnp.free.fr/
+.. _Nemu: http://code.google.com/p/nemu/
+.. _miniupnpd: http://miniupnp.free.fr/
 
 Installation
 ============
