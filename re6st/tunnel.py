@@ -40,6 +40,7 @@ class MultiGatewayManager(dict):
 class Connection(object):
 
     _retry = routes = 0
+    time = float('inf')
 
     def __init__(self, tunnel_manager, address_list, iface, prefix):
         self.tunnel_manager = tunnel_manager
@@ -60,6 +61,7 @@ class Connection(object):
 
     def open(self):
         tm = self.tunnel_manager
+        self.time = time.time()
         self.process = plib.client(
             self.iface, (self.address_list[self._retry],), tm.encrypt,
             '--tls-remote', '%u/%u' % (int(self._prefix, 2), len(self._prefix)),
@@ -406,12 +408,17 @@ class TunnelManager(object):
         if self._gateway_manager is not None:
             self._gateway_manager.remove(trusted_ip)
 
-    def _ovpn_route_up(self, common_name, ip):
+    def _ovpn_route_up(self, common_name, time, ip):
         prefix = utils.binFromSubnet(common_name)
-        try:
-            self._connection_dict[prefix].connected()
-        except KeyError:
-            pass
+        c = self._connection_dict.get(prefix)
+        if c and c.time < float(time):
+            try:
+                c.connected()
+            except (KeyError, TypeError), e:
+                logging.error("%s (route_up %s)", e, common_name)
+        else:
+            logging.info("ignore route_up notification for %s %r",
+                         common_name, tuple(self._connection_dict))
         if self._ip_changed:
             family, address = self._ip_changed(ip)
             if address:
