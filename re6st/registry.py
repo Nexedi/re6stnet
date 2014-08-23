@@ -1,6 +1,7 @@
 import base64, hmac, hashlib, httplib, inspect, logging, mailbox, os, random
-import select, smtplib, socket, sqlite3, string, struct, threading, time
+import select, smtplib, socket, sqlite3, string, struct, sys, threading, time
 from collections import deque
+from datetime import datetime
 from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
 from email.mime.text import MIMEText
 from OpenSSL import crypto
@@ -9,6 +10,7 @@ from . import tunnel, utils
 
 HMAC_HEADER = "Re6stHMAC"
 RENEW_PERIOD = 30 * 86400
+GRACE_PERIOD = RENEW_PERIOD
 
 
 class getcallargs(type):
@@ -77,6 +79,49 @@ class RegistryServer(object):
         logging.info("Network: %s/%u", utils.ipFromBin(self.network),
                                        len(self.network))
         self._email = self.ca.get_subject().emailAddress
+        self._onTimeout()
+
+    def _onTimeout(self):
+        # XXX: Because we use threads to process requests, the statements
+        #      'self._timeout = 1' below have no effect as long as the
+        #      'select' call does not return. Ideally, we should interrupt it.
+        logging.info("Checking if there's any old entry in the database ...")
+        not_after = None
+        old = time.time() - GRACE_PERIOD
+        q =  self.db.execute
+        with self.lock:
+          with self.db:
+            q("BEGIN")
+            for token, x in q("SELECT token, date FROM token"):
+                if x <= old:
+                    q("DELETE FROM token WHERE token=?", (token,))
+                elif not_after is None or x < not_after:
+                    not_after = x
+            for prefix, email, cert in q("SELECT * FROM cert"
+                                         " WHERE cert IS NOT NULL"):
+                try:
+                    cert = crypto.load_certificate(crypto.FILETYPE_PEM, cert)
+                except crypto.Error:
+                    continue
+                x = utils.notAfter(cert)
+                if x <= old:
+                    if prefix == self.prefix:
+                        logging.critical("Refuse to delete certificate"
+                                         " of main node: wrong clock ?")
+                        sys.exit(1)
+                    logging.info("Delete %s: %s (invalid since %s)",
+                        "certificate requested by '%s'" % email
+                        if email else "anonymous certificate",
+                        ", ".join("%s=%s" % x for x in
+                                  cert.get_subject().get_components()),
+                        datetime.utcfromtimestamp(x).isoformat())
+                    q("UPDATE cert SET email=null, cert=null WHERE prefix=?",
+                      (prefix,))
+                elif not_after is None or x < not_after:
+                    not_after = x
+            # TODO: reduce 'cert' table by merging free slots
+            #       (IOW, do the contrary of _newPrefix)
+            self._timeout = not_after and not_after + GRACE_PERIOD
 
     def _handle_request(self, request, method, kw):
         m = getattr(self, method)
@@ -129,16 +174,18 @@ class RegistryServer(object):
                                (client_prefix,)).next()[0]
 
     def requestToken(self, email):
-        while True:
-            # Generating token
-            token = ''.join(random.sample(string.ascii_lowercase, 8))
-            args = token, email, self.config.prefix_length, int(time.time())
-            # Updating database
-            try:
-                self.db.execute("INSERT INTO token VALUES (?,?,?,?)", args)
-                break
-            except sqlite3.IntegrityError:
-                pass
+        with self.lock:
+            while True:
+                # Generating token
+                token = ''.join(random.sample(string.ascii_lowercase, 8))
+                args = token, email, self.config.prefix_length, int(time.time())
+                # Updating database
+                try:
+                    self.db.execute("INSERT INTO token VALUES (?,?,?,?)", args)
+                    break
+                except sqlite3.IntegrityError:
+                    pass
+            self._timeout = 1
 
         # Creating and sending email
         msg = MIMEText('Hello, your token to join re6st network is: %s\n'
@@ -219,6 +266,7 @@ class RegistryServer(object):
         cert = crypto.dump_certificate(crypto.FILETYPE_PEM, cert)
         self.db.execute("UPDATE cert SET cert = ? WHERE prefix = ?",
                         (cert, client_prefix))
+        self._timeout = 1
         return cert
 
     def renewCertificate(self, cn):

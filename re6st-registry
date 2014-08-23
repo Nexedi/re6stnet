@@ -1,5 +1,5 @@
 #!/usr/bin/python
-import errno, httplib, logging, select, socket
+import errno, httplib, logging, select, socket, time
 from BaseHTTPServer import BaseHTTPRequestHandler
 from SocketServer import ThreadingTCPServer
 from urlparse import parse_qsl
@@ -103,8 +103,17 @@ def main():
     if server_list:
         empty_list = []
         while True:
+            while True:
+                next = server._timeout
+                if next is None:
+                    break
+                next -= time.time()
+                if next > 0:
+                    break
+                server._onTimeout()
             try:
-                r = select.select(server_list[:], empty_list, empty_list)[0]
+                r = select.select(server_list[:], empty_list, empty_list,
+                                  next)[0]
             except select.error as e:
                 if e.args[0] != errno.EINTR:
                     raise
