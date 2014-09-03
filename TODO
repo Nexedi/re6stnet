@@ -1,5 +1,3 @@
-- Test the package
-
 - Put more information in the token mail (registry), such as:
 
   - the ip address of the network being built
@@ -7,7 +5,6 @@
 
 - Babel limitations:
 
-  - The metric does not take latency into account.
   - re6stnet needs to communicate with Babel so that only unused tunnels are
     freed. For the moment, routes will be randomly broken throughout the
     network, from time to time, for small amounts of time.
@@ -22,3 +19,6 @@
 
 - Abort in case of import child process failure (babel, openvpn server,
   openvpn client if run with --client).
+
+- registry: add '--home PATH' command line option so that / display an HTML
+  page from PATH (use new str.format for templating)

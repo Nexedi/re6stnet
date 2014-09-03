@@ -1,3 +1,23 @@
+"""
+Authenticated communication:
+
+  handshake (hello):
+    C->S: CN
+    S->C: X = Encrypt(CN)(secret), Sign(CA)(X)
+
+  call:
+    C->S: CN, ..., HMAC(secret+1)(path_info?query_string)
+    S->C: result, HMAC(secret+2)(result)
+
+  secret+1 = SHA1(secret) to protect from replay attacks
+
+  HMAC in custom header, base64-encoded
+
+  To prevent anyone from breaking an existing session,
+  keep 2 secrets for each client:
+  - the last one that was really used by the client (!hello)
+  - the one of the last handshake (hello)
+"""
 import base64, hmac, hashlib, httplib, inspect, logging, mailbox, os, random
 import select, smtplib, socket, sqlite3, string, struct, sys, threading, time
 from collections import deque
