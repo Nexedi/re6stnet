@@ -1,6 +1,6 @@
-import logging, os, random, socket, subprocess, time
+import logging, os, random, socket, subprocess, time, weakref
 from collections import defaultdict, deque
-from . import plib, utils, version
+from . import ctl, plib, utils, version
 
 PORT = 326
 
@@ -39,7 +39,7 @@ class MultiGatewayManager(dict):
 
 class Connection(object):
 
-    _retry = routes = 0
+    _retry = 0
     time = float('inf')
 
     def __init__(self, tunnel_manager, address_list, iface, prefix):
@@ -104,10 +104,11 @@ class Connection(object):
 
 class TunnelManager(object):
 
-    def __init__(self, peer_db, openvpn_args, timeout,
+    def __init__(self, control_socket, peer_db, openvpn_args, timeout,
                 refresh, client_count, iface_list, network, prefix,
                 address, ip_changed, encrypt, remote_gateway, disable_proto,
                 neighbour_list=()):
+        self.ctl = ctl.Babel(control_socket, weakref.proxy(self), network)
         self.encrypt = encrypt
         self.ovpn_args = openvpn_args
         self.peer_db = peer_db
@@ -117,7 +118,7 @@ class TunnelManager(object):
         self._read_pipe = os.fdopen(r)
         self._connecting = set()
         self._connection_dict = {}
-        self._disconnected = None
+        self._disconnected = 0
         self._distant_peers = []
         self._iface_to_prefix = {}
         self._refresh_time = refresh
@@ -189,28 +190,33 @@ class TunnelManager(object):
     def select(self, r, w, t):
         r[self._read_pipe] = self.handleTunnelEvent
         r[self.sock] = self.handlePeerEvent
-        t.append((self._next_refresh, self.refresh))
+        if self._next_refresh:
+            t.append((self._next_refresh, self.refresh))
+        self.ctl.select(r, w, t)
 
     def refresh(self):
         logging.debug('Checking tunnels...')
         self._cleanDeads()
+        if self._next_tunnel_refresh < time.time() or \
+           self._makeNewTunnels(False):
+            self._next_refresh = None
+            self.ctl.request_dump() # calls babel_dump immediately at startup
+        else:
+            self._next_refresh = time.time() + 5
+
+    def babel_dump(self):
         remove = self._next_tunnel_refresh < time.time()
         if remove:
-            self._countRoutes()
             self._removeSomeTunnels()
             self.resetTunnelRefresh()
             self.peer_db.log()
-        self._makeNewTunnels(remove)
-        # XXX: Commented code is an attempt to clean up unused interfaces but
-        #      it is too aggressive. Sometimes _makeNewTunnels only asks address
-        #      (and the tunnel is created when we have an answer), so when the
-        #      maximum number of tunnels is reached, taps are recreated all the
-        #      time.
-        #      Also, babeld does not leave ipv6 membership for deleted taps,
+        self._makeNewTunnels(True)
+        # XXX: Commented code is an attempt to clean up unused interfaces
+        #      but babeld does not leave ipv6 membership for deleted taps,
         #      causing a memory leak in the kernel (capped by sysctl
         #      net.core.optmem_max), and after some time, new neighbours fail
         #      to see each other.
-        #if remove and self._free_iface_list:
+        #if remove and len(self._connecting) < len(self._free_iface_list):
         #    self._tuntap(self._free_iface_list.pop())
         self._next_refresh = time.time() + 5
 
@@ -220,7 +226,13 @@ class TunnelManager(object):
                 self._kill(prefix)
 
     def _tunnelScore(self, prefix):
-        n = self._connection_dict[prefix].routes
+        n = 0
+        try:
+            for x in self.ctl.neighbours[prefix][1]:
+                if x:
+                    n += 1
+        except KeyError:
+            pass
         return (prefix in self._neighbour_set, n) if n else ()
 
     def _removeSomeTunnels(self):
@@ -244,7 +256,6 @@ class TunnelManager(object):
                       int(prefix, 2), len(prefix))
 
     def _makeTunnel(self, prefix, address):
-        assert len(self._connection_dict) < self._client_count, (prefix, self.__dict__)
         if prefix in self._served or prefix in self._connection_dict:
             return False
         assert prefix != self._prefix, self.__dict__
@@ -264,40 +275,56 @@ class TunnelManager(object):
         c.open()
         return True
 
-    def _makeNewTunnels(self, route_counted):
+    def _makeNewTunnels(self, route_dumped):
         count = self._client_count - len(self._connection_dict)
         if not count:
             return
-        assert count >= 0
         # CAVEAT: Forget any peer that didn't reply to our previous address
         #         request, either because latency is too high or some packet
         #         was lost. However, this means that some time should pass
         #         before calling _makeNewTunnels again.
         self._connecting.clear()
         distant_peers = self._distant_peers
-        if len(distant_peers) < count and not route_counted:
-            self._countRoutes()
-        disconnected = self._disconnected
-        if disconnected is not None:
-            logging.info("No route to registry (%u neighbours, %u distant"
-                         " peers)", len(disconnected), len(distant_peers))
-            # We aren't the registry node and we have no tunnel to or from it,
-            # so it looks like we are not connected to the network, and our
-            # neighbours are in the same situation.
-            self._disconnected = None
-            disconnected = set(disconnected).union(distant_peers)
-            if disconnected:
-                # We do have neighbours that are probably also disconnected,
-                # so force rebootstrapping.
-                peer = self.peer_db.getBootstrapPeer()
-                if not peer:
-                    # Registry dead ? Assume we're connected after all.
-                    disconnected = None
-                elif peer[0] not in disconnected:
-                    # Got a node that will probably help us rejoining the
-                    # network, so connect to it.
-                    count -= self._makeTunnel(*peer)
-        if disconnected is None:
+        if len(distant_peers) < count or 0 < self._disconnected < time.time():
+            if not route_dumped:
+                return True
+            logging.debug('Analyze routes ...')
+            neighbours = self.ctl.neighbours
+            # Collect all nodes known by Babel
+            peers = set(prefix
+                for neigh_routes in neighbours.itervalues()
+                for prefix in neigh_routes[1]
+                if prefix)
+            # Keep only distant peers.
+            distant_peers[:] = peers.difference(neighbours)
+            # Check whether we're connected to the network.
+            registry = self.peer_db.registry_prefix
+            if (registry == self._prefix or registry in peers
+                                         or registry in self._connection_dict
+                                         or registry in self._served):
+                self._disconnected = 0
+            # Do not bootstrap too often, especially if we are several
+            # nodes to try.
+            elif self._disconnected < time.time():
+                logging.info("No route to registry (%u peers, %u distant)",
+                             len(peers), len(distant_peers))
+                self._disconnected = time.time() + self.timeout * (
+                    1 + random.randint(0, len(peers)))
+                distant_peers = None
+                if peers:
+                    # We aren't the only disconnected node
+                    # so force rebootstrapping.
+                    peer = self.peer_db.getBootstrapPeer()
+                    if not peer:
+                        # Registry dead ? Assume we're connected after all.
+                        distant_peers = self._distant_peers
+                    elif peer[0] not in peers:
+                        # Got a node that will probably help us rejoining
+                        # the network, so connect to it.
+                        count -= self._makeTunnel(*peer)
+                        if not count:
+                            return
+        if distant_peers:
             # Normal operation. Choose peers to connect to by looking at the
             # routing table.
             neighbour_set = self._neighbour_set.intersection(distant_peers)
@@ -306,36 +333,31 @@ class TunnelManager(object):
                     peer = neighbour_set.pop()
                     i = distant_peers.index(peer)
                 else:
-                    i = random.randrange(0, len(distant_peers))
+                    i = random.randrange(len(distant_peers))
                     peer = distant_peers[i]
                 distant_peers[i] = distant_peers[-1]
                 del distant_peers[-1]
                 address = self.peer_db.getAddress(peer)
                 if address:
                     count -= self._makeTunnel(peer, address)
-                else:
-                    ip = utils.ipFromBin(self._network + peer)
-                    try:
-                        self.sock.sendto('\2', (ip, PORT))
-                    except socket.error, e:
-                        logging.info('Failed to query %s (%s)', ip, e)
+                elif self.sendto(peer, '\2'):
                     self._connecting.add(peer)
                     count -= 1
-        elif count:
+        elif distant_peers is None:
             # No route/tunnel to registry, which usually happens when starting
             # up. Select peers from cache for which we have no route.
             new = 0
             bootstrap = True
             for peer, address in self.peer_db.getPeerList():
-                if peer not in disconnected:
-                    logging.info("Try to bootstrap using peer %u/%u",
-                                 int(peer, 2), len(peer))
+                if peer not in peers:
                     bootstrap = False
                     if self._makeTunnel(peer, address):
                         new += 1
                         if new == count:
                             return
-            if not (new or disconnected):
+            # The following condition on 'peers' is the same as above,
+            # when we asked the registry for a node to bootstrap.
+            if not (new or peers):
                 if bootstrap:
                     # Startup without any good address in the cache.
                     peer = self.peer_db.getBootstrapPeer()
@@ -346,41 +368,6 @@ class TunnelManager(object):
                 for peer in self.peer_db.getPeerList(1):
                     if self._makeTunnel(*peer):
                         break
-
-    def _countRoutes(self):
-        logging.debug('Starting to count the routes on each interface...')
-        del self._distant_peers[:]
-        for conn in self._connection_dict.itervalues():
-            conn.routes = 0
-        other = []
-        for iface, prefix in utils.iterRoutes(self._network, self._prefix):
-            assert iface != 'lo', (iface, prefix)
-            nexthop = self._iface_to_prefix.get(iface)
-            if nexthop:
-                self._connection_dict[nexthop].routes += 1
-            if prefix in self._served or prefix in self._connection_dict:
-                continue
-            if iface in self._iface_list:
-                other.append(prefix)
-            else:
-                self._distant_peers.append(prefix)
-        registry = self.peer_db.registry_prefix
-        if registry == self._prefix or any(registry in x for x in (
-              self._distant_peers, other, self._served, self._connection_dict)):
-            self._disconnected = None
-            # XXX: When there is no new peer to connect when looking at routes
-            #      coming from tunnels, we'd like to consider those discovered
-            #      from the LAN. However, we don't want to create tunnels to
-            #      nodes of the LAN so do nothing until we find a way to get
-            #      some information from Babel.
-            #if not self._distant_peers:
-            #    self._distant_peers = other
-        else:
-            self._disconnected = other
-        logging.debug("Routes counted: %u distant peers",
-                      len(self._distant_peers))
-        for c in self._connection_dict.itervalues():
-            logging.trace('- %s: %s', c.iface, c.routes)
 
     def killAll(self):
         for prefix in self._connection_dict.keys():
@@ -430,6 +417,14 @@ class TunnelManager(object):
             family, address = self._ip_changed(ip)
             if address:
                 self._address[family] = utils.dump_address(address)
+
+    def sendto(self, peer, msg):
+        ip = utils.ipFromBin(self._network + peer)
+        try:
+            return self.sock.sendto(msg, (ip, PORT))
+        except socket.error, e:
+            logging.info('Failed to send message to %s/%s (%s)',
+                         int(peer, 2), len(peer), e)
 
     def _sendto(self, to, msg):
         try:

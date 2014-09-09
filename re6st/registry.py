@@ -18,15 +18,16 @@ Authenticated communication:
   - the last one that was really used by the client (!hello)
   - the one of the last handshake (hello)
 """
-import base64, hmac, hashlib, httplib, inspect, logging, mailbox, os, random
-import select, smtplib, socket, sqlite3, string, struct, sys, threading, time
+import base64, hmac, hashlib, httplib, inspect, logging
+import mailbox, os, random, select, smtplib, socket, sqlite3
+import string, struct, sys, threading, time, weakref
 from collections import deque
 from datetime import datetime
 from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
 from email.mime.text import MIMEText
 from OpenSSL import crypto
 from urllib import splittype, splithost, splitport, urlencode
-from . import tunnel, utils
+from . import ctl, tunnel, utils
 
 HMAC_HEADER = "Re6stHMAC"
 RENEW_PERIOD = 30 * 86400
@@ -88,11 +89,21 @@ class RegistryServer(object):
         logging.info("Network: %s/%u", utils.ipFromBin(self.network),
                                        len(self.network))
         self.email = self.ca.get_subject().emailAddress
+
+        self.peers_lock = threading.Lock()
+        l = threading.Lock()
+        l.acquire()
+        self.wait_dump = l.acquire
+        self.babel_dump = l.release
+        self.ctl = ctl.Babel(config.control_socket,
+            weakref.proxy(self), self.network)
+
         self.onTimeout()
 
     def select(self, r, w, t):
         if self.timeout:
             t.append((self.timeout, self.onTimeout))
+        self.ctl.select(r, w, t)
 
     def onTimeout(self):
         # XXX: Because we use threads to process requests, the statements
@@ -306,10 +317,16 @@ class RegistryServer(object):
 
     @rpc
     def getBootstrapPeer(self, cn):
-        with self.lock:
+        with self.peers_lock:
             age, peers = self.peers
             if age < time.time() or not peers:
-                peers = [x[1] for x in utils.iterRoutes(self.network)]
+                self.ctl.request_dump()
+                self.wait_dump()
+                peers = [prefix
+                    for neigh_routes in self.ctl.neighbours.itervalues()
+                    for prefix in neigh_routes[1]
+                    if prefix]
+                peers.append(self.prefix)
                 random.shuffle(peers)
                 self.peers = time.time() + 60, peers
             peer = peers.pop()
@@ -318,6 +335,7 @@ class RegistryServer(object):
                 # so don't bother looping over above code
                 # (in case 'peers' is empty).
                 peer = self.prefix
+        with self.lock:
             address = utils.ipFromBin(self.network + peer), tunnel.PORT
             self.sock.sendto('\2', address)
             start = time.time()

@@ -161,7 +161,8 @@ if 1:
         " -set_serial 0x120010db80042 -days %u" % CA_DAYS, shell=True)
     db_path = 'registry/registry.db'
     registry.screen('../re6st-registry @registry/re6st-registry.conf --db %s'
-        ' --mailhost %s -v%u' % (db_path, os.path.abspath('mbox'), VERBOSE))
+        ' --mailhost %s -v%u --control-socket registry/babeld.socket'
+        % (db_path, os.path.abspath('mbox'), VERBOSE))
     registry_url = 'http://%s/' % REGISTRY
     registry.Popen(('python', '-c', """if 1:
         import socket, time
@@ -194,8 +195,9 @@ if 1:
             p.communicate(str(token[0]))
             os.remove(dh_path)
             os.remove(folder + '/ca.crt')
-        node.screen('../re6stnet @%s/re6stnet.conf -v%u --registry %s %s'
-                    % (folder, VERBOSE, registry, args))
+        node.screen('../re6stnet @%s/re6stnet.conf -v%u --registry %s'
+                    ' --control-socket %s/babeld.socket'
+                    ' %s' % (folder, VERBOSE, registry, folder, args))
     re6stnet(registry, 'registry', '--ip ' + REGISTRY, registry='http://localhost/')
     re6stnet(machine1, 'm1', '-I%s' % m1_if_0.name)
     re6stnet(machine2, 'm2', '--remote-gateway 10.1.1.1', prefix_len=80)

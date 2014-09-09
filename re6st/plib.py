@@ -62,7 +62,7 @@ def client(iface, address_list, encrypt, *args, **kw):
 
 
 def router(subnet, hello_interval, table, log_path, state_path, pidfile,
-           tunnel_interfaces, *args, **kw):
+           tunnel_interfaces, control_socket, *args, **kw):
     s = utils.ipFromBin(subnet)
     n = len(subnet)
     cmd = ['babeld',
@@ -80,6 +80,8 @@ def router(subnet, hello_interval, table, log_path, state_path, pidfile,
         cmd += '-t%u' % table, '-T%u' % table
     else:
         cmd[-2:-2] = '-C', 'redistribute ip ::/0 eq 0'
+    if control_socket:
+        cmd += '-R', '%s' % control_socket
     for iface in tunnel_interfaces:
         cmd += '-C', 'interface %s legacy-rxcost 5120' % iface
     cmd += args
