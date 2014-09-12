@@ -90,6 +90,10 @@ class RegistryServer(object):
         self.email = self.ca.get_subject().emailAddress
         self.onTimeout()
 
+    def select(self, r, t):
+        if self.timeout:
+            t.append((self.timeout, self.onTimeout))
+
     def onTimeout(self):
         # XXX: Because we use threads to process requests, the statements
         #      'self.timeout = 1' below have no effect as long as the

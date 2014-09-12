@@ -1,5 +1,5 @@
 #!/usr/bin/python
-import errno, httplib, logging, select, socket, time
+import httplib, logging, socket
 from BaseHTTPServer import BaseHTTPRequestHandler
 from SocketServer import ThreadingTCPServer
 from urlparse import parse_qsl
@@ -93,33 +93,18 @@ def main():
     def requestHandler(request, client_address, _):
         RequestHandler(request, client_address, server)
 
-    server_list = []
+    server_dict = {}
     if config.bind4:
-        server_list.append(HTTPServer4((config.bind4, config.port),
-                                       requestHandler))
+        r = HTTPServer4((config.bind4, config.port), requestHandler)
+        server_dict[r.fileno()] = r._handle_request_noblock
     if config.bind6:
-        server_list.append(HTTPServer6((config.bind6, config.port),
-                                       requestHandler))
-    if server_list:
-        empty_list = []
+        r = HTTPServer6((config.bind6, config.port), requestHandler)
+        server_dict[r.fileno()] = r._handle_request_noblock
+    if server_dict:
         while True:
-            while True:
-                next = server.timeout
-                if next is None:
-                    break
-                next -= time.time()
-                if next > 0:
-                    break
-                server.onTimeout()
-            try:
-                r = select.select(server_list[:], empty_list, empty_list,
-                                  next)[0]
-            except select.error as e:
-                if e.args[0] != errno.EINTR:
-                    raise
-            else:
-                for r in r:
-                    r._handle_request_noblock()
+            args = server_dict.copy(), []
+            server.select(*args)
+            utils.select(*args)
 
 
 if __name__ == "__main__":

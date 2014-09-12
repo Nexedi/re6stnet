@@ -1,4 +1,4 @@
-import logging, random, socket, subprocess, time
+import logging, os, random, socket, subprocess, time
 from collections import defaultdict, deque
 from . import plib, utils, version
 
@@ -104,7 +104,7 @@ class Connection(object):
 
 class TunnelManager(object):
 
-    def __init__(self, write_pipe, peer_db, openvpn_args, timeout,
+    def __init__(self, peer_db, openvpn_args, timeout,
                 refresh, client_count, iface_list, network, prefix,
                 address, ip_changed, encrypt, remote_gateway, disable_proto,
                 neighbour_list=()):
@@ -112,7 +112,9 @@ class TunnelManager(object):
         self.ovpn_args = openvpn_args
         self.peer_db = peer_db
         self.timeout = timeout
-        self.write_pipe = write_pipe
+        # Create and open read_only pipe to get server events
+        r, self.write_pipe = os.pipe()
+        self._read_pipe = os.fdopen(r)
         self._connecting = set()
         self._connection_dict = {}
         self._disconnected = None
@@ -140,7 +142,7 @@ class TunnelManager(object):
         # about binding and anycast.
         self.sock.bind(('::', PORT))
 
-        self.next_refresh = time.time()
+        self._next_refresh = time.time()
         self.resetTunnelRefresh()
 
         self._client_count = client_count
@@ -184,6 +186,11 @@ class TunnelManager(object):
         self._free_iface_list.append(iface)
         del self._iface_to_prefix[iface]
 
+    def select(self, r, t):
+        r[self._read_pipe] = self.handleTunnelEvent
+        r[self.sock] = self.handlePeerEvent
+        t.append((self._next_refresh, self.refresh))
+
     def refresh(self):
         logging.debug('Checking tunnels...')
         self._cleanDeads()
@@ -205,7 +212,7 @@ class TunnelManager(object):
         #      to see each other.
         #if remove and self._free_iface_list:
         #    self._tuntap(self._free_iface_list.pop())
-        self.next_refresh = time.time() + 5
+        self._next_refresh = time.time() + 5
 
     def _cleanDeads(self):
         for prefix in self._connection_dict.keys():
@@ -379,9 +386,9 @@ class TunnelManager(object):
         for prefix in self._connection_dict.keys():
             self._kill(prefix)
 
-    def handleTunnelEvent(self, msg):
+    def handleTunnelEvent(self):
         try:
-            msg = msg.rstrip()
+            msg = self._read_pipe.readline().rstrip()
             args = msg.split()
             m = getattr(self, '_ovpn_' + args.pop(0).replace('-', '_'))
         except (AttributeError, ValueError):

@@ -1,5 +1,5 @@
 #!/usr/bin/python
-import atexit, errno, logging, os, select, signal, socket
+import atexit, errno, logging, os, signal, socket
 import sqlite3, subprocess, sys, time, threading
 from collections import deque
 from OpenSSL import crypto
@@ -301,18 +301,16 @@ def main():
         cleanup = []
         if config.client_count and not config.client:
             required('registry')
-            # Create and open read_only pipe to get server events
-            r_pipe, write_pipe = os.pipe()
-            read_pipe = os.fdopen(r_pipe)
             peer_db = db.PeerDB(db_path, registry, config.key, network, prefix)
             cleanup.append(lambda: peer_db.cacheMinimize(config.client_count))
-            tunnel_manager = tunnel.TunnelManager(write_pipe, peer_db,
+            tunnel_manager = tunnel.TunnelManager(peer_db,
                 config.openvpn_args, timeout, config.tunnel_refresh,
                 config.client_count, config.iface_list, network, prefix,
                 address, ip_changed, config.encrypt, remote_gateway,
                 config.disable_proto, config.neighbour)
             cleanup.append(tunnel_manager.sock.close)
             tunnel_interfaces += tunnel_manager.new_iface_list
+            write_pipe = tunnel_manager.write_pipe
         else:
             tunnel_manager = write_pipe = None
 
@@ -418,34 +416,18 @@ def main():
                 cleanup.append(utils.Popen(cmd, shell=True).stop)
 
             # main loop
-            if tunnel_manager is None:
-                exit.release()
-                time.sleep(max(0, next_renew - time.time()))
-                raise ReexecException("Restart to renew certificate")
-            cleanup += tunnel_manager.delInterfaces, tunnel_manager.killAll
+            select_list = [forwarder.select] if forwarder else []
+            if tunnel_manager:
+                select_list.append(tunnel_manager.select)
+                cleanup += tunnel_manager.delInterfaces, tunnel_manager.killAll
             exit.release()
+            def renew():
+                raise ReexecException("Restart to renew certificate")
+            select_list.append(utils.select)
             while True:
-                next = tunnel_manager.next_refresh
-                if forwarder:
-                    next = min(next, forwarder.next_refresh)
-                r = [read_pipe, tunnel_manager.sock]
-                try:
-                    r = select.select(r, [], [], max(0, next - time.time()))[0]
-                except select.error as e:
-                    if e.args[0] != errno.EINTR:
-                        raise
-                    continue
-                if read_pipe in r:
-                    tunnel_manager.handleTunnelEvent(read_pipe.readline())
-                if tunnel_manager.sock in r:
-                    tunnel_manager.handlePeerEvent()
-                t = time.time()
-                if t >= tunnel_manager.next_refresh:
-                    tunnel_manager.refresh()
-                    if t >= next_renew:
-                        raise ReexecException("Restart to renew certificate")
-                if forwarder and t >= forwarder.next_refresh:
-                    forwarder.refresh()
+                args = {}, [(next_renew, renew)]
+                for s in select_list:
+                    s(*args)
         finally:
             # XXX: We have a possible race condition if a signal is handled at
             #      the beginning of this clause, just before the following line.

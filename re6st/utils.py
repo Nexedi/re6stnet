@@ -1,5 +1,5 @@
-import argparse, calendar, errno, logging, os, shlex, signal, socket
-import struct, subprocess, sys, textwrap, threading, time, traceback
+import argparse, calendar, errno, logging, os, select as _select, shlex, signal
+import socket, struct, subprocess, sys, textwrap, threading, time, traceback
 try:
     subprocess.CalledProcessError(0, '', '')
 except TypeError: # BBB: Python < 2.7
@@ -164,6 +164,21 @@ class Popen(subprocess.Popen):
             t.cancel()
             return r
 
+
+def select(R, T):
+    try:
+        r, w, _ = _select.select(R, (), (),
+            max(0, min(T)[0] - time.time()) if T else None)
+    except _select.error as e:
+        if e.args[0] != errno.EINTR:
+            raise
+        return
+    for r in r:
+        R[r]()
+    t = time.time()
+    for next_refresh, refresh in T:
+        if next_refresh <= t:
+            refresh()
 
 def makedirs(path):
     try:
