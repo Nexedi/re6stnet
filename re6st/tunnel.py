@@ -101,6 +101,59 @@ class Connection(object):
             self.open()
         return True
 
+class TunnelKiller(object):
+
+    state = None
+
+    def __init__(self, peer, tunnel_manager, client=False):
+        self.peer = peer
+        self.tm = weakref.proxy(tunnel_manager)
+        self.timeout = time.time() + 2 * tunnel_manager.timeout
+        self.client = client
+        self()
+
+    def __call__(self):
+        if self.state:
+            return getattr(self, self.state)()
+        tm_ctl = self.tm.ctl
+        try:
+            neigh = tm_ctl.neighbours[self.peer][0]
+        except KeyError:
+            return
+        self.state = 'softLocking'
+        tm_ctl.send(ctl.SetCostMultiplier(neigh.address, neigh.ifindex, 4096))
+        self.address = neigh.address
+        self.ifindex = neigh.ifindex
+        self.cost_multiplier = neigh.cost_multiplier
+
+    def softLocking(self):
+        tm = self.tm
+        if self.peer in tm.ctl.neighbours or None in tm.ctl.neighbours:
+            return
+        tm.ctl.send(ctl.SetCostMultiplier(self.address, self.ifindex, 0))
+        self.state = "hardLocking"
+
+    def hardLocking(self):
+        tm = self.tm
+        if (self.address, self.ifindex) in tm.ctl.locked:
+            self.state = 'locked'
+            self.timeout = time.time() + 2 * tm.timeout
+            tm.sendto(self.peer, ('\4' if self.client else '\5') + tm._prefix)
+        else:
+            self.timeout = 0
+
+    def unlock(self):
+        if self.state:
+            self.tm.ctl.send(ctl.SetCostMultiplier(self.address, self.ifindex,
+                                                   self.cost_multiplier))
+
+    def abort(self):
+        if self.state != 'unlocking':
+            self.state = 'unlocking'
+            self.timeout = time.time() + 2 * self.tm.timeout
+
+    locked = unlocking = lambda _: None
+
 
 class TunnelManager(object):
 
@@ -137,6 +190,7 @@ class TunnelManager(object):
         self._disable_proto = disable_proto
         self._neighbour_set = set(map(utils.binFromSubnet, neighbour_list))
         self._served = set()
+        self._killing = {}
 
         self.sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
         # See also http://stackoverflow.com/questions/597225/
@@ -198,6 +252,7 @@ class TunnelManager(object):
         logging.debug('Checking tunnels...')
         self._cleanDeads()
         if self._next_tunnel_refresh < time.time() or \
+           self._killing or \
            self._makeNewTunnels(False):
             self._next_refresh = None
             self.ctl.request_dump() # calls babel_dump immediately at startup
@@ -205,7 +260,15 @@ class TunnelManager(object):
             self._next_refresh = time.time() + 5
 
     def babel_dump(self):
-        remove = self._next_tunnel_refresh < time.time()
+        t = time.time()
+        if self._killing:
+            for prefix, tunnel_killer in self._killing.items():
+                if tunnel_killer.timeout < t:
+                    tunnel_killer.unlock()
+                    del self._killing[prefix]
+                else:
+                    tunnel_killer()
+        remove = self._next_tunnel_refresh < t
         if remove:
             self._removeSomeTunnels()
             self.resetTunnelRefresh()
@@ -237,15 +300,25 @@ class TunnelManager(object):
 
     def _removeSomeTunnels(self):
         # Get the candidates to killing
-        count = len(self._connection_dict) - self._client_count + 1
+        peer_set = set(self._connection_dict)
+        peer_set.difference_update(self._killing)
+        count = len(peer_set) - self._client_count + 1
         if count > 0:
-            for prefix in sorted(self._connection_dict,
-                                 key=self._tunnelScore)[:count]:
-                self._kill(prefix)
+            for prefix in sorted(peer_set, key=self._tunnelScore)[:count]:
+                self._killing[prefix] = TunnelKiller(prefix, self, True)
+
+    def _abortTunnelKiller(self, prefix):
+        tunnel_killer = self._killing.get(prefix)
+        if tunnel_killer:
+            if tunnel_killer.state:
+                tunnel_killer.abort()
+            else:
+                del self._killing[prefix]
 
     def _kill(self, prefix):
         logging.info('Killing the connection with %u/%u...',
                      int(prefix, 2), len(prefix))
+        self._abortTunnelKiller(prefix)
         connection = self._connection_dict.pop(prefix)
         self.freeInterface(connection.iface)
         connection.close()
@@ -399,6 +472,7 @@ class TunnelManager(object):
             self._served.remove(prefix)
         except KeyError:
             return
+        self._abortTunnelKiller(prefix)
         if self._gateway_manager is not None:
             self._gateway_manager.remove(trusted_ip)
 
@@ -472,6 +546,17 @@ class TunnelManager(object):
             #else: # I don't know my IP yet!
         elif code == 3:
             self._sendto(address, '\4' + version.version)
+        elif code in (4, 5): # kill
+            prefix = msg[1:]
+            if sender and sender.startswith(prefix, len(self._network)):
+                try:
+                    tunnel_killer = self._killing[prefix]
+                except KeyError:
+                    if code == 4 and prefix in self._served: # request
+                        self._killing[prefix] = TunnelKiller(prefix, self)
+                else:
+                    if code == 5 and tunnel_killer.state == 'locked': # response
+                        self._kill(prefix)
         elif code == 255:
             # the registry wants to know the topology for debugging purpose
             if not sender or sender[len(self._network):].startswith(

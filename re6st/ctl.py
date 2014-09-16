@@ -165,10 +165,14 @@ Dump = Packet(1,
   Struct("B"),
   Struct((
     Array(Struct((Struct("I", "index", "index"), String), "interface", "index name")),
-    Array(Struct("16sIHHHHHiHH", "neighbour", "address ifindex reach rxcost txcost rtt rttcost channel if_up")),
+    Array(Struct("16sIHHHHHiHH", "neighbour", "address ifindex reach rxcost txcost rtt rttcost channel if_up cost_multiplier")),
     Array(Struct("16sBH", "xroute", "prefix plen metric")),
     Array(Struct("16sBHHH8siiI16s16sB", "route", "prefix plen metric smoothed_metric refmetric id seqno age ifindex neigh_address nexthop flags")),
     ), "dump", "interfaces neighbours xroutes routes"))
+
+SetCostMultiplier = Packet(2,
+  Struct("16sIH"),
+  Struct("B", "set_cost_multiplier", "flags"))
 
 
 class Babel(object):
@@ -194,6 +198,7 @@ class Babel(object):
             return self.select(*args)
         self.select = select
         self.request_dump = lambda: self.handle_dump((), (), (), ())
+        self.locked = set()
 
     def send(self, packet):
         packet.write(self.write_buffer)
@@ -253,13 +258,20 @@ class Babel(object):
             else:
                 prefix = None
             neigh_routes[1][prefix] = route
+        self.locked.clear()
         if unidentified:
             routes = {}
             for address in unidentified:
-                routes.update(n[address][1])
+                neigh, r = n[address]
+                if not neigh.cost_multiplier:
+                    self.locked.add(address)
+                routes.update(r)
             if routes:
                 neighbours[None] = None, routes
                 logging.trace("Routes via unidentified neighbours. %r",
                               neighbours)
         self.interfaces = dict((i.index, name) for i, name in interfaces)
         self.handler.babel_dump()
+
+    def handle_set_cost_multiplier(self, flags):
+        pass
