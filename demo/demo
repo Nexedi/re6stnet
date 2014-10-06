@@ -151,8 +151,8 @@ else:
     print "Connectivity IPv4 OK!"
 
 nodes = []
-gateway1.screen('miniupnpd -d -f miniupnpd.conf -P miniupnpd.pid -a 10.1.1.1'
-                ' -i %s' % g1_if_0_name)
+gateway1.screen('miniupnpd -d -f miniupnpd.conf -P miniupnpd.pid'
+                ' -a %s -i %s' % (g1_if_1.name, g1_if_0_name))
 if 1:
     import sqlite3
     os.path.exists('ca.crt') or subprocess.check_call(
