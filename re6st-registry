@@ -29,8 +29,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 query = dict(parse_qsl(query, keep_blank_values=1,
                                               strict_parsing=1))
             _, path = path.split('/')
-            if not _ and path[0] != '_':
-                return self.server._handle_request(self, path, query)
+            if not _:
+                return self.server.handle_request(self, path, query)
         except Exception:
             logging.info(self.requestline, exc_info=1)
         self.send_error(httplib.BAD_REQUEST)
@@ -104,13 +104,13 @@ def main():
         empty_list = []
         while True:
             while True:
-                next = server._timeout
+                next = server.timeout
                 if next is None:
                     break
                 next -= time.time()
                 if next > 0:
                     break
-                server._onTimeout()
+                server.onTimeout()
             try:
                 r = select.select(server_list[:], empty_list, empty_list,
                                   next)[0]

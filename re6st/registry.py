@@ -32,27 +32,16 @@ HMAC_HEADER = "Re6stHMAC"
 RENEW_PERIOD = 30 * 86400
 GRACE_PERIOD = RENEW_PERIOD
 
-
-class getcallargs(type):
-
-    def __init__(cls, name, bases, d):
-        type.__init__(cls, name, bases, d)
-        for n, f in d.iteritems():
-            if n[0] == '_':
-                continue
-            try:
-                args, varargs, varkw, defaults = inspect.getargspec(f)
-            except TypeError:
-                continue
-            if varargs or varkw or defaults:
-                continue
-            f.getcallargs = eval("lambda %s: locals()" % ','.join(args[1:]))
+def rpc(f):
+    args, varargs, varkw, defaults = inspect.getargspec(f)
+    assert not (varargs or varkw or defaults), f
+    f.getcallargs = eval("lambda %s: locals()" % ','.join(args[1:]))
+    return f
 
 
 class RegistryServer(object):
 
-    __metaclass__ = getcallargs
-    _peers = 0, ()
+    peers = 0, ()
 
     def __init__(self, config):
         self.config = config
@@ -98,12 +87,12 @@ class RegistryServer(object):
         self.network = utils.networkFromCa(self.ca)
         logging.info("Network: %s/%u", utils.ipFromBin(self.network),
                                        len(self.network))
-        self._email = self.ca.get_subject().emailAddress
-        self._onTimeout()
+        self.email = self.ca.get_subject().emailAddress
+        self.onTimeout()
 
-    def _onTimeout(self):
+    def onTimeout(self):
         # XXX: Because we use threads to process requests, the statements
-        #      'self._timeout = 1' below have no effect as long as the
+        #      'self.timeout = 1' below have no effect as long as the
         #      'select' call does not return. Ideally, we should interrupt it.
         logging.info("Checking if there's any old entry in the database ...")
         not_after = None
@@ -140,10 +129,10 @@ class RegistryServer(object):
                 elif not_after is None or x < not_after:
                     not_after = x
             # TODO: reduce 'cert' table by merging free slots
-            #       (IOW, do the contrary of _newPrefix)
-            self._timeout = not_after and not_after + GRACE_PERIOD
+            #       (IOW, do the contrary of newPrefix)
+            self.timeout = not_after and not_after + GRACE_PERIOD
 
-    def _handle_request(self, request, method, kw):
+    def handle_request(self, request, method, kw):
         m = getattr(self, method)
         if method in ('topology',) and \
            request.client_address[0] not in ('127.0.0.1', '::1'):
@@ -177,9 +166,10 @@ class RegistryServer(object):
         if result:
             request.wfile.write(result)
 
+    @rpc
     def hello(self, client_prefix):
         with self.lock:
-            cert = self._getCert(client_prefix)
+            cert = self.getCert(client_prefix)
             key = hashlib.sha1(struct.pack('Q',
                 random.getrandbits(64))).digest()
             self.sessions.setdefault(client_prefix, [])[1:] = key,
@@ -188,11 +178,12 @@ class RegistryServer(object):
         assert len(key) == len(sign)
         return key + sign
 
-    def _getCert(self, client_prefix):
+    def getCert(self, client_prefix):
         assert self.lock.locked()
         return self.db.execute("SELECT cert FROM cert WHERE prefix = ?",
                                (client_prefix,)).next()[0]
 
+    @rpc
     def requestToken(self, email):
         with self.lock:
             while True:
@@ -205,14 +196,14 @@ class RegistryServer(object):
                     break
                 except sqlite3.IntegrityError:
                     pass
-            self._timeout = 1
+            self.timeout = 1
 
         # Creating and sending email
         msg = MIMEText('Hello, your token to join re6st network is: %s\n'
                        % token)
         msg['Subject'] = '[re6stnet] Token Request'
-        if self._email:
-            msg['From'] = self._email
+        if self.email:
+            msg['From'] = self.email
         msg['To'] = email
         if os.path.isabs(self.config.mailhost) or \
            os.path.isfile(self.config.mailhost):
@@ -224,10 +215,10 @@ class RegistryServer(object):
                     m.close()
         else:
             s = smtplib.SMTP(self.config.mailhost)
-            s.sendmail(self._email, email, msg.as_string())
+            s.sendmail(self.email, email, msg.as_string())
             s.quit()
 
-    def _newPrefix(self, prefix_len):
+    def newPrefix(self, prefix_len):
         max_len = 128 - len(self.network)
         assert 0 < prefix_len <= max_len
         try:
@@ -243,8 +234,9 @@ class RegistryServer(object):
         if len(prefix) < max_len or '1' in prefix:
             return prefix
         self.db.execute("UPDATE cert SET cert = 'reserved' WHERE prefix = ?", (prefix,))
-        return self._newPrefix(prefix_len)
+        return self.newPrefix(prefix_len)
 
+    @rpc
     def requestCertificate(self, token, req):
         req = crypto.load_certificate_request(crypto.FILETYPE_PEM, req)
         with self.lock:
@@ -263,17 +255,17 @@ class RegistryServer(object):
                     if not prefix_len:
                         return
                     email = None
-                prefix = self._newPrefix(prefix_len)
+                prefix = self.newPrefix(prefix_len)
                 self.db.execute("UPDATE cert SET email = ? WHERE prefix = ?",
                                 (email, prefix))
                 if self.prefix is None:
                     self.prefix = prefix
                     self.db.execute(
                         "INSERT INTO config VALUES ('prefix',?)", (prefix,))
-                return self._createCertificate(prefix, req.get_subject(),
+                return self.createCertificate(prefix, req.get_subject(),
                                                        req.get_pubkey())
 
-    def _createCertificate(self, client_prefix, subject, pubkey):
+    def createCertificate(self, client_prefix, subject, pubkey):
         cert = crypto.X509()
         cert.set_serial_number(0) # required for libssl < 1.0
         cert.gmtime_adj_notBefore(0)
@@ -286,37 +278,36 @@ class RegistryServer(object):
         cert = crypto.dump_certificate(crypto.FILETYPE_PEM, cert)
         self.db.execute("UPDATE cert SET cert = ? WHERE prefix = ?",
                         (cert, client_prefix))
-        self._timeout = 1
+        self.timeout = 1
         return cert
 
+    @rpc
     def renewCertificate(self, cn):
         with self.lock:
             with self.db:
-                pem = self._getCert(cn)
+                pem = self.getCert(cn)
                 cert = crypto.load_certificate(crypto.FILETYPE_PEM, pem)
                 if utils.notAfter(cert) - RENEW_PERIOD < time.time():
-                    pem = self._createCertificate(cn, cert.get_subject(),
-                                                      cert.get_pubkey())
+                    pem = self.createCertificate(cn, cert.get_subject(),
+                                                     cert.get_pubkey())
                 return pem
 
+    @rpc
     def getCa(self):
         return crypto.dump_certificate(crypto.FILETYPE_PEM, self.ca)
 
+    @rpc
     def getPrefix(self, cn):
         return self.prefix
 
-    def getPrivateAddress(self, cn):
-        # BBB: Deprecated by getPrefix.
-        return utils.ipFromBin(self.network + self.prefix)
-
+    @rpc
     def getBootstrapPeer(self, cn):
         with self.lock:
-            cert = self._getCert(cn)
-            age, peers = self._peers
+            age, peers = self.peers
             if age < time.time() or not peers:
                 peers = [x[1] for x in utils.iterRoutes(self.network)]
                 random.shuffle(peers)
-                self._peers = time.time() + 60, peers
+                self.peers = time.time() + 60, peers
             peer = peers.pop()
             if peer == cn:
                 # Very unlikely (e.g. peer restarted with empty cache),
@@ -341,9 +332,11 @@ class RegistryServer(object):
             else:
                 logging.info("Timeout while querying [%s]:%u", *address)
                 return
+            cert = self.getCert(cn)
         logging.info("Sending bootstrap peer: %s", msg)
         return utils.encrypt(cert, msg)
 
+    @rpc
     def topology(self):
         with self.lock:
             peers = deque(('%u/%u' % (int(self.prefix, 2), len(self.prefix)),))
