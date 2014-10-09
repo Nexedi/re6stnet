@@ -90,7 +90,7 @@ class RegistryServer(object):
         self.email = self.ca.get_subject().emailAddress
         self.onTimeout()
 
-    def select(self, r, t):
+    def select(self, r, w, t):
         if self.timeout:
             t.append((self.timeout, self.onTimeout))
 

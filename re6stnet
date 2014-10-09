@@ -425,7 +425,7 @@ def main():
                 raise ReexecException("Restart to renew certificate")
             select_list.append(utils.select)
             while True:
-                args = {}, [(next_renew, renew)]
+                args = {}, {}, [(next_renew, renew)]
                 for s in select_list:
                     s(*args)
         finally:

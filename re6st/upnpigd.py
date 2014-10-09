@@ -28,7 +28,7 @@ class Forwarder(object):
                 raise UPnPException(str(e))
         return wraps(wrapped)(wrapper)
 
-    def select(self, r, t):
+    def select(self, r, w, t):
         t.append((self.next_refresh, self.refresh))
 
     def checkExternalIp(self, ip=None):

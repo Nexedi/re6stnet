@@ -165,9 +165,9 @@ class Popen(subprocess.Popen):
             return r
 
 
-def select(R, T):
+def select(R, W, T):
     try:
-        r, w, _ = _select.select(R, (), (),
+        r, w, _ = _select.select(R, W, (),
             max(0, min(T)[0] - time.time()) if T else None)
     except _select.error as e:
         if e.args[0] != errno.EINTR:
@@ -175,6 +175,8 @@ def select(R, T):
         return
     for r in r:
         R[r]()
+    for w in w:
+        W[w]()
     t = time.time()
     for next_refresh, refresh in T:
         if next_refresh <= t:

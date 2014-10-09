@@ -186,7 +186,7 @@ class TunnelManager(object):
         self._free_iface_list.append(iface)
         del self._iface_to_prefix[iface]
 
-    def select(self, r, t):
+    def select(self, r, w, t):
         r[self._read_pipe] = self.handleTunnelEvent
         r[self.sock] = self.handlePeerEvent
         t.append((self._next_refresh, self.refresh))

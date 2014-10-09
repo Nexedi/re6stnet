@@ -102,7 +102,7 @@ def main():
         server_dict[r.fileno()] = r._handle_request_noblock
     if server_dict:
         while True:
-            args = server_dict.copy(), []
+            args = server_dict.copy(), {}, []
             server.select(*args)
             utils.select(*args)
 
