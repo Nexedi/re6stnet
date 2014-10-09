@@ -313,7 +313,7 @@ class RegistryServer(object):
         with self.lock:
             cert = self._getCert(cn)
             age, peers = self._peers
-            if time.time() < age or not peers:
+            if age < time.time() or not peers:
                 peers = [x[1] for x in utils.iterRoutes(self.network)]
                 random.shuffle(peers)
                 self._peers = time.time() + 60, peers
