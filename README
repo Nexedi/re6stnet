@@ -50,13 +50,13 @@ Requirements
 - Python 2.6 or 2.7
 - OpenSSL binary and development libraries
 - OpenVPN
-- Babel_
+- Babel_ (with Nexedi patches)
 - python-miniupnpc for UPnP support (optional)
 - for the demo: miniupnpd_, Graphviz, Screen, Nemu_
 
 See also `setup.py` for Python dependencies.
 
-.. _Babel: http://www.pps.univ-paris-diderot.fr/~jch/software/babel/
+.. _Babel: http://git.erp5.org/gitweb/babeld.git
 .. _Nemu: http://code.google.com/p/nemu/
 .. _miniupnpd: http://miniupnp.free.fr/
 

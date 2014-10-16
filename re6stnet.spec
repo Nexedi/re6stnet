@@ -8,7 +8,7 @@ Release:   %(set %ver; echo ${1#*-})
 License:   GPLv2+
 Group:     Applications/Internet
 BuildArch: noarch
-Requires:  babeld = 1.5.0-nxd1
+Requires:  babeld = 1.5.0-nxd2
 Requires:  iproute
 Requires:  openssl
 Requires:  openvpn
