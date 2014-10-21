@@ -545,7 +545,8 @@ class TunnelManager(object):
                     ';'.join(self._address.itervalues())))
             #else: # I don't know my IP yet!
         elif code == 3:
-            self._sendto(address, '\4' + version.version)
+            if len(msg) == 1:
+                self._sendto(address, '\3' + version.version)
         elif code in (4, 5): # kill
             prefix = msg[1:]
             if sender and sender.startswith(prefix, len(self._network)):
