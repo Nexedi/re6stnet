@@ -161,7 +161,7 @@ class RegistryServer(object):
 
     def handle_request(self, request, method, kw):
         m = getattr(self, method)
-        if method in ('topology',) and \
+        if method in ('versions', 'topology',) and \
            request.client_address[0] not in ('127.0.0.1', '::1'):
             return request.send_error(httplib.FORBIDDEN)
         key = m.getcallargs(**kw).get('cn')
@@ -368,6 +368,44 @@ class RegistryServer(object):
             cert = self.getCert(cn)
         logging.info("Sending bootstrap peer: %s", msg)
         return utils.encrypt(cert, msg)
+
+    @rpc
+    def versions(self):
+        with self.peers_lock:
+            self.request_dump()
+            peers = set(prefix
+                for neigh_routes in self.ctl.neighbours.itervalues()
+                for prefix in neigh_routes[1]
+                if prefix)
+        peers.add(self.prefix)
+        peer_dict = {}
+        s = self.sock,
+        with self.lock:
+            while True:
+                r, w, _ = select.select(s, s if peers else (), (), 3)
+                if r:
+                    ver, address = self.sock.recvfrom(1<<16)
+                    address = utils.binFromIp(address[0])
+                    if (address.startswith(self.network) and
+                        len(ver) > 1 and ver[0] in '\3\4' # BBB
+                        ):
+                        try:
+                            peer_dict[max(filter(address[len(self.network):]
+                                                 .startswith, peer_dict),
+                                          key=len)] = ver[1:]
+                        except ValueError:
+                            pass
+                if w:
+                    x = peers.pop()
+                    peer_dict[x] = None
+                    x = utils.ipFromBin(self.network + x)
+                    try:
+                        self.sock.sendto('\3', (x, tunnel.PORT))
+                    except socket.error:
+                        pass
+                elif not r:
+                    break
+        return repr(peer_dict)
 
     @rpc
     def topology(self):
