@@ -91,10 +91,6 @@ class RegistryServer(object):
         self.email = self.ca.get_subject().emailAddress
 
         self.peers_lock = threading.Lock()
-        l = threading.Lock()
-        l.acquire()
-        self.wait_dump = l.acquire
-        self.babel_dump = l.release
         self.ctl = ctl.Babel(config.control_socket,
             weakref.proxy(self), self.network)
 
@@ -103,7 +99,23 @@ class RegistryServer(object):
     def select(self, r, w, t):
         if self.timeout:
             t.append((self.timeout, self.onTimeout))
-        self.ctl.select(r, w, t)
+
+    def request_dump(self):
+        assert self.peers_lock.locked()
+        self._wait_dump = True
+        while True:
+            self.ctl.request_dump()
+            try:
+                while self._wait_dump:
+                    args = {}, {}, ()
+                    self.ctl.select(*args)
+                    utils.select(*args)
+                break
+            except ctl.ConnectionClosed:
+                self.ctl.reset()
+
+    def babel_dump(self):
+        self._wait_dump = False
 
     def onTimeout(self):
         # XXX: Because we use threads to process requests, the statements
@@ -320,8 +332,7 @@ class RegistryServer(object):
         with self.peers_lock:
             age, peers = self.peers
             if age < time.time() or not peers:
-                self.ctl.request_dump()
-                self.wait_dump()
+                self.request_dump()
                 peers = [prefix
                     for neigh_routes in self.ctl.neighbours.itervalues()
                     for prefix in neigh_routes[1]

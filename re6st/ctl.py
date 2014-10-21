@@ -175,30 +175,52 @@ SetCostMultiplier = Packet(2,
   Struct("B", "set_cost_multiplier", "flags"))
 
 
+class ConnectionClosed(Exception):
+
+    def __str__(self):
+        return "connection to babeld closed (%s)" % self.args
+
+
 class Babel(object):
 
     _decode = None
 
     def __init__(self, socket_path, handler, network):
+        self.socket_path = socket_path
+        self.handler = handler
         self.network = network
+        self.locked = set()
+        self.reset()
+
+    def reset(self):
+        try:
+            del self.socket, self.request_dump
+        except AttributeError:
+            pass
         self.write_buffer = Buffer()
         self.read_buffer = Buffer()
         self.read_buffer.want(header.size)
-        self.handler = handler
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         def select(*args):
             try:
-                s.connect(socket_path)
-            except socket.error:
-                return
+                s.connect(self.socket_path)
+            except socket.error, e:
+                logging.debug("%s", e)
+                return e
             s.send("\1")
             s.setblocking(0)
-            del self.request_dump, self.select
+            del self.select
             self.socket = s
             return self.select(*args)
         self.select = select
-        self.request_dump = lambda: self.handle_dump((), (), (), ())
-        self.locked = set()
+
+    def request_dump(self):
+        if self.select({}, {}, ()):
+            self.handle_dump((), (), (), ())
+        else:
+            # interfaces + neighbours + installed routes
+            self.request_dump = lambda: self.send(Dump(11))
+            self.request_dump()
 
     def send(self, packet):
         packet.write(self.write_buffer)
@@ -212,7 +234,7 @@ class Babel(object):
     def _read(self):
         d = self.socket.recv(65536)
         if not d:
-            raise RuntimeError("connection to babeld closed")
+            raise ConnectionClosed(self.socket_path)
         b = self.read_buffer
         b += d
         while b.ready:
@@ -234,9 +256,6 @@ class Babel(object):
 
     def _write(self):
         self.write_buffer.send(self.socket)
-
-    def request_dump(self):
-        self.send(Dump(11)) # interfaces + neighbours + installed routes
 
     def handle_dump(self, interfaces, neighbours, xroutes, routes):
         # neighbours = {neigh_prefix: (neighbour, {dst_prefix: route})}
