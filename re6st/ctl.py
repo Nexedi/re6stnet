@@ -175,7 +175,10 @@ SetCostMultiplier = Packet(2,
   Struct("B", "set_cost_multiplier", "flags"))
 
 
-class ConnectionClosed(Exception):
+class BabelException(Exception): pass
+
+
+class ConnectionClosed(BabelException):
 
     def __str__(self):
         return "connection to babeld closed (%s)" % self.args

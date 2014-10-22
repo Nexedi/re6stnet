@@ -102,16 +102,18 @@ class RegistryServer(object):
 
     def request_dump(self):
         assert self.peers_lock.locked()
+        def abort():
+            raise ctl.BabelException
         self._wait_dump = True
-        while True:
+        for _ in 0, 1:
             self.ctl.request_dump()
             try:
                 while self._wait_dump:
-                    args = {}, {}, ()
+                    args = {}, {}, ((time.time() + 5, abort),)
                     self.ctl.select(*args)
                     utils.select(*args)
                 break
-            except ctl.ConnectionClosed:
+            except ctl.BabelException:
                 self.ctl.reset()
 
     def babel_dump(self):
