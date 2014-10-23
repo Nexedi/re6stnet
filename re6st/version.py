@@ -17,7 +17,10 @@ dirty = _git_call("diff-index", "--quiet", "HEAD", "--")
 if dirty not in (0, 1):
     raise _S.CalledProcessError(dirty, "git")
 
-revision = int(_git_output("rev-list", "--topo-order", "--count", "HEAD"))
+try:
+  revision = int(_git_output("rev-list", "--count", "HEAD"))
+except _S.CalledProcessError: # BBB: Git too old
+  revision = len(_git_output("rev-list", "HEAD").split())
 short = _git_output("rev-parse", "--short", "HEAD")
 version = "0-%s.g%s" % (revision, short)
 
