@@ -23,8 +23,7 @@ def openvpn(iface, encrypt, *args, **kw):
     logging.debug('%r', args)
     return utils.Popen(args, **kw)
 
-# tested in a LAN with a switch and wired/wireless interfaces (mtu 1500)
-ovpn_link_mtu_dict = {'udp': 1490, 'udp6': 1450}
+ovpn_link_mtu_dict = {'udp': 1481, 'udp6': 1450}
 
 def server(iface, max_clients, dh_path, pipe_fd, port, proto, encrypt, *args, **kw):
     client_script = '%s %s' % (ovpn_server, pipe_fd)
