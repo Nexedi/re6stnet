@@ -209,7 +209,8 @@ class RegistryServer(object):
 
     def getCert(self, client_prefix):
         assert self.lock.locked()
-        return self.db.execute("SELECT cert FROM cert WHERE prefix = ?",
+        return self.db.execute("SELECT cert FROM cert"
+                               " WHERE prefix=? AND cert IS NOT NULL",
                                (client_prefix,)).next()[0]
 
     @rpc
