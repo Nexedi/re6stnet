@@ -328,6 +328,9 @@ class TunnelManager(object):
         logging.trace('Connection with %u/%u killed',
                       int(prefix, 2), len(prefix))
 
+    def _newTunnelScore(self, prefix):
+        return (prefix in self._neighbour_set) + random.random()
+
     def _makeTunnel(self, prefix, address):
         if prefix in self._served or prefix in self._connection_dict:
             return False
@@ -358,9 +361,7 @@ class TunnelManager(object):
         #         before calling _makeNewTunnels again.
         self._connecting.clear()
         distant_peers = self._distant_peers
-        if len(distant_peers) < count or 0 < self._disconnected < time.time():
-            if not route_dumped:
-                return True
+        if route_dumped:
             logging.debug('Analyze routes ...')
             neighbours = self.ctl.neighbours
             # Collect all nodes known by Babel
@@ -370,6 +371,7 @@ class TunnelManager(object):
                 if prefix)
             # Keep only distant peers.
             distant_peers[:] = peers.difference(neighbours)
+            distant_peers.sort(key=self._newTunnelScore)
             # Check whether we're connected to the network.
             registry = self.peer_db.registry_prefix
             if (registry == self._prefix or registry in peers
@@ -397,19 +399,13 @@ class TunnelManager(object):
                         count -= self._makeTunnel(*peer)
                         if not count:
                             return
+        elif len(distant_peers) < count or 0 < self._disconnected < time.time():
+            return True
         if distant_peers:
             # Normal operation. Choose peers to connect to by looking at the
             # routing table.
-            neighbour_set = self._neighbour_set.intersection(distant_peers)
             while count and distant_peers:
-                if neighbour_set:
-                    peer = neighbour_set.pop()
-                    i = distant_peers.index(peer)
-                else:
-                    i = random.randrange(len(distant_peers))
-                    peer = distant_peers[i]
-                distant_peers[i] = distant_peers[-1]
-                del distant_peers[-1]
+                peer = distant_peers.pop()
                 address = self.peer_db.getAddress(peer)
                 if address:
                     count -= self._makeTunnel(peer, address)
