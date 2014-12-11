@@ -156,10 +156,11 @@ class Popen(subprocess.Popen):
             self.returncode = -1
 
     def stop(self):
-        if self.pid:
+        if self.pid and self.returncode is None:
             self.terminate()
             t = threading.Timer(5, self.kill)
             t.start()
+            # PY3: use waitid(WNOWAIT) and call self.poll() after t.cancel()
             r = self.wait()
             t.cancel()
             return r

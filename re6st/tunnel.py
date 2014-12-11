@@ -86,8 +86,8 @@ class Connection(object):
     def close(self):
         try:
             self.process.stop()
-        except (AttributeError, OSError):
-            pass # we already polled an exited process
+        except AttributeError:
+            pass
 
     def refresh(self):
         # Check that the connection is alive
