@@ -161,11 +161,14 @@ class RegistryServer(object):
             #       (IOW, do the contrary of newPrefix)
             self.timeout = not_after and not_after + GRACE_PERIOD
 
-    def handle_request(self, request, method, kw):
+    def handle_request(self, request, method, kw,
+                       _localhost=('127.0.0.1', '::1')):
         m = getattr(self, method)
-        if method in ('versions', 'topology',) and \
-           request.client_address[0] not in ('127.0.0.1', '::1'):
-            return request.send_error(httplib.FORBIDDEN)
+        if method in ('versions', 'topology'):
+            x_forwarded_for = request.headers.get('X-Forwarded-For')
+            if request.client_address[0] not in _localhost or \
+               x_forwarded_for and x_forwarded_for not in _localhost:
+                return request.send_error(httplib.FORBIDDEN)
         key = m.getcallargs(**kw).get('cn')
         if key:
             h = base64.b64decode(request.headers[HMAC_HEADER])
