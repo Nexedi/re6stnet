@@ -31,7 +31,7 @@ from . import ctl, tunnel, utils
 
 HMAC_HEADER = "Re6stHMAC"
 RENEW_PERIOD = 30 * 86400
-GRACE_PERIOD = RENEW_PERIOD
+GRACE_PERIOD = 100 * 86400
 
 def rpc(f):
     args, varargs, varkw, defaults = inspect.getargspec(f)
