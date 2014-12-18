@@ -417,13 +417,14 @@ def main():
                     sys.exit(r)
                 exit.acquire()
             for cmd in config.daemon or ():
-                cleanup.append(utils.Popen(cmd, shell=True).stop)
+                cleanup.insert(-1, utils.Popen(cmd, shell=True).stop)
 
             # main loop
             select_list = [forwarder.select] if forwarder else []
             if tunnel_manager:
                 select_list.append(tunnel_manager.select)
-                cleanup += tunnel_manager.delInterfaces, tunnel_manager.killAll
+                cleanup[-1:-1] = (tunnel_manager.delInterfaces,
+                                  tunnel_manager.killAll)
             exit.release()
             def renew():
                 raise ReexecException("Restart to renew certificate")
