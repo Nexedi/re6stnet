@@ -27,7 +27,7 @@ from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
 from email.mime.text import MIMEText
 from OpenSSL import crypto
 from urllib import splittype, splithost, splitport, urlencode
-from . import ctl, tunnel, utils
+from . import ctl, tunnel, utils, version
 
 HMAC_HEADER = "Re6stHMAC"
 RENEW_PERIOD = 30 * 86400
@@ -448,6 +448,7 @@ class RegistryServer(object):
 class RegistryClient(object):
 
     _hmac = None
+    user_agent = "re6stnet/" + version.version
 
     def __init__(self, url, key_path=None, ca=None, auto_close=True):
         self.key_path = key_path
@@ -489,6 +490,7 @@ class RegistryClient(object):
                     else:
                         retry = False
                     self._conn.putrequest('GET', url, skip_accept_encoding=1)
+                    self._conn.putheader('User-Agent', self.user_agent)
                     if client_prefix:
                         self._conn.putheader(HMAC_HEADER, base64.b64encode(h))
                     self._conn.endheaders()
