@@ -4,7 +4,7 @@ ConditionPathExists=/etc/re6stnet/re6st-registry.conf
 
 [Service]
 WorkingDirectory=/etc/re6stnet
-ExecStart=/usr/bin/re6st-registry @re6st-registry.conf
+ExecStart=/usr/bin/env re6st-registry @re6st-registry.conf
 Restart=on-failure
 
 [Install]
