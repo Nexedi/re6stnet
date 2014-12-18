@@ -1,0 +1,281 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+import argparse, httplib,  select, socket, sqlite3, struct, sys, time, traceback
+import xml.etree.cElementTree as ET
+from collections import defaultdict
+import os; sys.path[0] = os.path.dirname(sys.path[0])
+from re6st import ctl, tunnel, utils
+
+class iterRoutes(object):
+
+    _waiting = True
+
+    def __new__(cls, control_socket, network):
+        self = object.__new__(cls)
+        c = ctl.Babel(control_socket, self, network)
+        c.request_dump()
+        while self._waiting:
+            args = {}, {}, ()
+            c.select(*args)
+            utils.select(*args)
+        return (prefix
+            for neigh_routes in c.neighbours.itervalues()
+            for prefix in neigh_routes[1]
+            if prefix)
+
+    def babel_dump(self):
+        self._waiting = False
+
+
+def cmd_update(db, config):
+    s = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+    q = db.execute
+    ip, n = config.network.split('/')
+    network = utils.binFromIp(ip)[:int(n)]
+    p = dict(q("SELECT prefix, mode FROM ip"))
+    peers = set()
+    now = int(time.time())
+    for prefix in iterRoutes(config.control_socket, network):
+        if prefix in p:
+            q("UPDATE ip SET last=? WHERE prefix=?", (now, prefix))
+            if not p[prefix]:
+                continue
+        else:
+            q("INSERT INTO ip (prefix, last) VALUES (?, ?)", (prefix, now))
+        peers.add(prefix)
+    for retry in xrange(3):
+        if not peers:
+            break
+        p = peers.copy()
+        while True:
+            r, w, _ = select.select([s], [s] if p else [], [], 1)
+            if r:
+                x, a = s.recvfrom(1<<16)
+                if x[0] == '\1':
+                    try:
+                        prefix, address = x[1:x.index('\n')].split()
+                    except ValueError:
+                        pass
+                    else:
+                        if utils.binFromIp(a[0]).startswith(network + prefix):
+                            peers.discard(prefix)
+                            ip = None
+                            for ip, _, _ in utils.parse_address(address):
+                                try:
+                                    if utils.binFromIp(ip): #.startswith(network):
+                                        ip = None
+                                except socket.error:
+                                    try:
+                                        a = socket.inet_aton(ip)
+                                    except socket.error:
+                                        pass
+                                    else:
+                                        if bin(*struct.unpack('>I', a))[2:] \
+                                            .startswith((
+                                                '10100000', '11111110',
+                                                '101011000001',
+                                                '1100000010101000')):
+                                            ip = None
+                            if ip:
+                                q("UPDATE ip SET ip=? WHERE prefix=?",
+                                  (ip, prefix))
+            if w:
+                x = utils.ipFromBin(network + p.pop())
+                try:
+                    s.sendto('\2', (x, tunnel.PORT))
+                except socket.error:
+                    pass
+            elif not r:
+                break
+    db.commit()
+
+def cmd_ip(db, config):
+    q = db.execute
+    for ip in config.ip:
+        cn, ip = ip.split('=')
+        prefix = utils.binFromSubnet(cn)
+        try:
+            q("UPDATE ip SET mode=? WHERE prefix=?",
+              (('manual', 'auto').index(ip), prefix))
+        except ValueError:
+            q("UPDATE ip SET mode=0, ip=? WHERE prefix=?",
+              (ip or None, prefix))
+    db.commit()
+
+
+def geo_freegeoip():
+    import json
+    host = 'freegeoip.net'
+    c = httplib.HTTPConnection(host, httplib.HTTP_PORT, timeout=60)
+    p = sys.stdout.write
+    def geo(ip):
+        for ip in {x[-1][0] for x in socket.getaddrinfo(ip, 0, 0,
+                                                        socket.SOCK_STREAM)}:
+            p("Querying %s for %s ..." % (host, ip))
+            c.putrequest('GET', '/json/' + ip, skip_accept_encoding=1)
+            c.endheaders()
+            r = c.getresponse()
+            status = r.status
+            r = r.read()
+            if status == httplib.OK:
+                r = json.loads(r)
+                title = None
+                country_code = r.get("country_code") or "??"
+                for k in "city", "region_name":
+                    title = r[k]
+                    if title:
+                        title += ", %s" % country_code
+                        break
+                else:
+                    title = r["country_name"] or country_code
+                lat = r['latitude']
+                long = r['longitude']
+                p(" %s,%s,%s\n" % (lat, long, title.encode("utf-8")))
+                return lat, long, title
+            p(" %s %s\n" % (status, httplib.responses.get(status, "???")))
+    return geo
+
+
+def cmd_geoip(db, config):
+    q = db.execute
+    mode_dict = {}
+    cache_dict = {}
+    mute = False
+    for ip, mode, latitude in q(
+            "SELECT distinct ip.ip, loc.mode, loc.latitude"
+            " FROM ip left join loc on (ip.ip=loc.ip)"
+            " WHERE ip.ip is not null"
+            "   AND (loc.mode is null or loc.mode != 'manual')"):
+        if latitude is None or config.all:
+            insert = mode is None
+            try:
+                loc = cache_dict[ip]
+            except KeyError:
+                if mode in (None, 'auto'):
+                    mode = 'freegeoip'
+                try:
+                    geo = mode_dict[mode]
+                except KeyError:
+                    geo = mode_dict[mode] = globals()['geo_' + mode]()
+                try:
+                    loc = geo(ip)
+                except Exception, e:
+                    if mute:
+                        traceback.print_exception(type(e), e, None)
+                    else:
+                        traceback.print_exc()
+                        mute = True
+                    loc = None
+                cache_dict[ip] = loc
+            if loc:
+                if insert:
+                    q("INSERT INTO loc (ip) VALUES (?)", (ip,))
+                q("UPDATE loc SET latitude=?, longitude=?, title=? WHERE ip=?",
+                  (loc[0], loc[1], loc[2], ip))
+                db.commit()
+
+def kml(db):
+    d = ET.Element("Document")
+    loc_dict = defaultdict(list)
+    t = None
+    try:
+        for prefix, latitude, longitude, title, last in db.execute(
+              "SELECT prefix, latitude, longitude, title, last FROM ip, loc"
+              " WHERE ip.ip=loc.ip and latitude ORDER BY last DESC"):
+            if t is None:
+                t = last - 86400
+            if last < t:
+                break
+            loc_dict[(latitude, longitude, title)].append(prefix)
+    finally:
+        db.rollback()
+    for (latitude, longitude, title), prefix_list in loc_dict.iteritems():
+        p = ET.SubElement(d, "Placemark")
+        ET.SubElement(p, "name").text = "%s (%s)" % (title, len(prefix_list))
+        ET.SubElement(p, "description").text = '\n'.join(
+            "%s/%s" % (int(prefix, 2), len(prefix))
+            for prefix in prefix_list)
+        ET.SubElement(ET.SubElement(p, "Point"), "coordinates") \
+            .text = "%s,%s" % (longitude, latitude)
+    return ('<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<kml xmlns="http://www.opengis.net/kml/2.2">\n'
+            '%s\n</kml>' % ET.tostring(d))
+
+def cmd_gis(db, config):
+    import SimpleHTTPServer, SocketServer
+    class Handler(SimpleHTTPServer.SimpleHTTPRequestHandler):
+        def do_GET(self):
+            if self.path != '/':
+                self.send_error(404)
+            else:
+                xml = kml(db)
+                self.send_response(200)
+                self.send_header('Content-Length', len(xml))
+                self.send_header('Content-type', 'text/xml; charset=utf-8')
+                self.end_headers()
+                self.wfile.write(xml)
+    class TCPServer(SocketServer.TCPServer):
+        address_family = socket.AF_INET6
+        allow_reuse_address = True
+    TCPServer((config.bind6, config.port), Handler).serve_forever()
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    _ = parser.add_argument
+    _('--db', required=True,
+        help="Path to SQLite database file collecting all IP geolocalization.")
+    parsers = parser.add_subparsers(dest='command')
+
+    _ = parsers.add_parser('update',
+        help="Query all running nodes to fetch their tunnel IP."
+             " CN marked for manual update with 'ip' subcommand are skipped."
+             ).add_argument
+    _('--control-socket', metavar='CTL_SOCK', default=ctl.SOCK_PATH,
+        help="Socket path to use for communication between re6stnet and babeld"
+             " (option -R of Babel).")
+    _('network')
+
+    _ = parsers.add_parser('geoip',
+        help="Get latitude & longitude information."
+             " CN marked for manual lookup with 'loc' subcommand are skipped."
+             ).add_argument
+    _('-a', '--all', action='store_true',
+        help="Also update information for nodes with a known location.")
+
+    _ = parsers.add_parser('ip', help='Set IP').add_argument
+    _('ip', nargs='+', metavar="CN={IP|MODE}",
+        help="MODE can be one of: manual, auto.")
+
+    _ = parsers.add_parser('loc', help='Set latitude & longitude').add_argument
+    _('loc', nargs='+', metavar="IP={φ,λ,TITLE|MODE}",
+        help="MODE can be one of: manual, freegeoip, auto."
+             " 'auto' defaults to 'freegeoip'")
+
+    _ = parsers.add_parser('gis').add_argument
+    _('--port', type=int, default=httplib.HTTP_PORT,
+        help="Port on which the server will listen.")
+    _('-6', dest='bind6', default='::',
+        help="Bind server to this IPv6.")
+
+    config = parser.parse_args()
+    utils.setupLog(False)
+
+    db = sqlite3.connect(config.db)
+    db.execute("""CREATE TABLE IF NOT EXISTS ip (
+        prefix text primary key,
+        mode integer default 1,
+        ip text,
+        last integer)""")
+    db.execute("""CREATE TABLE IF NOT EXISTS loc (
+        ip text primary key,
+        mode text default 'auto',
+        latitude real,
+        longitude real,
+        title text)""")
+    globals()['cmd_' + config.command](db, config)
+    db.close()
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,33 @@
+#!/usr/bin/python
+import sqlite3, sys
+import os; sys.path[0] = os.path.dirname(sys.path[0])
+from re6st import utils
+from OpenSSL import crypto
+
+with open("/etc/re6stnet/ca.crt") as f:
+    ca = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
+network = utils.networkFromCa(ca)
+
+db = sqlite3.connect("/var/lib/re6stnet/registry.db")
+for x in sys.argv[1:]:
+    try:
+        a, b = x.split('/')
+    except ValueError:
+        prefix = x
+    else:
+        b = int(b)
+        try:
+            prefix = bin(int(a))[2:].zfill(b)
+        except ValueError:
+            a = utils.binFromIp(a)
+            assert a.startswith(network)
+            prefix = a[len(network):b]
+    a = db.execute("select * from cert where prefix=?", (prefix,)).fetchone()
+    b = network + prefix
+    b = '%s/%s' % (utils.ipFromBin(b), len(b))
+    if a:
+        subject = crypto.load_certificate(crypto.FILETYPE_PEM, a[2]).get_subject()
+        print "%s\t%s\t%s" % (b, a[1], ''.join('/%s=%s' % x for x in subject.get_components()))
+    else:
+        print "%s\t-" % b
+db.close()
