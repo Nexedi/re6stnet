@@ -264,6 +264,11 @@ class TunnelManager(object):
         if self._killing:
             for prefix, tunnel_killer in self._killing.items():
                 if tunnel_killer.timeout < t:
+                    if tunnel_killer.state != 'unlocking':
+                        logging.info(
+                            'Abort destruction of tunnel %s %s/%s (state: %s)',
+                            'to' if tunnel_killer.client else 'from',
+                            int(prefix, 2), len(prefix), tunnel_killer.state)
                     tunnel_killer.unlock()
                     del self._killing[prefix]
                 else:
