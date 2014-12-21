@@ -91,9 +91,10 @@ class Connection(object):
 
     def refresh(self):
         # Check that the connection is alive
-        if self.process.poll() != None:
-            logging.info('Connection with %s has failed with return code %s',
-                         self._prefix, self.process.returncode)
+        if self.process.poll() is not None:
+            logging.info('Connection with %s/%s has failed with return code %s',
+                         int(self._prefix, 2), len(self._prefix),
+                         self.process.returncode)
             if self._retry is None or len(self.address_list) <= self._retry:
                 return False
             logging.info('Retrying with alternate address')
