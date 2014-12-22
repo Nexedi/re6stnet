@@ -380,9 +380,14 @@ class TunnelManager(object):
             distant_peers.sort(key=self._newTunnelScore)
             # Check whether we're connected to the network.
             registry = self.peer_db.registry_prefix
-            if (registry == self._prefix or registry in peers
-                                         or registry in self._connection_dict
-                                         or registry in self._served):
+            if registry == self._prefix:
+                if not distant_peers:
+                    # Faster recovery of registry node: use cache instead
+                    # of waiting that another node tries to connect to it.
+                    distant_peers = None
+            elif (registry in peers or
+                  registry in self._connection_dict or
+                  registry in self._served):
                 self._disconnected = 0
             # Do not bootstrap too often, especially if we are several
             # nodes to try.
@@ -433,12 +438,12 @@ class TunnelManager(object):
             # The following condition on 'peers' is the same as above,
             # when we asked the registry for a node to bootstrap.
             if not (new or peers):
-                if bootstrap:
+                if bootstrap and registry != self._prefix:
                     # Startup without any good address in the cache.
                     peer = self.peer_db.getBootstrapPeer()
                     if peer and self._makeTunnel(*peer):
                         return
-                # Failed to bootstrap ! Last change to connect is to
+                # Failed to bootstrap ! Last chance to connect is to
                 # retry an address that already failed :(
                 for peer in self.peer_db.getPeerList(1):
                     if self._makeTunnel(*peer):
