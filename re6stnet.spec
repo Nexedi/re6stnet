@@ -30,6 +30,7 @@ install -Dpm 0644 docs/*.1 $1%_mandir/man1
 install -Dpm 0644 daemon/*.service $1$2
 install -Dp daemon/network-manager $1/etc/NetworkManager/dispatcher.d/50re6stnet
 install -Dpm 0644 daemon/README.conf $1/etc/re6stnet/README.conf
+install -Dpm 0644 daemon/logrotate.conf $1/etc/logrotate.d/re6stnet
 mv $1%_bindir/re6stnet $1%_sbindir
 find $1 -mindepth 1 -type d -name re6st\* -printf /%%P\\n > INSTALLED
 
@@ -44,6 +45,7 @@ rm INSTALLED
 %_mandir/*/*
 /lib/systemd/system/*
 /etc/NetworkManager/dispatcher.d/50re6stnet
+/etc/logrotate.d/re6stnet
 
 %post
 if [ $1 -eq 1 ]; then
