@@ -95,12 +95,14 @@ class Connection(object):
             logging.info('Connection with %s/%s has failed with return code %s',
                          int(self._prefix, 2), len(self._prefix),
                          self.process.returncode)
-            if self._retry is None or len(self.address_list) <= self._retry:
-                return False
+            if self._retry is None:
+                return 1
+            if len(self.address_list) <= self._retry:
+                return -1
             logging.info('Retrying with alternate address')
             self.close()
             self.open()
-        return True
+        return 0
 
 class TunnelKiller(object):
 
@@ -251,8 +253,8 @@ class TunnelManager(object):
 
     def refresh(self):
         logging.debug('Checking tunnels...')
-        self._cleanDeads()
-        if self._next_tunnel_refresh < time.time() or \
+        if self._cleanDeads() or \
+           self._next_tunnel_refresh < time.time() or \
            self._killing or \
            self._makeNewTunnels(False):
             self._next_refresh = None
@@ -290,9 +292,13 @@ class TunnelManager(object):
         self._next_refresh = time.time() + 5
 
     def _cleanDeads(self):
+        disconnected = False
         for prefix in self._connection_dict.keys():
-            if not self._connection_dict[prefix].refresh():
+            status = self._connection_dict[prefix].refresh()
+            if status:
+                disconnected |= status > 0
                 self._kill(prefix)
+        return disconnected
 
     def _tunnelScore(self, prefix):
         n = 0
