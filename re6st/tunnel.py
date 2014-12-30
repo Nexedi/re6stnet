@@ -1,4 +1,4 @@
-import logging, os, random, socket, subprocess, time, weakref
+import errno, logging, os, random, socket, subprocess, time, weakref
 from collections import defaultdict, deque
 from . import ctl, plib, utils, version
 
@@ -510,14 +510,16 @@ class TunnelManager(object):
         try:
             return self.sock.sendto(msg, (ip, PORT))
         except socket.error, e:
-            logging.info('Failed to send message to %s/%s (%s)',
-                         int(peer, 2), len(peer), e)
+            (logging.info if e.errno == errno.ENETUNREACH else logging.error)(
+                'Failed to send message to %s/%s (%s)',
+                int(peer, 2), len(peer), e)
 
     def _sendto(self, to, msg):
         try:
             return self.sock.sendto(msg, to[:2])
         except socket.error, e:
-            logging.info('Failed to send message to %s (%s)', to, e)
+            (logging.info if e.errno == errno.ENETUNREACH else logging.error)(
+                'Failed to send message to %s (%s)', to, e)
 
     def handlePeerEvent(self):
         msg, address = self.sock.recvfrom(1<<16)
