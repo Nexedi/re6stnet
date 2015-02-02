@@ -1,5 +1,5 @@
 from functools import wraps
-import logging, socket, time
+import logging, random, socket, time
 import miniupnpc
 
 
@@ -8,10 +8,18 @@ class UPnPException(Exception):
 
 
 class Forwarder(object):
+    """
+    External port is chosen randomly between 32768 & 49151 included.
+    """
 
     next_refresh = 0
     _next_retry = -1
-    _next_port = 1024
+    _next_port = random.randrange(0, 8192)
+
+    @classmethod
+    def _getExternalPort(cls):
+        port = cls._next_port = (cls._next_port + 1) % 8192
+        return 32768 + port
 
     def __init__(self, description):
         self._description = description
@@ -73,6 +81,7 @@ class Forwarder(object):
             logging.debug('Refreshing port forwarding')
         ip = self.externalipaddress()
         lanaddr = self._u.lanaddr
+        retry = 8191
         for r in self._rules:
             local, proto, port = r
             if port and not force:
@@ -81,11 +90,11 @@ class Forwarder(object):
             args = proto.upper(), lanaddr, local, desc, ''
             while True:
                 if port is None:
-                    port = self._next_port
-                    if port > 65535:
+                    if not retry:
                         raise UPnPException('No free port to redirect %s'
                                             % desc)
-                    self._next_port = port + 1
+                    retry -= 1
+                    port = self._getExternalPort()
                 try:
                     self.addportmapping(port, *args)
                     break
@@ -99,10 +108,6 @@ class Forwarder(object):
         return ip
 
     def clear(self):
-        try:
-            del self._next_port
-        except AttributeError:
-            return
         for r in self._rules:
             port = r[2]
             if port:
