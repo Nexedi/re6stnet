@@ -314,10 +314,12 @@ class TunnelManager(object):
         # Get the candidates to killing
         peer_set = set(self._connection_dict)
         peer_set.difference_update(self._killing)
-        count = len(peer_set) - self._client_count + 1
-        if count > 0:
-            for prefix in sorted(peer_set, key=self._tunnelScore)[:count]:
-                self._killing[prefix] = TunnelKiller(prefix, self, True)
+        # Keep only a small number of tunnels if server is not reachable
+        # (user should configure NAT properly).
+        if (self._client_count if self._served or self._disconnected else
+              min(2, self._client_count)) <= len(peer_set):
+            prefix = min(peer_set, key=self._tunnelScore)
+            self._killing[prefix] = TunnelKiller(prefix, self, True)
 
     def _abortTunnelKiller(self, prefix):
         tunnel_killer = self._killing.get(prefix)
@@ -419,6 +421,11 @@ class TunnelManager(object):
         elif len(distant_peers) < count or 0 < self._disconnected < time.time():
             return True
         if distant_peers:
+            if count and not self._served:
+                # Limit number of client tunnels if server is not reachable
+                # from outside.
+                count = max(0, min(2, self._client_count)
+                               - len(self._connection_dict))
             # Normal operation. Choose peers to connect to by looking at the
             # routing table.
             while count and distant_peers:
