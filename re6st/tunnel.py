@@ -160,11 +160,12 @@ class TunnelKiller(object):
 
 class TunnelManager(object):
 
-    def __init__(self, control_socket, peer_db, openvpn_args, timeout,
-                refresh, client_count, iface_list, network, prefix,
-                address, ip_changed, encrypt, remote_gateway, disable_proto,
-                neighbour_list=()):
-        self.ctl = ctl.Babel(control_socket, weakref.proxy(self), network)
+    def __init__(self, control_socket, peer_db, cert, openvpn_args, timeout,
+                 refresh, client_count, iface_list, address, ip_changed,
+                 encrypt, remote_gateway, disable_proto, neighbour_list=()):
+        self.cert = cert
+        self._network = cert.network
+        self.ctl = ctl.Babel(control_socket, weakref.proxy(self), self._network)
         self.encrypt = encrypt
         self.ovpn_args = openvpn_args
         self.peer_db = peer_db
@@ -178,9 +179,8 @@ class TunnelManager(object):
         self._distant_peers = []
         self._iface_to_prefix = {}
         self._refresh_time = refresh
-        self._network = network
         self._iface_list = iface_list
-        self._prefix = prefix
+        self._prefix = cert.prefix
         address_dict = defaultdict(list)
         for family, address in address:
             address_dict[family] += address

@@ -27,7 +27,7 @@ from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
 from email.mime.text import MIMEText
 from OpenSSL import crypto
 from urllib import splittype, splithost, splitport, urlencode
-from . import ctl, tunnel, utils, version
+from . import ctl, tunnel, utils, version, x509
 
 HMAC_HEADER = "Re6stHMAC"
 RENEW_PERIOD = 30 * 86400
@@ -79,16 +79,12 @@ class RegistryServer(object):
         else:
             self.db.execute("INSERT INTO cert VALUES ('',null,null)")
 
-        # Loading certificates
-        with open(self.config.ca) as f:
-            self.ca = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
-        with open(self.config.key) as f:
-            self.key = crypto.load_privatekey(crypto.FILETYPE_PEM, f.read())
+        self.cert = x509.Cert(self.config.ca, self.config.key)
         # Get vpn network prefix
-        self.network = utils.networkFromCa(self.ca)
+        self.network = self.cert.network
         logging.info("Network: %s/%u", utils.ipFromBin(self.network),
                                        len(self.network))
-        self.email = self.ca.get_subject().emailAddress
+        self.email = self.cert.ca.get_subject().emailAddress
 
         self.peers_lock = threading.Lock()
         self.ctl = ctl.Babel(config.control_socket,
@@ -141,7 +137,7 @@ class RegistryServer(object):
                     cert = crypto.load_certificate(crypto.FILETYPE_PEM, cert)
                 except crypto.Error:
                     continue
-                x = utils.notAfter(cert)
+                x = x509.notAfter(cert)
                 if x <= old:
                     if prefix == self.prefix:
                         logging.critical("Refuse to delete certificate"
@@ -205,8 +201,8 @@ class RegistryServer(object):
             key = hashlib.sha1(struct.pack('Q',
                 random.getrandbits(64))).digest()
             self.sessions.setdefault(client_prefix, [])[1:] = key,
-        key = utils.encrypt(cert, key)
-        sign = crypto.sign(self.key, key, 'sha1')
+        key = x509.encrypt(cert, key)
+        sign = self.cert.sign(key)
         assert len(key) == len(sign)
         return key + sign
 
@@ -303,11 +299,11 @@ class RegistryServer(object):
         cert.set_serial_number(0) # required for libssl < 1.0
         cert.gmtime_adj_notBefore(0)
         cert.gmtime_adj_notAfter(self.cert_duration)
-        cert.set_issuer(self.ca.get_subject())
+        cert.set_issuer(self.cert.ca.get_subject())
         subject.CN = "%u/%u" % (int(client_prefix, 2), len(client_prefix))
         cert.set_subject(subject)
         cert.set_pubkey(pubkey)
-        cert.sign(self.key, 'sha1')
+        cert.sign(self.cert.key, 'sha1')
         cert = crypto.dump_certificate(crypto.FILETYPE_PEM, cert)
         self.db.execute("UPDATE cert SET cert = ? WHERE prefix = ?",
                         (cert, client_prefix))
@@ -320,14 +316,14 @@ class RegistryServer(object):
             with self.db:
                 pem = self.getCert(cn)
                 cert = crypto.load_certificate(crypto.FILETYPE_PEM, pem)
-                if utils.notAfter(cert) - RENEW_PERIOD < time.time():
+                if x509.notAfter(cert) - RENEW_PERIOD < time.time():
                     pem = self.createCertificate(cn, cert.get_subject(),
                                                      cert.get_pubkey())
                 return pem
 
     @rpc
     def getCa(self):
-        return crypto.dump_certificate(crypto.FILETYPE_PEM, self.ca)
+        return crypto.dump_certificate(crypto.FILETYPE_PEM, self.cert.ca)
 
     @rpc
     def getPrefix(self, cn):
@@ -374,7 +370,7 @@ class RegistryServer(object):
                 return
             cert = self.getCert(cn)
         logging.info("Sending bootstrap peer: %s", msg)
-        return utils.encrypt(cert, msg)
+        return x509.encrypt(cert, msg)
 
     @rpc
     def versions(self):
@@ -451,9 +447,8 @@ class RegistryClient(object):
     _hmac = None
     user_agent = "re6stnet/" + version.version
 
-    def __init__(self, url, key_path=None, ca=None, auto_close=True):
-        self.key_path = key_path
-        self.ca = ca
+    def __init__(self, url, cert=None, auto_close=True):
+        self.cert = cert
         self.auto_close = auto_close
         scheme, host = splittype(url)
         host, path = splithost(host)
@@ -483,8 +478,8 @@ class RegistryClient(object):
                             retry = False
                             h = self.hello(client_prefix)
                             n = len(h) // 2
-                            crypto.verify(self.ca, h[n:], h[:n], 'sha1')
-                            key = utils.decrypt(self.key_path, h[:n])
+                            self.cert.verify(h[n:], h[:n])
+                            key = self.cert.decrypt(h[:n])
                         h = hmac.HMAC(key, query, hashlib.sha1).digest()
                         key = hashlib.sha1(key).digest()
                         self._hmac = hashlib.sha1(key).digest()

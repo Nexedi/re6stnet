@@ -2,9 +2,7 @@
 import atexit, errno, logging, os, signal, socket
 import sqlite3, subprocess, sys, time, threading
 from collections import deque
-from OpenSSL import crypto
-from re6st import ctl, db, plib, tunnel, utils, version
-from re6st.registry import RegistryClient, RENEW_PERIOD
+from re6st import ctl, db, plib, tunnel, utils, version, x509
 from re6st.utils import exit
 
 class ReexecException(Exception):
@@ -22,7 +20,7 @@ def getConfig():
              "- any: ask peers our IP\n"
              " (default: like 'upnp' if miniupnpc is installed,\n"
              "  otherwise like 'any')")
-    _('--registry', metavar='URL',
+    _('--registry', metavar='URL', required=True,
         help="Public HTTP URL of the registry, for bootstrapping.")
     _('-l', '--log', default='/var/log/re6stnet',
         help="Path to the directory used for log files:\n"
@@ -126,48 +124,11 @@ def getConfig():
 
     return parser.parse_args()
 
-def maybe_renew(path, cert, info, renew):
-    while True:
-        next_renew = utils.notAfter(cert) - RENEW_PERIOD
-        if time.time() < next_renew:
-            return cert, next_renew
-        try:
-            pem = renew()
-            if not pem or pem == crypto.dump_certificate(
-                  crypto.FILETYPE_PEM, cert):
-                exc_info = 0
-                break
-            cert = crypto.load_certificate(crypto.FILETYPE_PEM, pem)
-        except Exception:
-            exc_info = 1
-            break
-        new_path = path + '.new'
-        with open(new_path, 'w') as f:
-            f.write(pem)
-        try:
-          s = os.stat(path)
-          os.chown(new_path, s.st_uid, s.st_gid)
-        except OSError:
-          pass
-        os.rename(new_path, path)
-        logging.info("%s renewed until %s UTC",
-            info, time.asctime(time.gmtime(utils.notAfter(cert))))
-    logging.error("%s not renewed. Will retry tomorrow.",
-                  info, exc_info=exc_info)
-    return cert, time.time() + 86400
-
 def main():
     # Get arguments
     config = getConfig()
-    with open(config.ca) as f:
-        ca = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
-    with open(config.cert) as f:
-        cert = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
-    prefix = utils.binFromSubnet(utils.subnetFromCert(cert))
-    config.openvpn_args += (
-        '--ca', config.ca,
-        '--cert', config.cert,
-        '--key', config.key)
+    cert = x509.Cert(config.ca, config.key, config.cert)
+    config.openvpn_args += cert.openvpn_args
     # TODO: verify certificates (should we moved to M2Crypto ?)
 
     if config.test:
@@ -186,13 +147,8 @@ def main():
     exit.signal(0, signal.SIGINT, signal.SIGTERM)
     exit.signal(-1, signal.SIGHUP, signal.SIGUSR2)
 
-    registry = RegistryClient(config.registry, config.key, ca)
-    cert, next_renew = maybe_renew(config.cert, cert, "Certificate",
-                                   lambda: registry.renewCertificate(prefix))
-    ca, ca_renew = maybe_renew(config.ca, ca, "CA Certificate", registry.getCa)
-    if next_renew > ca_renew:
-        next_renew = ca_renew
-    network = utils.networkFromCa(ca)
+    next_renew = cert.maybeRenew(config.registry)
+    network = cert.network
 
     if config.max_clients is None:
         config.max_clients = config.client_count * 2
@@ -288,7 +244,7 @@ def main():
         cleanup.append(lambda: subprocess.call(args))
 
     try:
-        subnet = network + prefix
+        subnet = network + cert.prefix
         my_ip = utils.ipFromBin(subnet, '1')
         my_subnet = '%s/%u' % (utils.ipFromBin(subnet), len(subnet))
         my_network = "%s/%u" % (utils.ipFromBin(network), len(network))
@@ -303,12 +259,11 @@ def main():
         timeout = 4 * config.hello
         cleanup = []
         if config.client_count and not config.client:
-            required('registry')
-            peer_db = db.PeerDB(db_path, registry, config.key, network, prefix)
+            peer_db = db.PeerDB(db_path, config.registry, cert)
             cleanup.append(lambda: peer_db.cacheMinimize(config.client_count))
             tunnel_manager = tunnel.TunnelManager(config.control_socket,
-                peer_db, config.openvpn_args, timeout, config.tunnel_refresh,
-                config.client_count, config.iface_list, network, prefix,
+                peer_db, cert, config.openvpn_args, timeout,
+                config.tunnel_refresh, config.client_count, config.iface_list,
                 address, ip_changed, config.encrypt, remote_gateway,
                 config.disable_proto, config.neighbour)
             cleanup.append(tunnel_manager.sock.close)

@@ -1,4 +1,4 @@
-import argparse, calendar, errno, logging, os, select as _select, shlex, signal
+import argparse, errno, logging, os, select as _select, shlex, signal
 import socket, struct, subprocess, sys, textwrap, threading, time, traceback
 try:
     subprocess.CalledProcessError(0, '', '')
@@ -207,15 +207,6 @@ def ipFromBin(ip, suffix=''):
     return socket.inet_ntop(socket.AF_INET6,
         struct.pack('>QQ', int(ip[:64], 2), int(ip[64:], 2)))
 
-def networkFromCa(ca):
-    return bin(ca.get_serial_number())[3:]
-
-def subnetFromCert(cert):
-    return cert.get_subject().CN
-
-def notAfter(cert):
-    return calendar.timegm(time.strptime(cert.get_notAfter(),'%Y%m%d%H%M%SZ'))
-
 def dump_address(address):
     return ';'.join(map(','.join, address))
 
@@ -232,26 +223,3 @@ def parse_address(address_list):
 def binFromSubnet(subnet):
     p, l = subnet.split('/')
     return bin(int(p))[2:].rjust(int(l), '0')
-
-def decrypt(key_path, data):
-    p = Popen(('openssl', 'rsautl', '-decrypt', '-inkey', key_path),
-              stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-    out, err = p.communicate(data)
-    if p.returncode:
-        raise subprocess.CalledProcessError(p.returncode, 'openssl', err)
-    return out
-
-def encrypt(cert, data):
-    r, w = os.pipe()
-    try:
-        threading.Thread(target=os.write, args=(w, cert)).start()
-        p = Popen(('openssl', 'rsautl', '-encrypt', '-certin',
-                              '-inkey', '/proc/self/fd/%u' % r),
-                  stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-        out, err = p.communicate(data)
-    finally:
-        os.close(r)
-        os.close(w)
-    if p.returncode:
-        raise subprocess.CalledProcessError(p.returncode, 'openssl', err)
-    return out

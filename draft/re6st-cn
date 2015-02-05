@@ -1,12 +1,12 @@
 #!/usr/bin/python
 import sqlite3, sys
 import os; sys.path[0] = os.path.dirname(sys.path[0])
-from re6st import utils
+from re6st import utils, x509
 from OpenSSL import crypto
 
 with open("/etc/re6stnet/ca.crt") as f:
     ca = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
-network = utils.networkFromCa(ca)
+network = x509.networkFromCa(ca)
 
 db = sqlite3.connect("/var/lib/re6stnet/registry.db")
 for x in sys.argv[1:]:

@@ -1,16 +1,14 @@
 import logging, sqlite3, socket, subprocess, time
-from . import utils
-
+from re6st.registry import RegistryClient
 
 class PeerDB(object):
 
     # internal ip = temp arg/attribute
-    def __init__(self, db_path, registry, key_path, network, prefix,
-                       db_size=200):
-        self._prefix = prefix
+    def __init__(self, db_path, registry, cert, db_size=200):
+        self._prefix = cert.prefix
         self._db_size = db_size
-        self._key_path = key_path
-        self._registry = registry
+        self._decrypt = cert.decrypt
+        self._registry = RegistryClient(registry, cert)
 
         logging.info('Initialize cache ...')
         self._db = sqlite3.connect(db_path, isolation_level=None)
@@ -100,7 +98,7 @@ class PeerDB(object):
         logging.info('Getting Boot peer...')
         try:
             bootpeer = self._registry.getBootstrapPeer(self._prefix)
-            prefix, address = utils.decrypt(self._key_path, bootpeer).split()
+            prefix, address = self._decrypt(bootpeer).split()
         except (socket.error, subprocess.CalledProcessError, ValueError), e:
             logging.warning('Failed to bootstrap (%s)',
                             e if bootpeer else 'no peer returned')
