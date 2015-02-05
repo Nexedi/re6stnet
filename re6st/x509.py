@@ -77,8 +77,7 @@ class Cert(object):
             self.key = crypto.load_privatekey(crypto.FILETYPE_PEM, f.read())
         if cert:
             with open(cert) as f:
-                cert = f.read()
-            self.cert = crypto.load_certificate(crypto.FILETYPE_PEM, cert)
+                self.cert = self.loadVerify(f.read())
 
     @property
     def prefix(self):
@@ -102,6 +101,21 @@ class Cert(object):
         self.ca, ca_renew = maybe_renew(self.ca_path, self.ca,
               "CA Certificate", registry.getCa)
         return min(next_renew, ca_renew)
+
+    def loadVerify(self, cert, strict=False):
+        try:
+            r = crypto.load_certificate(crypto.FILETYPE_PEM, cert)
+        except crypto.Error:
+            raise VerifyError(None, None, 'unable to load certificate')
+        p = openssl('verify', '-CAfile', self.ca_path)
+        out, err = p.communicate(cert)
+        if p.returncode or strict:
+            for x in out.splitlines():
+                if x.startswith('error '):
+                    x, msg = x.split(':', 1)
+                    _, code, _, depth, _ = x.split(None, 4)
+                    raise VerifyError(int(code), int(depth), msg)
+        return r
 
     def verify(self, sign, data):
         crypto.verify(self.ca, sign, data, 'sha1')

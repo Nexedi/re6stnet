@@ -129,7 +129,6 @@ def main():
     config = getConfig()
     cert = x509.Cert(config.ca, config.key, config.cert)
     config.openvpn_args += cert.openvpn_args
-    # TODO: verify certificates (should we moved to M2Crypto ?)
 
     if config.test:
         sys.exit(eval(config.test, None, config.__dict__))
