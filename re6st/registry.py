@@ -355,10 +355,11 @@ class RegistryServer(object):
         with self.lock:
             address = utils.ipFromBin(self.network + peer), tunnel.PORT
             self.sock.sendto('\2', address)
-            start = time.time()
-            timeout = 1
+            s = self.sock,
+            timeout = 3
+            end = timeout + time.time()
             # Loop because there may be answers from previous requests.
-            while select.select([self.sock], [], [], timeout)[0]:
+            while select.select(s, (), (), timeout)[0]:
                 msg = self.sock.recv(1<<16)
                 if msg[0] == '\1':
                     try:
@@ -367,7 +368,7 @@ class RegistryServer(object):
                         continue
                     if msg.split()[0] == peer:
                         break
-                timeout = max(0, time.time() - start)
+                timeout = max(0, end - time.time())
             else:
                 logging.info("Timeout while querying [%s]:%u", *address)
                 return
@@ -419,9 +420,9 @@ class RegistryServer(object):
             peers = deque(('%u/%u' % (int(self.prefix, 2), len(self.prefix)),))
             cookie = hex(random.randint(0, 1<<32))[2:]
             graph = dict.fromkeys(peers)
+            s = self.sock,
             while True:
-                r, w, _ = select.select([self.sock],
-                    [self.sock] if peers else [], [], 1)
+                r, w, _ = select.select(s, s if peers else (), (), 3)
                 if r:
                     answer = self.sock.recv(1<<16)
                     if answer[0] == '\xfe':
