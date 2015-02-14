@@ -46,7 +46,8 @@ for name in """internet=I registry=R
     node._screen = node.Popen((SCREEN, '-DmS', name))
     node.screen = (lambda name: lambda *cmd:
         subprocess.call([SCREEN, '-r', name, '-X', 'eval'] + map(
-            "screen sh -c '%s; exec $SHELL'".__mod__, cmd)))(name)
+            """screen sh -c 'set %s; "\$@"; echo "\$@"; exec $SHELL'"""
+            .__mod__, cmd)))(name)
 
 # create switch
 switch1 = nemu.Switch()
