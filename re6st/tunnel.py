@@ -158,47 +158,140 @@ class TunnelKiller(object):
     locked = unlocking = lambda _: None
 
 
-class TunnelManager(object):
+class BaseTunnelManager(object):
 
-    def __init__(self, control_socket, peer_db, cert, openvpn_args, timeout,
-                 refresh, client_count, iface_list, address, ip_changed,
-                 encrypt, remote_gateway, disable_proto, neighbour_list=()):
+    def __init__(self, peer_db, cert, address=()):
         self.cert = cert
         self._network = cert.network
-        self.ctl = ctl.Babel(control_socket, weakref.proxy(self), self._network)
-        self.encrypt = encrypt
-        self.ovpn_args = openvpn_args
+        self._prefix = cert.prefix
         self.peer_db = peer_db
-        self.timeout = timeout
-        # Create and open read_only pipe to get server events
-        r, self.write_pipe = os.pipe()
-        self._read_pipe = os.fdopen(r)
         self._connecting = set()
         self._connection_dict = {}
-        self._disconnected = 0
-        self._distant_peers = []
-        self._iface_to_prefix = {}
-        self._refresh_time = refresh
-        self._iface_list = iface_list
-        self._prefix = cert.prefix
+        self._served = set()
+
         address_dict = defaultdict(list)
         for family, address in address:
             address_dict[family] += address
         self._address = dict((family, utils.dump_address(address))
                              for family, address in address_dict.iteritems()
                              if address)
-        self._ip_changed = ip_changed
-        self._gateway_manager = MultiGatewayManager(remote_gateway) \
-                                if remote_gateway else None
-        self._disable_proto = disable_proto
-        self._neighbour_set = set(map(utils.binFromSubnet, neighbour_list))
-        self._served = set()
-        self._killing = {}
 
         self.sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
         # See also http://stackoverflow.com/questions/597225/
         # about binding and anycast.
         self.sock.bind(('::', PORT))
+
+    def select(self, r, w, t):
+        r[self.sock] = self.handlePeerEvent
+
+    def sendto(self, peer, msg):
+        ip = utils.ipFromBin(self._network + peer)
+        try:
+            return self.sock.sendto(msg, (ip, PORT))
+        except socket.error, e:
+            (logging.info if e.errno == errno.ENETUNREACH else logging.error)(
+                'Failed to send message to %s/%s (%s)',
+                int(peer, 2), len(peer), e)
+
+    def _sendto(self, to, msg):
+        try:
+            return self.sock.sendto(msg, to[:2])
+        except socket.error, e:
+            (logging.info if e.errno == errno.ENETUNREACH else logging.error)(
+                'Failed to send message to %s (%s)', to, e)
+
+    def handlePeerEvent(self):
+        msg, address = self.sock.recvfrom(1<<16)
+        if address[0] == '::1':
+            sender = None
+        else:
+            try:
+                sender = utils.binFromIp(address[0])
+            except socket.error, e:
+                # inet_pton does not parse '<ipv6>%<iface>'
+                logging.warning('ignored message from %r (%s)', address, e)
+                return
+            if not sender.startswith(self._network):
+                return
+        if not msg:
+            return
+        code = ord(msg[0])
+        if code == 1: # answer
+            # Old versions may send additional and obsolete addresses.
+            # Ignore them, as well as truncated lines.
+            try:
+                prefix, address = msg[1:msg.index('\n')].split()
+                int(prefix, 2)
+            except ValueError:
+                pass
+            else:
+                if prefix != self._prefix:
+                    self.peer_db.addPeer(prefix, address)
+                    try:
+                        self._connecting.remove(prefix)
+                    except KeyError:
+                        pass
+                    else:
+                        self._makeTunnel(prefix, address)
+        elif code == 2: # request
+            if self._address:
+                self._sendto(address, '\1%s %s\n' % (self._prefix,
+                    ';'.join(self._address.itervalues())))
+            #else: # I don't know my IP yet!
+        elif code == 3:
+            if len(msg) == 1:
+                self._sendto(address, '\3' + version.version)
+        elif code in (4, 5): # kill
+            prefix = msg[1:]
+            if sender and sender.startswith(prefix, len(self._network)):
+                try:
+                    tunnel_killer = self._killing[prefix]
+                except KeyError:
+                    if code == 4 and prefix in self._served: # request
+                        self._killing[prefix] = TunnelKiller(prefix, self)
+                else:
+                    if code == 5 and tunnel_killer.state == 'locked': # response
+                        self._kill(prefix)
+        elif code == 255:
+            # the registry wants to know the topology for debugging purpose
+            if not sender or sender[len(self._network):].startswith(
+                  self.peer_db.registry_prefix):
+                msg = ['\xfe%s%u/%u\n%u\n' % (msg[1:],
+                    int(self._prefix, 2), len(self._prefix),
+                    len(self._connection_dict))]
+                msg.extend('%u/%u\n' % (int(x, 2), len(x))
+                           for x in (self._connection_dict, self._served)
+                           for x in x)
+                try:
+                    self.sock.sendto(''.join(msg), address[:2])
+                except socket.error, e:
+                    pass
+
+
+class TunnelManager(BaseTunnelManager):
+
+    def __init__(self, control_socket, peer_db, cert, openvpn_args, timeout,
+                 refresh, client_count, iface_list, address, ip_changed,
+                 encrypt, remote_gateway, disable_proto, neighbour_list=()):
+        super(TunnelManager, self).__init__(peer_db, cert, address)
+        self.ctl = ctl.Babel(control_socket, weakref.proxy(self), self._network)
+        self.encrypt = encrypt
+        self.ovpn_args = openvpn_args
+        self.timeout = timeout
+        # Create and open read_only pipe to get server events
+        r, self.write_pipe = os.pipe()
+        self._read_pipe = os.fdopen(r)
+        self._disconnected = 0
+        self._distant_peers = []
+        self._iface_to_prefix = {}
+        self._refresh_time = refresh
+        self._iface_list = iface_list
+        self._ip_changed = ip_changed
+        self._gateway_manager = MultiGatewayManager(remote_gateway) \
+                                if remote_gateway else None
+        self._disable_proto = disable_proto
+        self._neighbour_set = set(map(utils.binFromSubnet, neighbour_list))
+        self._killing = {}
 
         self._next_refresh = time.time()
         self.resetTunnelRefresh()
@@ -511,86 +604,3 @@ class TunnelManager(object):
             family, address = self._ip_changed(ip)
             if address:
                 self._address[family] = utils.dump_address(address)
-
-    def sendto(self, peer, msg):
-        ip = utils.ipFromBin(self._network + peer)
-        try:
-            return self.sock.sendto(msg, (ip, PORT))
-        except socket.error, e:
-            (logging.info if e.errno == errno.ENETUNREACH else logging.error)(
-                'Failed to send message to %s/%s (%s)',
-                int(peer, 2), len(peer), e)
-
-    def _sendto(self, to, msg):
-        try:
-            return self.sock.sendto(msg, to[:2])
-        except socket.error, e:
-            (logging.info if e.errno == errno.ENETUNREACH else logging.error)(
-                'Failed to send message to %s (%s)', to, e)
-
-    def handlePeerEvent(self):
-        msg, address = self.sock.recvfrom(1<<16)
-        if address[0] == '::1':
-            sender = None
-        else:
-            try:
-                sender = utils.binFromIp(address[0])
-            except socket.error, e:
-                # inet_pton does not parse '<ipv6>%<iface>'
-                logging.warning('ignored message from %r (%s)', address, e)
-                return
-            if not sender.startswith(self._network):
-                return
-        if not msg:
-            return
-        code = ord(msg[0])
-        if code == 1: # answer
-            # Old versions may send additional and obsolete addresses.
-            # Ignore them, as well as truncated lines.
-            try:
-                prefix, address = msg[1:msg.index('\n')].split()
-                int(prefix, 2)
-            except ValueError:
-                pass
-            else:
-                if prefix != self._prefix:
-                    self.peer_db.addPeer(prefix, address)
-                    try:
-                        self._connecting.remove(prefix)
-                    except KeyError:
-                        pass
-                    else:
-                        self._makeTunnel(prefix, address)
-        elif code == 2: # request
-            if self._address:
-                self._sendto(address, '\1%s %s\n' % (self._prefix,
-                    ';'.join(self._address.itervalues())))
-            #else: # I don't know my IP yet!
-        elif code == 3:
-            if len(msg) == 1:
-                self._sendto(address, '\3' + version.version)
-        elif code in (4, 5): # kill
-            prefix = msg[1:]
-            if sender and sender.startswith(prefix, len(self._network)):
-                try:
-                    tunnel_killer = self._killing[prefix]
-                except KeyError:
-                    if code == 4 and prefix in self._served: # request
-                        self._killing[prefix] = TunnelKiller(prefix, self)
-                else:
-                    if code == 5 and tunnel_killer.state == 'locked': # response
-                        self._kill(prefix)
-        elif code == 255:
-            # the registry wants to know the topology for debugging purpose
-            if not sender or sender[len(self._network):].startswith(
-                  self.peer_db.registry_prefix):
-                msg = ['\xfe%s%u/%u\n%u\n' % (msg[1:],
-                    int(self._prefix, 2), len(self._prefix),
-                    len(self._connection_dict))]
-                msg.extend('%u/%u\n' % (int(x, 2), len(x))
-                           for x in (self._connection_dict, self._served)
-                           for x in x)
-                try:
-                    self.sock.sendto(''.join(msg), address[:2])
-                except socket.error, e:
-                    pass

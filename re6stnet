@@ -256,20 +256,20 @@ def main():
         # Init db and tunnels
         tunnel_interfaces = server_tunnels.keys()
         timeout = 4 * config.hello
-        cleanup = []
+        peer_db = db.PeerDB(db_path, config.registry, cert)
+        cleanup = [lambda: peer_db.cacheMinimize(config.client_count)]
         if config.client_count and not config.client:
-            peer_db = db.PeerDB(db_path, config.registry, cert)
-            cleanup.append(lambda: peer_db.cacheMinimize(config.client_count))
             tunnel_manager = tunnel.TunnelManager(config.control_socket,
                 peer_db, cert, config.openvpn_args, timeout,
                 config.tunnel_refresh, config.client_count, config.iface_list,
                 address, ip_changed, config.encrypt, remote_gateway,
                 config.disable_proto, config.neighbour)
-            cleanup.append(tunnel_manager.sock.close)
             tunnel_interfaces += tunnel_manager.new_iface_list
             write_pipe = tunnel_manager.write_pipe
         else:
-            tunnel_manager = write_pipe = None
+            write_pipe = None
+            tunnel_manager = tunnel.BaseTunnelManager(peer_db, cert)
+        cleanup.append(tunnel_manager.sock.close)
 
         try:
             exit.acquire()
@@ -372,17 +372,18 @@ def main():
                 exit.acquire()
             for cmd in config.daemon or ():
                 cleanup.insert(-1, utils.Popen(cmd, shell=True).stop)
-
-            # main loop
-            select_list = [forwarder.select] if forwarder else []
-            if tunnel_manager:
-                select_list.append(tunnel_manager.select)
+            try:
                 cleanup[-1:-1] = (tunnel_manager.delInterfaces,
                                   tunnel_manager.killAll)
+            except AttributeError:
+                pass
+
+            # main loop
             exit.release()
             def renew():
                 raise ReexecException("Restart to renew certificate")
-            select_list.append(utils.select)
+            select_list = [forwarder.select] if forwarder else []
+            select_list += tunnel_manager.select, utils.select
             while True:
                 args = {}, {}, [(next_renew, renew)]
                 for s in select_list:
