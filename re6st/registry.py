@@ -43,10 +43,10 @@ def rpc(f):
 class RegistryServer(object):
 
     peers = 0, ()
+    cert_duration = 365 * 86400
 
     def __init__(self, config):
         self.config = config
-        self.cert_duration = 365 * 86400
         self.lock = threading.Lock()
         self.sessions = {}
         self.sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)

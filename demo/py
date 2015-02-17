@@ -7,6 +7,26 @@ def __file__():
     _parse_args = ArgumentParser.parse_args
     ArgumentParser.parse_args = lambda self: _parse_args(self, sys.argv[2:])
 
+    if 1:
+        # Check renewal of certificate.
+        from random import randrange
+        from re6st import registry
+        registry.RENEW_PERIOD = 60
+        _createCertificate = registry.RegistryServer.createCertificate
+        def createCertificate(self, client_prefix, *args):
+            self.cert_duration = 200 if int(client_prefix, 2) == 7 else \
+                randrange(10, 60) ** 2
+            try:
+                return _createCertificate(self, client_prefix, *args)
+            finally:
+                del self.cert_duration
+        registry.RegistryServer.createCertificate = createCertificate
+
+        # Simulate the case of a node that does
+        # not renew its certificate in time.
+        if sys.argv[2] == "@m7/re6stnet.conf":
+            registry.RENEW_PERIOD = -30
+
     return os.path.join(sys.path[0], sys.argv[1])
 __file__ = __file__()
 execfile(__file__)
