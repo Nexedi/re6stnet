@@ -164,7 +164,7 @@ class BaseTunnelManager(object):
 
     _forward = None
 
-    def __init__(self, peer_db, cert, address=()):
+    def __init__(self, peer_db, cert, cert_renew, address=()):
         self.cert = cert
         self._network = cert.network
         self._prefix = cert.prefix
@@ -185,11 +185,28 @@ class BaseTunnelManager(object):
         # about binding and anycast.
         self.sock.bind(('::', PORT))
 
-        # Initialize with a dummy peer (self) so that '_peers' is never empty.
-        self._peers = [x509.Peer(self._prefix)]
+        p = x509.Peer(self._prefix)
+        self._next_invalidated = p.stop_date = cert_renew
+        self._peers = [p]
 
     def select(self, r, w, t):
         r[self.sock] = self.handlePeerEvent
+        t.append((self._next_invalidated, self.invalidatePeers))
+
+    def invalidatePeers(self):
+        next = float('inf')
+        now = time.time()
+        remove = []
+        for i, peer in enumerate(self._peers):
+            if peer.stop_date < now:
+                if peer.prefix == self._prefix:
+                    raise utils.ReexecException("Restart to renew certificate")
+                remove.append(i)
+            elif peer.stop_date < next:
+                next = peer.stop_date
+        for i in reversed(remove):
+            del self._peers[i]
+        self._next_invalidated = next
 
     def sendto(self, prefix, msg):
         to = utils.ipFromBin(self._network + prefix), PORT
@@ -266,9 +283,10 @@ class BaseTunnelManager(object):
             try:
                 cert = self.cert.loadVerify(msg,
                     True, crypto.FILETYPE_ASN1)
-            except x509.VerifyError, e:
+                stop_date = x509.notAfter(cert)
+            except (x509.VerifyError, ValueError), e:
                 logging.debug('ignored invalid certificate from %r (%s)',
-                              address, e.args[2])
+                              address, e.args[-1])
                 return
             p = utils.binFromSubnet(x509.subnetFromCert(cert))
             if p != peer.prefix:
@@ -279,6 +297,9 @@ class BaseTunnelManager(object):
                 peer = x509.Peer(p)
                 insort(self._peers, peer)
             peer.cert = cert
+            peer.stop_date = stop_date
+            if stop_date < self._next_invalidated:
+                self._next_invalidated = stop_date
             if seqno:
                 self._sendto(to, peer.hello(self.cert))
             else:
@@ -335,10 +356,11 @@ class BaseTunnelManager(object):
 
 class TunnelManager(BaseTunnelManager):
 
-    def __init__(self, control_socket, peer_db, cert, openvpn_args, timeout,
-                 refresh, client_count, iface_list, address, ip_changed,
-                 encrypt, remote_gateway, disable_proto, neighbour_list=()):
-        super(TunnelManager, self).__init__(peer_db, cert, address)
+    def __init__(self, control_socket, peer_db, cert, cert_renew, openvpn_args,
+                 timeout, refresh, client_count, iface_list, address,
+                 ip_changed, encrypt, remote_gateway, disable_proto,
+                 neighbour_list=()):
+        super(TunnelManager, self).__init__(peer_db, cert, cert_renew, address)
         self.ctl = ctl.Babel(control_socket, weakref.proxy(self), self._network)
         self.encrypt = encrypt
         self.ovpn_args = openvpn_args
@@ -403,8 +425,8 @@ class TunnelManager(BaseTunnelManager):
         del self._iface_to_prefix[iface]
 
     def select(self, r, w, t):
+        super(TunnelManager, self).select(r, w, t)
         r[self._read_pipe] = self.handleTunnelEvent
-        r[self.sock] = self.handlePeerEvent
         if self._next_refresh:
             t.append((self._next_refresh, self.refresh))
         self.ctl.select(r, w, t)

@@ -3,6 +3,9 @@ import socket, struct, subprocess, sys, textwrap, threading, time, traceback
 
 HMAC_LEN = len(hashlib.sha1('').digest())
 
+class ReexecException(Exception):
+    pass
+
 try:
     subprocess.CalledProcessError(0, '', '')
 except TypeError: # BBB: Python < 2.7
