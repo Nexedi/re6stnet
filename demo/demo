@@ -7,6 +7,11 @@ VERBOSE = 4
 REGISTRY='10.0.0.2'
 CA_DAYS = 1000
 
+# Quick check to avoid wasting time if there is an error.
+with open(os.devnull, "wb") as f:
+    for x in 're6stnet', 're6st-conf', 're6st-registry':
+        subprocess.check_call(('./py', x, '--help'), stdout=f)
+
 #                       registry
 #                           |.2
 #                           |10.0.0
