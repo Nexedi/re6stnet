@@ -55,28 +55,19 @@ class RegistryServer(object):
         utils.makedirs(os.path.dirname(self.config.db))
         self.db = sqlite3.connect(self.config.db, isolation_level=None,
                                                   check_same_thread=False)
-        self.db.execute("""CREATE TABLE IF NOT EXISTS config (
-                        name text primary key,
-                        value text)""")
-        try:
-            (self.prefix,), = self.db.execute(
-                "SELECT value FROM config WHERE name='prefix'")
-        except ValueError:
-            self.prefix = None
-        self.db.execute("""CREATE TABLE IF NOT EXISTS token (
-                        token text primary key not null,
-                        email text not null,
-                        prefix_len integer not null,
-                        date integer not null)""")
-        try:
-            self.db.execute("""CREATE TABLE cert (
-                               prefix text primary key not null,
-                               email text,
-                               cert text)""")
-        except sqlite3.OperationalError, e:
-            if e.args[0] != 'table cert already exists':
-                raise RuntimeError
-        else:
+        utils.sqliteCreateTable(self.db, "config",
+                "name TEXT PRIMARY KEY NOT NULL",
+                "value")
+        self.prefix = self.getConfig("prefix", None)
+        utils.sqliteCreateTable(self.db, "token",
+                "token TEXT PRIMARY KEY NOT NULL",
+                "email TEXT NOT NULL",
+                "prefix_len INTEGER NOT NULL",
+                "date INTEGER NOT NULL")
+        if utils.sqliteCreateTable(self.db, "cert",
+                "prefix TEXT PRIMARY KEY NOT NULL",
+                "email TEXT",
+                "cert TEXT"):
             self.db.execute("INSERT INTO cert VALUES ('',null,null)")
 
         self.cert = x509.Cert(self.config.ca, self.config.key)
@@ -91,6 +82,15 @@ class RegistryServer(object):
             weakref.proxy(self), self.network)
 
         self.onTimeout()
+
+    def getConfig(self, name, *default):
+        r, = next(self.db.execute(
+            "SELECT value FROM config WHERE name=?", (name,)), default)
+        return r
+
+    def setConfig(self, *name_value):
+        self.db.execute("INSERT OR REPLACE INTO config VALUES (?, ?)",
+                        name_value)
 
     def sendto(self, prefix, code):
         self.sock.sendto("%s\0%c" % (prefix, code), ('::1', tunnel.PORT))
@@ -302,8 +302,7 @@ class RegistryServer(object):
                                 (email, prefix))
                 if self.prefix is None:
                     self.prefix = prefix
-                    self.db.execute(
-                        "INSERT INTO config VALUES ('prefix',?)", (prefix,))
+                    self.setConfig('prefix', prefix)
                 return self.createCertificate(prefix, req.get_subject(),
                                                        req.get_pubkey())
 

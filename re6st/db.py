@@ -1,5 +1,6 @@
-import logging, sqlite3, socket, subprocess, time
+import logging, os, sqlite3, socket, subprocess, time
 from re6st.registry import RegistryClient
+from . import utils
 
 class PeerDB(object):
 
@@ -11,20 +12,16 @@ class PeerDB(object):
         self._registry = RegistryClient(registry, cert)
 
         logging.info('Initialize cache ...')
-        self._db = sqlite3.connect(db_path, isolation_level=None)
-        self._db.text_factory = str
+        try:
+            self._db = self._open(db_path)
+        except sqlite3.OperationalError:
+            logging.exception("Start with empty cache")
+            os.rename(db_path, db_path + '.bak')
+            self._db = self._open(db_path)
         q = self._db.execute
-        q("PRAGMA synchronous = OFF")
-        q("PRAGMA journal_mode = MEMORY")
-        q("""CREATE TABLE IF NOT EXISTS peer (
-            prefix TEXT PRIMARY KEY,
-            address TEXT NOT NULL)""")
-        q("""CREATE TABLE IF NOT EXISTS config (
-            name text primary key,
-            value text)""")
         q('ATTACH DATABASE ":memory:" AS volatile')
         q("""CREATE TABLE volatile.stat (
-            peer TEXT PRIMARY KEY,
+            peer TEXT PRIMARY KEY NOT NULL,
             try INTEGER NOT NULL DEFAULT 0)""")
         q("CREATE INDEX volatile.stat_try ON stat(try)")
         q("INSERT INTO volatile.stat (peer) SELECT prefix FROM peer")
@@ -48,6 +45,19 @@ class PeerDB(object):
         self.registry_prefix = a
         logging.info("Cache initialized. Prefix of registry node is %s/%u",
                      int(a, 2), len(a))
+
+    def _open(self, path):
+        db = sqlite3.connect(path, isolation_level=None)
+        db.text_factory = str
+        db.execute("PRAGMA synchronous = OFF")
+        db.execute("PRAGMA journal_mode = MEMORY")
+        utils.sqliteCreateTable(db, "peer",
+            "prefix TEXT PRIMARY KEY NOT NULL",
+            "address TEXT NOT NULL")
+        utils.sqliteCreateTable(db, "config",
+            "name TEXT PRIMARY KEY NOT NULL",
+            "value")
+        return db
 
     def log(self):
         if logging.getLogger().isEnabledFor(5):

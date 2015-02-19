@@ -1,6 +1,6 @@
 #!/usr/bin/python
 import atexit, errno, logging, os, signal, socket
-import sqlite3, subprocess, sys, time, threading
+import subprocess, sys, time, threading
 from collections import deque
 from re6st import ctl, db, plib, tunnel, utils, version, x509
 from re6st.utils import exit, ReexecException
@@ -393,9 +393,6 @@ def main():
                 except:
                     pass
             exit.release()
-    except sqlite3.Error:
-        logging.exception("Restarting with empty cache")
-        os.rename(db_path, db_path + '.bak')
     except ReexecException, e:
         logging.info(e)
     except Exception:

@@ -1,5 +1,6 @@
-import argparse, errno, hashlib, logging, os, select as _select, shlex, signal
-import socket, struct, subprocess, sys, textwrap, threading, time, traceback
+import argparse, errno, hashlib, logging, os, select as _select
+import shlex, signal, socket, sqlite3, struct, subprocess
+import sys, textwrap, threading, time, traceback
 
 HMAC_LEN = len(hashlib.sha1('').digest())
 
@@ -236,3 +237,15 @@ def newHmacSecret():
     assert len(pack(0,0,0)) == HMAC_LEN
     return lambda x=None: pack(g(64) if x is None else x, g(64), g(32))
 newHmacSecret = newHmacSecret()
+
+def sqliteCreateTable(db, name, *columns):
+    sql = "CREATE TABLE %s (%s)" % (name, ','.join('\n  ' + x for x in columns))
+    for x, in db.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' and name=?""",
+            (name,)):
+        if x == sql:
+            return
+        raise sqlite3.OperationalError(
+            "table %r already exists with unexpected schema" % name)
+    db.execute(sql)
+    return True
