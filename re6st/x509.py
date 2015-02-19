@@ -45,9 +45,10 @@ def fingerprint(cert, alg='sha1'):
 def maybe_renew(path, cert, info, renew):
     from .registry import RENEW_PERIOD
     while True:
-        next_renew = notAfter(cert) - RENEW_PERIOD
-        if time.time() < next_renew:
-            return cert, next_renew
+        if cert.get_serial_number():
+            next_renew = notAfter(cert) - RENEW_PERIOD
+            if time.time() < next_renew:
+                return cert, next_renew
         try:
             pem = renew()
             if not pem or pem == crypto.dump_certificate(

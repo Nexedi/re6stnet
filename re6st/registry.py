@@ -129,6 +129,15 @@ class RegistryServer(object):
     def babel_dump(self):
         self._wait_dump = False
 
+    def iterCert(self):
+        for prefix, email, cert in self.db.execute(
+                "SELECT * FROM cert WHERE cert IS NOT NULL"):
+            try:
+                yield (crypto.load_certificate(crypto.FILETYPE_PEM, cert),
+                       prefix, email)
+            except crypto.Error:
+                pass
+
     def onTimeout(self):
         # XXX: Because we use threads to process requests, the statements
         #      'self.timeout = 1' below have no effect as long as the
@@ -145,12 +154,7 @@ class RegistryServer(object):
                     q("DELETE FROM token WHERE token=?", (token,))
                 elif not_after is None or x < not_after:
                     not_after = x
-            for prefix, email, cert in q("SELECT * FROM cert"
-                                         " WHERE cert IS NOT NULL"):
-                try:
-                    cert = crypto.load_certificate(crypto.FILETYPE_PEM, cert)
-                except crypto.Error:
-                    continue
+            for cert, prefix, email in self.iterCert():
                 x = x509.notAfter(cert)
                 if x <= old:
                     if prefix == self.prefix:
@@ -303,18 +307,39 @@ class RegistryServer(object):
                 if self.prefix is None:
                     self.prefix = prefix
                     self.setConfig('prefix', prefix)
-                return self.createCertificate(prefix, req.get_subject(),
-                                                       req.get_pubkey())
+                subject = req.get_subject()
+                subject.serialNumber = str(self.getSubjectSerial())
+                return self.createCertificate(prefix, subject, req.get_pubkey())
 
-    def createCertificate(self, client_prefix, subject, pubkey):
+    def getSubjectSerial(self):
+        # Smallest unique number, for IPv4 support.
+        serials = []
+        for x in self.iterCert():
+            serial = x[0].get_subject().serialNumber
+            if serial:
+                serials.append(int(serial))
+        serials.sort()
+        for serial, x in enumerate(serials):
+            if serial != x:
+                return serial
+        return len(serials)
+
+    def createCertificate(self, client_prefix, subject, pubkey, not_after=None):
         cert = crypto.X509()
-        cert.set_serial_number(0) # required for libssl < 1.0
         cert.gmtime_adj_notBefore(0)
-        cert.gmtime_adj_notAfter(self.cert_duration)
+        if not_after:
+            cert.set_notAfter(not_after)
+        else:
+            cert.gmtime_adj_notAfter(self.cert_duration)
         cert.set_issuer(self.cert.ca.get_subject())
         subject.CN = "%u/%u" % (int(client_prefix, 2), len(client_prefix))
         cert.set_subject(subject)
         cert.set_pubkey(pubkey)
+        # Certificate serial, for revocation support. Contrary to
+        # subject serial, it does not need to be as small as possible.
+        serial = 1 + self.getConfig('_serial', 0)
+        self.setConfig('_serial', serial)
+        cert.set_serial_number(serial)
         cert.sign(self.cert.key, 'sha1')
         cert = crypto.dump_certificate(crypto.FILETYPE_PEM, cert)
         self.db.execute("UPDATE cert SET cert = ? WHERE prefix = ?",
@@ -329,9 +354,13 @@ class RegistryServer(object):
                 pem = self.getCert(cn)
                 cert = crypto.load_certificate(crypto.FILETYPE_PEM, pem)
                 if x509.notAfter(cert) - RENEW_PERIOD < time.time():
-                    pem = self.createCertificate(cn, cert.get_subject(),
-                                                     cert.get_pubkey())
-                return pem
+                    not_after = None
+                elif cert.get_serial_number():
+                    return pem
+                else:
+                    not_after = cert.get_notAfter()
+                return self.createCertificate(cn,
+                    cert.get_subject(), cert.get_pubkey(), not_after)
 
     @rpc
     def getCa(self):

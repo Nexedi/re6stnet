@@ -87,12 +87,14 @@ def main():
         if r:
             sys.exit(r)
 
+    reserved = 'CN', 'serial'
     req = crypto.X509Req()
     try:
         with open(cert_path) as f:
             cert = loadCert(f.read())
         components = dict(cert.get_subject().get_components())
-        components.pop('CN', None)
+        for k in reserved:
+            components.pop(k, None)
     except IOError, e:
         if e.errno != errno.ENOENT:
             raise
@@ -101,8 +103,8 @@ def main():
         components.update(config.req)
     subj = req.get_subject()
     for k, v in components.iteritems():
-        if k == 'CN':
-            sys.exit("CN field is reserved.")
+        if k in reserved:
+            sys.exit(k + " field is reserved.")
         if v:
             setattr(subj, k, v)
 
