@@ -160,11 +160,16 @@ nodes = []
 gateway1.screen('miniupnpd -d -f miniupnpd.conf -P miniupnpd.pid'
                 ' -a %s -i %s' % (g1_if_1.name, g1_if_0_name))
 if 1:
-    import sqlite3
+    from OpenSSL import crypto
+    import hashlib, sqlite3
     os.path.exists('ca.crt') or subprocess.check_call(
         "openssl req -nodes -new -x509 -key registry/ca.key -out ca.crt"
         " -subj /CN=re6st.example.com/emailAddress=re6st@example.com"
         " -set_serial 0x120010db80042 -days %u" % CA_DAYS, shell=True)
+    with open('ca.crt') as f:
+        ca = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
+    fingerprint = "sha1:" + hashlib.sha1(
+        crypto.dump_certificate(crypto.FILETYPE_ASN1, ca)).hexdigest()
     db_path = 'registry/registry.db'
     registry.screen('./py re6st-registry @registry/re6st-registry.conf'
         ' --db %s --mailhost %s -v%u --control-socket registry/babeld.socket'
@@ -189,7 +194,8 @@ if 1:
                 os.symlink('../dh2048.pem', dh_path)
             email = node.name + '@example.com'
             p = node.Popen(('../py', 're6st-conf', '--registry', registry,
-                '--email', email), stdin=subprocess.PIPE, cwd=folder)
+                            '--email', email, '--fingerprint', fingerprint),
+                stdin=subprocess.PIPE, cwd=folder)
             token = None
             while not token:
                 time.sleep(.1)

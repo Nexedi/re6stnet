@@ -1,5 +1,6 @@
 #!/usr/bin/python
-import argparse, atexit, errno, os, subprocess, sqlite3, sys, time
+import argparse, atexit, binascii, errno, hashlib
+import os, subprocess, sqlite3, sys, time
 from OpenSSL import crypto
 from re6st import registry, utils, x509
 
@@ -18,6 +19,8 @@ def main():
         description="Setup script for re6stnet.",
         formatter_class=utils.HelpFormatter)
     _ = parser.add_argument
+    _('--fingerprint', metavar='ALG:FINGERPRINT',
+        help="Check CA fingerprint to protect against MITM.")
     _('--registry', required=True, metavar='URL',
         help="HTTP URL of the server delivering certificates.")
     _('--is-needed', action='store_true',
@@ -53,8 +56,20 @@ def main():
     s = registry.RegistryClient(config.registry)
 
     # Get CA
-    ca = s.getCa()
-    network = x509.networkFromCa(loadCert(ca))
+    ca = loadCert(s.getCa())
+    if config.fingerprint:
+        try:
+            alg, fingerprint = config.fingerprint.split(':', 1)
+            fingerprint = binascii.a2b_hex(fingerprint)
+            if hashlib.new(alg).digest_size != len(fingerprint):
+                raise ValueError("wrong size")
+        except StandardError, e:
+            parser.error("invalid fingerprint: %s" % e)
+        if x509.fingerprint(ca, alg).digest() != fingerprint:
+            sys.exit("CA fingerprint doesn't match")
+    else:
+        print "WARNING: it is strongly recommended to use --fingerprint option."
+    network = x509.networkFromCa(ca)
     if config.is_needed:
         route, err = subprocess.Popen(('ip', '-6', '-o', 'route', 'get',
                                        utils.ipFromBin(network)),
@@ -62,7 +77,7 @@ def main():
         sys.exit(err or route and
             utils.binFromIp(route.split()[8]).startswith(network))
 
-    create(ca_path, ca)
+    create(ca_path, crypto.dump_certificate(crypto.FILETYPE_PEM, ca))
     if config.ca_only:
         sys.exit()
 

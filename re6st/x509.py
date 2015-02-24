@@ -31,6 +31,9 @@ def encrypt(cert, data):
         raise subprocess.CalledProcessError(p.returncode, 'openssl', err)
     return out
 
+def fingerprint(cert, alg='sha1'):
+    return hashlib.new(alg, crypto.dump_certificate(crypto.FILETYPE_ASN1, cert))
+
 def maybe_renew(path, cert, info, renew):
     from .registry import RENEW_PERIOD
     while True:
