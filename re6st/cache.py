@@ -2,7 +2,7 @@ import logging, os, sqlite3, socket, subprocess, time
 from re6st.registry import RegistryClient
 from . import utils
 
-class PeerDB(object):
+class Cache(object):
 
     # internal ip = temp arg/attribute
     def __init__(self, db_path, registry, cert, db_size=200):

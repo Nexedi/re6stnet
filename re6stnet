@@ -2,7 +2,8 @@
 import atexit, errno, logging, os, signal, socket
 import subprocess, sys, time, threading
 from collections import deque
-from re6st import ctl, db, plib, tunnel, utils, version, x509
+from re6st import ctl, plib, tunnel, utils, version, x509
+from re6st.cache import Cache
 from re6st.utils import exit, ReexecException
 
 def getConfig():
@@ -26,7 +27,7 @@ def getConfig():
              "- <iface>.log: 1 file per spawned OpenVPN\n")
     _('-s', '--state', default='/var/lib/re6stnet',
         help="Path to re6stnet state directory:\n"
-             "- peers.db: cache of peer addresses\n"
+             "- cache.db: cache of network parameters and peer addresses\n"
              "- babeld.state: see option -S of babeld\n")
     _('-v', '--verbose', default=1, type=int, metavar='LEVEL',
         help="Log level of re6stnet itself. 0 disables logging."
@@ -136,7 +137,7 @@ def main():
     logging.trace("Environment: %r", os.environ)
     logging.trace("Configuration: %r", config)
     utils.makedirs(config.state)
-    db_path = os.path.join(config.state, 'peers.db')
+    db_path = os.path.join(config.state, 'cache.db')
     if config.ovpnlog:
         plib.ovpn_log = config.log
 
@@ -253,11 +254,11 @@ def main():
         # Init db and tunnels
         tunnel_interfaces = server_tunnels.keys()
         timeout = 4 * config.hello
-        peer_db = db.PeerDB(db_path, config.registry, cert)
-        cleanup = [lambda: peer_db.cacheMinimize(config.client_count)]
+        cache = Cache(db_path, config.registry, cert)
+        cleanup = [lambda: cache.cacheMinimize(config.client_count)]
         if config.client_count and not config.client:
             tunnel_manager = tunnel.TunnelManager(config.control_socket,
-                peer_db, cert, next_renew, config.openvpn_args, timeout,
+                cache, cert, next_renew, config.openvpn_args, timeout,
                 config.tunnel_refresh, config.client_count, config.iface_list,
                 address, ip_changed, config.encrypt, remote_gateway,
                 config.disable_proto, config.neighbour)
@@ -265,7 +266,7 @@ def main():
             write_pipe = tunnel_manager.write_pipe
         else:
             write_pipe = None
-            tunnel_manager = tunnel.BaseTunnelManager(peer_db, cert, next_renew)
+            tunnel_manager = tunnel.BaseTunnelManager(cache, cert, next_renew)
         cleanup.append(tunnel_manager.sock.close)
 
         try:

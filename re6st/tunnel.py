@@ -79,11 +79,11 @@ class Connection(object):
     def connected(self):
         i = self._retry - 1
         self._retry = None
-        db = self.tunnel_manager.peer_db
+        cache = self.tunnel_manager.cache
         if i:
-            db.addPeer(self._prefix, ','.join(self.address_list[i]), True)
+            cache.addPeer(self._prefix, ','.join(self.address_list[i]), True)
         else:
-            db.connecting(self._prefix, 0)
+            cache.connecting(self._prefix, 0)
 
     def close(self):
         try:
@@ -164,11 +164,11 @@ class BaseTunnelManager(object):
 
     _forward = None
 
-    def __init__(self, peer_db, cert, cert_renew, address=()):
+    def __init__(self, cache, cert, cert_renew, address=()):
         self.cert = cert
         self._network = cert.network
         self._prefix = cert.prefix
-        self.peer_db = peer_db
+        self.cache = cache
         self._connecting = set()
         self._connection_dict = {}
         self._served = set()
@@ -322,7 +322,7 @@ class BaseTunnelManager(object):
         elif code == 1: # address
             if msg:
                 if peer:
-                    self.peer_db.addPeer(peer, msg)
+                    self.cache.addPeer(peer, msg)
                     try:
                         self._connecting.remove(peer)
                     except KeyError:
@@ -347,7 +347,7 @@ class BaseTunnelManager(object):
                 return version.version
         elif code == 5:
             # the registry wants to know the topology for debugging purpose
-            if not peer or peer == self.peer_db.registry_prefix:
+            if not peer or peer == self.cache.registry_prefix:
                 return str(len(self._connection_dict)) + ''.join(
                     ' %s/%s' % (int(x, 2), len(x))
                     for x in (self._connection_dict, self._served)
@@ -356,11 +356,11 @@ class BaseTunnelManager(object):
 
 class TunnelManager(BaseTunnelManager):
 
-    def __init__(self, control_socket, peer_db, cert, cert_renew, openvpn_args,
+    def __init__(self, control_socket, cache, cert, cert_renew, openvpn_args,
                  timeout, refresh, client_count, iface_list, address,
                  ip_changed, encrypt, remote_gateway, disable_proto,
                  neighbour_list=()):
-        super(TunnelManager, self).__init__(peer_db, cert, cert_renew, address)
+        super(TunnelManager, self).__init__(cache, cert, cert_renew, address)
         self.ctl = ctl.Babel(control_socket, weakref.proxy(self), self._network)
         self.encrypt = encrypt
         self.ovpn_args = openvpn_args
@@ -460,7 +460,7 @@ class TunnelManager(BaseTunnelManager):
         if remove:
             self._removeSomeTunnels()
             self.resetTunnelRefresh()
-            self.peer_db.log()
+            self.cache.log()
         self._makeNewTunnels(True)
         # XXX: Commented code is an attempt to clean up unused interfaces
         #      but babeld does not leave ipv6 membership for deleted taps,
@@ -531,7 +531,7 @@ class TunnelManager(BaseTunnelManager):
         assert prefix != self._prefix, self.__dict__
         address = [x for x in utils.parse_address(address)
                      if x[2] not in self._disable_proto]
-        self.peer_db.connecting(prefix, 1)
+        self.cache.connecting(prefix, 1)
         if not address:
             return False
         logging.info('Establishing a connection with %u/%u',
@@ -567,7 +567,7 @@ class TunnelManager(BaseTunnelManager):
             distant_peers[:] = peers.difference(neighbours)
             distant_peers.sort(key=self._newTunnelScore)
             # Check whether we're connected to the network.
-            registry = self.peer_db.registry_prefix
+            registry = self.cache.registry_prefix
             if registry == self._prefix:
                 if not distant_peers:
                     # Faster recovery of registry node: use cache instead
@@ -590,7 +590,7 @@ class TunnelManager(BaseTunnelManager):
                 if peers:
                     # We aren't the only disconnected node
                     # so force rebootstrapping.
-                    peer = self.peer_db.getBootstrapPeer()
+                    peer = self.cache.getBootstrapPeer()
                     if not peer:
                         # Registry dead ? Assume we're connected after all.
                         distant_peers = self._distant_peers
@@ -612,7 +612,7 @@ class TunnelManager(BaseTunnelManager):
             # routing table.
             while count and distant_peers:
                 peer = distant_peers.pop()
-                address = self.peer_db.getAddress(peer)
+                address = self.cache.getAddress(peer)
                 if address:
                     count -= self._makeTunnel(peer, address)
                 elif self.sendto(peer, '\1'):
@@ -623,7 +623,7 @@ class TunnelManager(BaseTunnelManager):
             # up. Select peers from cache for which we have no route.
             new = 0
             bootstrap = True
-            for peer, address in self.peer_db.getPeerList():
+            for peer, address in self.cache.getPeerList():
                 if peer not in peers:
                     bootstrap = False
                     if self._makeTunnel(peer, address):
@@ -635,12 +635,12 @@ class TunnelManager(BaseTunnelManager):
             if not (new or peers):
                 if bootstrap and registry != self._prefix:
                     # Startup without any good address in the cache.
-                    peer = self.peer_db.getBootstrapPeer()
+                    peer = self.cache.getBootstrapPeer()
                     if peer and self._makeTunnel(*peer):
                         return
                 # Failed to bootstrap ! Last chance to connect is to
                 # retry an address that already failed :(
-                for peer in self.peer_db.getPeerList(1):
+                for peer in self.cache.getPeerList(1):
                     if self._makeTunnel(*peer):
                         break
 
@@ -666,7 +666,7 @@ class TunnelManager(BaseTunnelManager):
             self._gateway_manager.add(trusted_ip, False)
         if prefix in self._connection_dict and self._prefix < prefix:
             self._kill(prefix)
-            self.peer_db.connecting(prefix, 0)
+            self.cache.connecting(prefix, 0)
 
     def _ovpn_client_disconnect(self, common_name, trusted_ip):
         prefix = utils.binFromSubnet(common_name)
