@@ -12,6 +12,7 @@ class PeerDB(object):
 
         logging.info('Initialize cache ...')
         self._db = sqlite3.connect(db_path, isolation_level=None)
+        self._db.text_factory = str
         q = self._db.execute
         q("PRAGMA synchronous = OFF")
         q("PRAGMA journal_mode = MEMORY")

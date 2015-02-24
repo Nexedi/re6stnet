@@ -297,21 +297,27 @@ if len(sys.argv) > 1:
             elif self.path == '/tunnel.html':
                 other = 'route'
                 gv = registry.Popen(('python', '-c', r"""if 1:
-                    import math
+                    import math, json
                     from re6st.registry import RegistryClient
-                    g = eval(RegistryClient('http://localhost/').topology())
+                    g = json.loads(RegistryClient(
+                        'http://localhost/').topology())
+                    r = set(g.pop('', ()))
+                    a = set()
+                    for v in g.itervalues():
+                        a.update(v)
+                    g.update(dict.fromkeys(a.difference(g), ()))
                     print 'digraph {'
                     a = 2 * math.pi / len(g)
                     z = 4
                     m2 = '%u/80' % (2 << 64)
                     title = lambda n: '2|80' if n == m2 else n
-                    g = sorted((title(k), v) for k, v in g.iteritems())
-                    for i, (n, p) in enumerate(g):
+                    g = sorted((title(k), k in r, v) for k, v in g.iteritems())
+                    for i, (n, r, v) in enumerate(g):
                         print '"%s"[pos="%s,%s!"%s];' % (title(n),
                             z * math.cos(a * i), z * math.sin(a * i),
-                            ', style=dashed' if p is None else '')
-                        for p in p or ():
-                            print '"%s" -> "%s";' % (n, title(p))
+                            '' if r else ', style=dashed')
+                        for v in v:
+                            print '"%s" -> "%s";' % (n, title(v))
                     print '}'
                 """), stdout=subprocess.PIPE, cwd="..").communicate()[0]
                 if gv:

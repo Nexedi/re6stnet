@@ -1,5 +1,8 @@
-import argparse, errno, logging, os, select as _select, shlex, signal
+import argparse, errno, hashlib, logging, os, select as _select, shlex, signal
 import socket, struct, subprocess, sys, textwrap, threading, time, traceback
+
+HMAC_LEN = len(hashlib.sha1('').digest())
+
 try:
     subprocess.CalledProcessError(0, '', '')
 except TypeError: # BBB: Python < 2.7
@@ -223,3 +226,10 @@ def parse_address(address_list):
 def binFromSubnet(subnet):
     p, l = subnet.split('/')
     return bin(int(p))[2:].rjust(int(l), '0')
+
+def newHmacSecret():
+    from random import getrandbits as g
+    pack = struct.Struct(">QQI").pack
+    assert len(pack(0,0,0)) == HMAC_LEN
+    return lambda x=None: pack(g(64) if x is None else x, g(64), g(32))
+newHmacSecret = newHmacSecret()

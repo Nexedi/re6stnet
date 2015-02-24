@@ -18,10 +18,10 @@ Authenticated communication:
   - the last one that was really used by the client (!hello)
   - the one of the last handshake (hello)
 """
-import base64, hmac, hashlib, httplib, inspect, logging
+import base64, hmac, hashlib, httplib, inspect, json, logging
 import mailbox, os, random, select, smtplib, socket, sqlite3
-import string, struct, sys, threading, time, weakref
-from collections import deque
+import string, sys, threading, time, weakref
+from collections import defaultdict, deque
 from datetime import datetime
 from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
 from email.mime.text import MIMEText
@@ -91,6 +91,20 @@ class RegistryServer(object):
             weakref.proxy(self), self.network)
 
         self.onTimeout()
+
+    def sendto(self, prefix, code):
+        self.sock.sendto("%s\0%c" % (prefix, code), ('::1', tunnel.PORT))
+
+    def recv(self, code):
+        try:
+            prefix, msg = self.sock.recv(1<<16).split('\0', 1)
+            int(prefix, 2)
+        except ValueError:
+            pass
+        else:
+            if msg and ord(msg[0]) == code:
+                return prefix, msg[1:]
+        return None, None
 
     def select(self, r, w, t):
         if self.timeout:
@@ -198,8 +212,7 @@ class RegistryServer(object):
     def hello(self, client_prefix):
         with self.lock:
             cert = self.getCert(client_prefix)
-            key = hashlib.sha1(struct.pack('Q',
-                random.getrandbits(64))).digest()
+            key = utils.newHmacSecret()
             self.sessions.setdefault(client_prefix, [])[1:] = key,
         key = x509.encrypt(cert, key)
         sign = self.cert.sign(key)
@@ -349,26 +362,22 @@ class RegistryServer(object):
                 # (in case 'peers' is empty).
                 peer = self.prefix
         with self.lock:
-            address = utils.ipFromBin(self.network + peer), tunnel.PORT
-            self.sock.sendto('\2', address)
+            self.sendto(peer, 1)
             s = self.sock,
             timeout = 3
             end = timeout + time.time()
             # Loop because there may be answers from previous requests.
             while select.select(s, (), (), timeout)[0]:
-                msg = self.sock.recv(1<<16)
-                if msg[0] == '\1':
-                    try:
-                        msg = msg[1:msg.index('\n')]
-                    except ValueError:
-                        continue
-                    if msg.split()[0] == peer:
-                        break
+                prefix, msg = self.recv(1)
+                if prefix == peer:
+                    break
                 timeout = max(0, end - time.time())
             else:
-                logging.info("Timeout while querying [%s]:%u", *address)
+                logging.info("Timeout while querying address for %s/%s",
+                             int(peer, 2), len(peer))
                 return
             cert = self.getCert(cn)
+        msg = "%s %s" % (peer, msg)
         logging.info("Sending bootstrap peer: %s", msg)
         return x509.encrypt(cert, msg)
 
@@ -387,59 +396,46 @@ class RegistryServer(object):
             while True:
                 r, w, _ = select.select(s, s if peers else (), (), 3)
                 if r:
-                    ver, address = self.sock.recvfrom(1<<16)
-                    address = utils.binFromIp(address[0])
-                    if (address.startswith(self.network) and
-                        len(ver) > 1 and ver[0] in '\3\4' # BBB
-                        ):
-                        try:
-                            peer_dict[max(filter(address[len(self.network):]
-                                                 .startswith, peer_dict),
-                                          key=len)] = ver[1:]
-                        except ValueError:
-                            pass
+                    prefix, ver = self.recv(4)
+                    if prefix:
+                        peer_dict[prefix] = ver
                 if w:
-                    x = peers.pop()
-                    peer_dict[x] = None
-                    x = utils.ipFromBin(self.network + x)
-                    try:
-                        self.sock.sendto('\3', (x, tunnel.PORT))
-                    except socket.error:
-                        pass
+                    prefix = peers.pop()
+                    peer_dict[prefix] = None
+                    self.sendto(prefix, 4)
                 elif not r:
                     break
-        return repr(peer_dict)
+        return json.dumps(peer_dict)
 
     @rpc
     def topology(self):
+        p = lambda p: '%s/%s' % (int(p, 2), len(p))
+        peers = deque((p(self.prefix),))
+        graph = defaultdict(set)
+        s = self.sock,
         with self.lock:
-            peers = deque(('%u/%u' % (int(self.prefix, 2), len(self.prefix)),))
-            cookie = hex(random.randint(0, 1<<32))[2:]
-            graph = dict.fromkeys(peers)
-            s = self.sock,
             while True:
                 r, w, _ = select.select(s, s if peers else (), (), 3)
                 if r:
-                    answer = self.sock.recv(1<<16)
-                    if answer[0] == '\xfe':
-                        answer = answer[1:].split('\n')[:-1]
-                        if len(answer) >= 3 and answer[0] == cookie:
-                            x = answer[3:]
-                            assert answer[1] not in x, (answer, graph)
-                            graph[answer[1]] = x[:int(answer[2])]
-                            x = set(x).difference(graph)
-                            peers += x
-                            graph.update(dict.fromkeys(x))
+                    prefix, x = self.recv(5)
+                    if prefix and x:
+                        prefix = p(prefix)
+                        x = x.split()
+                        try:
+                            n = int(x.pop(0))
+                        except ValueError:
+                            continue
+                        if n <= len(x) and prefix not in x:
+                            graph[prefix].update(x[:n])
+                            peers += set(x).difference(graph)
+                            for x in x[n:]:
+                                graph[x].add(prefix)
+                            graph[''].add(prefix)
                 if w:
-                    x = utils.binFromSubnet(peers.popleft())
-                    x = utils.ipFromBin(self.network + x)
-                    try:
-                        self.sock.sendto('\xff%s\n' % cookie, (x, tunnel.PORT))
-                    except socket.error:
-                        pass
+                    self.sendto(utils.binFromSubnet(peers.popleft()), 5)
                 elif not r:
                     break
-            return repr(graph)
+        return json.dumps(dict((k, list(v)) for k, v in graph.iteritems()))
 
 
 class RegistryClient(object):
