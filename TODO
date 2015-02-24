@@ -5,15 +5,13 @@
 
 - Babel limitations:
 
-  - re6stnet needs to communicate with Babel so that only unused tunnels are
-    freed. For the moment, routes will be randomly broken throughout the
-    network, from time to time, for small amounts of time.
   - Babel must be able to set source address on routes it installed. Otherwise,
     a wrong IP will be selected if managed interfaces already have several
     public IPv6. If there's only one interface like this, a workaround is to
     use --main-interface option on it.
 
-- Is it useful that each node regenerates its own DH parameter ?
+- Nodes should not have to generate their own DH parameters. Add a `getDh(cn)`
+  registry RPC that is called at re6stnet startup if they're missing.
 
 - Filter non-routable IPs. Add an option not to do it.
 
