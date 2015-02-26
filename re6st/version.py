@@ -27,5 +27,13 @@ version = "0-%s.g%s" % (revision, short)
 if dirty:
     version += ".dirty"
 
+# Because the software could be forked or have local changes/commits, above
+# properties can't be used to decide whether a peer runs an appropriate version:
+# they are intended to the network admin.
+# Only 'protocol' is important and it must be increased whenever they would be
+# a wish to force an update of nodes.
+protocol = 1
+min_protocol = 1
+
 if __name__ == "__main__":
     print version

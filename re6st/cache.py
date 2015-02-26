@@ -1,10 +1,9 @@
-import logging, os, sqlite3, socket, subprocess, time
+import json, logging, os, sqlite3, socket, subprocess, time, zlib
 from re6st.registry import RegistryClient
-from . import utils
+from . import utils, version, x509
 
 class Cache(object):
 
-    # internal ip = temp arg/attribute
     def __init__(self, db_path, registry, cert, db_size=200):
         self._prefix = cert.prefix
         self._db_size = db_size
@@ -25,26 +24,28 @@ class Cache(object):
             try INTEGER NOT NULL DEFAULT 0)""")
         q("CREATE INDEX volatile.stat_try ON stat(try)")
         q("INSERT INTO volatile.stat (peer) SELECT prefix FROM peer")
+        self._db.commit()
+        self._loadConfig(q("SELECT * FROM config"))
         try:
-            a = q("SELECT value FROM config WHERE name='registry'").next()[0]
-            int(a, 2)
-        except (StopIteration, ValueError):
-            logging.info("Asking registry its private IP...")
+            cert.verifyVersion(self.version)
+        except (AttributeError, x509.VerifyError):
             retry = 1
-            while True:
-                try:
-                    a = self._registry.getPrefix(self._prefix)
-                    int(a, 2)
-                    break
-                except socket.error, e:
-                    logging.warning(e)
-                    time.sleep(retry)
-                    retry = min(60, retry * 2)
-            q("INSERT OR REPLACE INTO config VALUES ('registry',?)", (a,))
-            self._db.commit()
-        self.registry_prefix = a
-        logging.info("Cache initialized. Prefix of registry node is %s/%u",
-                     int(a, 2), len(a))
+            while not self.updateConfig():
+                time.sleep(retry)
+                retry = min(60, retry * 2)
+        else:
+            if (# re6stnet upgraded after being unused  for a long time.
+                self.protocol < version.protocol
+                # Always query the registry at startup in case we were down
+                # when it tried to send us new parameters.
+                or self._prefix == self.registry_prefix):
+                self.updateConfig()
+        if version.protocol < self.min_protocol:
+            logging.critical("Your version of re6stnet is too old."
+                             " Please update.")
+            sys.exit(1)
+        self.warnProtocol()
+        logging.info("Cache initialized.")
 
     def _open(self, path):
         db = sqlite3.connect(path, isolation_level=None)
@@ -58,6 +59,58 @@ class Cache(object):
             "name TEXT PRIMARY KEY NOT NULL",
             "value")
         return db
+
+    def _loadConfig(self, config):
+        cls = self.__class__
+        logging.debug("Loading network parameters:")
+        for k, v in config:
+            hasattr(cls, k) or setattr(self, k, v)
+            logging.debug("- %s: %r", k, v)
+
+    def updateConfig(self):
+        logging.info("Getting new network parameters from registry...")
+        try:
+            # TODO: When possible, the registry should be queried via the re6st.
+            config = json.loads(zlib.decompress(
+                self._registry.getNetworkConfig(self._prefix)))
+            base64 = config.pop('', ())
+            config = dict((str(k), v.decode('base64') if k in base64 else
+                                   str(v) if type(v) is unicode else v)
+                          for k, v in config.iteritems())
+        except socket.error, e:
+            logging.warning(e)
+            return
+        except Exception:
+            # Even if the response is authenticated, a mistake on the registry
+            # should not kill the whole network in a few seconds.
+            logging.exception("buggy registry ?")
+            return
+        # XXX: check version ?
+        self.delay_restart = config.pop("delay_restart", 0)
+        old = {}
+        with self._db as db:
+            remove = []
+            for k, v in db.execute("SELECT * FROM config"):
+                if k in config:
+                    old[k] = v
+                    continue
+                try:
+                    delattr(self, k)
+                except AttributeError:
+                    pass
+                remove.append(k)
+            db.execute("DELETE FROM config WHERE name in ('%s')"
+                       % "','".join(remove))
+            db.executemany("INSERT OR REPLACE INTO config VALUES(?,?)",
+                           config.iteritems())
+        self._loadConfig(config.iteritems())
+        return [k for k, v in config.iteritems()
+                  if k not in old or old[k] != v]
+
+    def warnProtocol(self):
+        if version.protocol < self.protocol:
+            logging.warning("There's a new version of re6stnet:"
+                            " you should update.")
 
     def log(self):
         if logging.getLogger().isEnabledFor(5):

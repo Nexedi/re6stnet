@@ -3,7 +3,7 @@ import httplib, logging, socket
 from BaseHTTPServer import BaseHTTPRequestHandler
 from SocketServer import ThreadingTCPServer
 from urlparse import parse_qsl
-from re6st import ctl, registry, utils
+from re6st import ctl, registry, utils, version
 
 # To generate server ca and key with serial for 2001:db8:42::/48
 #  openssl req -nodes -new -x509 -key ca.key -set_serial 0x120010db80042 -days 3650 -out ca.crt
@@ -89,7 +89,14 @@ def main():
     _('-v', '--verbose', default=1, type=int,
             help="Log level. 0 disables logging."
                  " Use SIGUSR1 to reopen log.")
+    _('--min-protocol', default=version.min_protocol, type=int,
+        help="Reject nodes that are too old. Current is %s." % version.protocol)
+
     config = parser.parse_args()
+
+    if not version.min_protocol <= config.min_protocol <= version.protocol:
+        parser.error("--min-protocol: value must between %s and %s (included)"
+                     % (version.min_protocol, version.protocol))
 
     utils.setupLog(config.verbose, config.logfile)
 

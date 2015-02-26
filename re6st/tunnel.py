@@ -162,6 +162,11 @@ class TunnelKiller(object):
 
 class BaseTunnelManager(object):
 
+    # TODO: To minimize downtime when network parameters change, we should do
+    #       our best to not restart any process. Ideally, this list should be
+    #       empty and the affected subprocesses reloaded.
+    NEED_RESTART = frozenset()
+
     _forward = None
 
     def __init__(self, cache, cert, cert_renew, address=()):
@@ -172,6 +177,7 @@ class BaseTunnelManager(object):
         self._connecting = set()
         self._connection_dict = {}
         self._served = set()
+        self._version = cache.version
 
         address_dict = defaultdict(list)
         for family, address in address:
@@ -186,12 +192,27 @@ class BaseTunnelManager(object):
         self.sock.bind(('::', PORT))
 
         p = x509.Peer(self._prefix)
-        self._next_invalidated = p.stop_date = cert_renew
+        p.stop_date = cert_renew
         self._peers = [p]
+        self._timeouts = [(cert_renew, self.invalidatePeers)]
 
     def select(self, r, w, t):
         r[self.sock] = self.handlePeerEvent
-        t.append((self._next_invalidated, self.invalidatePeers))
+        t += self._timeouts
+
+    def selectTimeout(self, next, callback, force=True):
+        t = self._timeouts
+        for i, x in enumerate(t):
+            if x[1] == callback:
+                if not next:
+                    logging.debug("timeout: removing %r (%s)", callback.__name__, next)
+                    del t[i]
+                elif force or next < x[0]:
+                    logging.debug("timeout: updating %r (%s)", callback.__name__, next)
+                    t[i] = next, callback
+                return
+        logging.debug("timeout: adding %r (%s)", callback.__name__, next)
+        t.append((next, callback))
 
     def invalidatePeers(self):
         next = float('inf')
@@ -206,11 +227,14 @@ class BaseTunnelManager(object):
                 next = peer.stop_date
         for i in reversed(remove):
             del self._peers[i]
-        self._next_invalidated = next
+        self.selectTimeout(next, self.invalidatePeers)
+
+    def _getPeer(self, prefix):
+        return self._peers[bisect(self._peers, prefix) - 1]
 
     def sendto(self, prefix, msg):
         to = utils.ipFromBin(self._network + prefix), PORT
-        peer = self._peers[bisect(self._peers, prefix) - 1]
+        peer = self._getPeer(prefix)
         if peer.prefix != prefix:
             peer = x509.Peer(prefix)
             insort(self._peers, peer)
@@ -259,7 +283,7 @@ class BaseTunnelManager(object):
         if len(msg) <= 4 or not sender.startswith(self._network):
             return
         prefix = sender[len(self._network):]
-        peer = self._peers[bisect(self._peers, prefix) - 1]
+        peer = self._getPeer(prefix)
         msg = peer.decode(msg)
         if type(msg) is tuple:
             seqno, msg = msg
@@ -274,7 +298,8 @@ class BaseTunnelManager(object):
                     logging.debug('ignored new session key from %r',
                                   address, exc_info=1)
                     return
-                self._sendto(to, "", peer) # ack
+                peer.version = self._version \
+                    if self._sendto(to, '\0' + self._version, peer) else ''
                 return
             if seqno:
                 h = x509.fingerprint(self.cert.cert).digest()
@@ -298,8 +323,7 @@ class BaseTunnelManager(object):
                 insort(self._peers, peer)
             peer.cert = cert
             peer.stop_date = stop_date
-            if stop_date < self._next_invalidated:
-                self._next_invalidated = stop_date
+            self.selectTimeout(stop_date, self.invalidatePeers, False)
             if seqno:
                 self._sendto(to, peer.hello(self.cert))
             else:
@@ -330,7 +354,25 @@ class BaseTunnelManager(object):
                     self._makeTunnel(peer, msg)
             else:
                 return ';'.join(self._address.itervalues())
-        elif 2 <= code <= 3: # kill
+        elif not code: # ver
+            if peer:
+                try:
+                    if msg == self._version:
+                        return
+                    self.cert.verifyVersion(msg)
+                except x509.VerifyError:
+                    pass
+                else:
+                    if msg < self._version:
+                        return self._version
+                    self._version = msg
+                    self.selectTimeout(time.time() + 1, self.newVersion)
+                finally:
+                    if peer:
+                        self._getPeer(peer).version = self._version
+            else:
+                self.selectTimeout(time.time() + 1, self.newVersion)
+        elif code <= 3: # kill
             if peer:
                 try:
                     tunnel_killer = self._killing[peer]
@@ -352,6 +394,33 @@ class BaseTunnelManager(object):
                     ' %s/%s' % (int(x, 2), len(x))
                     for x in (self._connection_dict, self._served)
                     for x in x)
+
+    @staticmethod
+    def _restart():
+        raise utils.ReexecException(
+            "Restart with new network parameters")
+
+    def broadcastVersion(self):
+        pass
+
+    def newVersion(self):
+        changed = self.cache.updateConfig()
+        if changed is None:
+            logging.info("will retry to update network parameters in 5 minutes")
+            self.selectTimeout(time.time() + 300, self.newVersion)
+            return
+        logging.info("changed: %r", changed)
+        self.selectTimeout(None, self.newVersion)
+        self._version = self.cache.version
+        self.broadcastVersion()
+        self.cache.warnProtocol()
+        if not self.NEED_RESTART.isdisjoint(changed) or \
+           version.protocol < self.cache.min_protocol:
+            # Wait at least 1 second to broadcast new version to neighbours.
+            # If re6stnet is too old, don't abort now, because a new version
+            # may have been installed without restart.
+            self.selectTimeout(time.time() + 1 + self.cache.delay_restart,
+                               self._restart)
 
 
 class TunnelManager(BaseTunnelManager):
@@ -693,3 +762,13 @@ class TunnelManager(BaseTunnelManager):
             family, address = self._ip_changed(ip)
             if address:
                 self._address[family] = utils.dump_address(address)
+
+    def broadcastVersion(self):
+        for prefix in self.ctl.neighbours:
+            if prefix:
+                peer = self._getPeer(prefix)
+                if peer.prefix != prefix:
+                    self.sendto(prefix, None)
+                elif (peer.version < self._version and
+                      self.sendto(prefix, '\0' + self._version)):
+                    peer.version = self._version

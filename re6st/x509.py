@@ -149,6 +149,13 @@ class Cert(object):
             raise subprocess.CalledProcessError(p.returncode, 'openssl', err)
         return out
 
+    def verifyVersion(self, version):
+        try:
+            n = 1 + (ord(version[0]) >> 5)
+            self.verify(version[n:], version[:n])
+        except (IndexError, crypto.Error):
+            raise VerifyError(None, None, 'invalid network version')
+
 
 class Peer(object):
     """
@@ -175,6 +182,7 @@ class Peer(object):
     _hello = _last = 0
     _key = newHmacSecret()
     stop_date = float('inf')
+    version = ''
 
     def __init__(self, prefix):
         assert len(prefix) == 16 or prefix == ('0' * 14 + '1' + '0' * 65), prefix

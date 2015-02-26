@@ -20,7 +20,7 @@ Authenticated communication:
 """
 import base64, hmac, hashlib, httplib, inspect, json, logging
 import mailbox, os, random, select, smtplib, socket, sqlite3
-import string, sys, threading, time, weakref
+import string, struct, sys, threading, time, weakref, zlib
 from collections import defaultdict, deque
 from datetime import datetime
 from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
@@ -55,10 +55,12 @@ class RegistryServer(object):
         utils.makedirs(os.path.dirname(self.config.db))
         self.db = sqlite3.connect(self.config.db, isolation_level=None,
                                                   check_same_thread=False)
+        self.db.text_factory = str
         utils.sqliteCreateTable(self.db, "config",
                 "name TEXT PRIMARY KEY NOT NULL",
                 "value")
         self.prefix = self.getConfig("prefix", None)
+        self.version = self.getConfig("version", "\0")
         utils.sqliteCreateTable(self.db, "token",
                 "token TEXT PRIMARY KEY NOT NULL",
                 "email TEXT NOT NULL",
@@ -82,6 +84,9 @@ class RegistryServer(object):
             weakref.proxy(self), self.network)
 
         self.onTimeout()
+        if self.prefix:
+            with self.db:
+                self.updateNetworkConfig()
 
     def getConfig(self, name, *default):
         r, = next(self.db.execute(
@@ -91,6 +96,41 @@ class RegistryServer(object):
     def setConfig(self, *name_value):
         self.db.execute("INSERT OR REPLACE INTO config VALUES (?, ?)",
                         name_value)
+
+    def updateNetworkConfig(self):
+        kw = {
+            'protocol': version.protocol,
+            'registry_prefix': self.prefix,
+        }
+        for x in 'min_protocol',:
+            kw[x] = getattr(self.config, x)
+        config = json.dumps(kw, sort_keys=True)
+        if config != self.getConfig('last_config', None):
+            self.version = self.encodeVersion(
+                1 + self.decodeVersion(self.version))
+            self.setConfig('version', self.version)
+            self.setConfig('last_config', config)
+            self.sendto(self.prefix, 0)
+        kw[''] = 'version',
+        # Example to avoid all nodes to restart at the same time:
+        # kw['delay_restart'] = 600 * random.random()
+        kw['version'] = self.version.encode('base64')
+        self.network_config = zlib.compress(json.dumps(kw))
+
+    # The 3 first bits code the number of bytes.
+    def encodeVersion(self, version):
+        for n in xrange(8):
+            x = 32 << 8 * n
+            if version < x:
+                x = struct.pack("!Q", version + n * x)[7-n:]
+                return x + self.cert.sign(x)
+            version -= x
+
+    def decodeVersion(self, version):
+        n = ord(version[0]) >> 5
+        version, = struct.unpack("!Q", '\0' * (7 - n) + version[:n+1])
+        return sum((32 << 8 * n for n in xrange(n)),
+                   version - (n * 32 << 8 * n))
 
     def sendto(self, prefix, code):
         self.sock.sendto("%s\0%c" % (prefix, code), ('::1', tunnel.PORT))
@@ -307,6 +347,7 @@ class RegistryServer(object):
                 if self.prefix is None:
                     self.prefix = prefix
                     self.setConfig('prefix', prefix)
+                    self.updateNetworkConfig()
                 subject = req.get_subject()
                 subject.serialNumber = str(self.getSubjectSerial())
                 return self.createCertificate(prefix, subject, req.get_pubkey())
@@ -337,8 +378,8 @@ class RegistryServer(object):
         cert.set_pubkey(pubkey)
         # Certificate serial, for revocation support. Contrary to
         # subject serial, it does not need to be as small as possible.
-        serial = 1 + self.getConfig('_serial', 0)
-        self.setConfig('_serial', serial)
+        serial = 1 + self.getConfig('serial', 0)
+        self.setConfig('serial', serial)
         cert.set_serial_number(serial)
         cert.sign(self.cert.key, 'sha1')
         cert = crypto.dump_certificate(crypto.FILETYPE_PEM, cert)
@@ -367,8 +408,8 @@ class RegistryServer(object):
         return crypto.dump_certificate(crypto.FILETYPE_PEM, self.cert.ca)
 
     @rpc
-    def getPrefix(self, cn):
-        return self.prefix
+    def getNetworkConfig(self, cn):
+        return self.network_config
 
     @rpc
     def getBootstrapPeer(self, cn):
