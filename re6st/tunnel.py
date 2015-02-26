@@ -6,8 +6,6 @@ from . import ctl, plib, utils, version, x509
 
 PORT = 326
 
-# Be careful the refresh interval should let the routes be established
-
 
 class MultiGatewayManager(dict):
 
@@ -165,7 +163,7 @@ class BaseTunnelManager(object):
     # TODO: To minimize downtime when network parameters change, we should do
     #       our best to not restart any process. Ideally, this list should be
     #       empty and the affected subprocesses reloaded.
-    NEED_RESTART = frozenset()
+    NEED_RESTART = frozenset(('babel_default', 'encrypt', 'hello'))
 
     _forward = None
 
@@ -425,13 +423,14 @@ class BaseTunnelManager(object):
 
 class TunnelManager(BaseTunnelManager):
 
+    NEED_RESTART = BaseTunnelManager.NEED_RESTART.union((
+        'client_count', 'max_clients', 'tunnel_refresh'))
+
     def __init__(self, control_socket, cache, cert, cert_renew, openvpn_args,
-                 timeout, refresh, client_count, iface_list, address,
-                 ip_changed, encrypt, remote_gateway, disable_proto,
-                 neighbour_list=()):
+                 timeout, client_count, iface_list, address, ip_changed,
+                 remote_gateway, disable_proto, neighbour_list=()):
         super(TunnelManager, self).__init__(cache, cert, cert_renew, address)
         self.ctl = ctl.Babel(control_socket, weakref.proxy(self), self._network)
-        self.encrypt = encrypt
         self.ovpn_args = openvpn_args
         self.timeout = timeout
         # Create and open read_only pipe to get server events
@@ -440,7 +439,6 @@ class TunnelManager(BaseTunnelManager):
         self._disconnected = 0
         self._distant_peers = []
         self._iface_to_prefix = {}
-        self._refresh_time = refresh
         self._iface_list = iface_list
         self._ip_changed = ip_changed
         self._gateway_manager = MultiGatewayManager(remote_gateway) \
@@ -457,8 +455,12 @@ class TunnelManager(BaseTunnelManager):
             for i in xrange(1, self._client_count + 1))
         self._free_iface_list = []
 
+    @property
+    def encrypt(self):
+        return self.cache.encrypt
+
     def resetTunnelRefresh(self):
-        self._next_tunnel_refresh = time.time() + self._refresh_time
+        self._next_tunnel_refresh = time.time() + self.cache.tunnel_refresh
 
     def _tuntap(self, iface=None):
         if iface:

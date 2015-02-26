@@ -92,6 +92,28 @@ def main():
     _('--min-protocol', default=version.min_protocol, type=int,
         help="Reject nodes that are too old. Current is %s." % version.protocol)
 
+    _ = parser.add_argument_group('routing').add_argument
+    _('--hello', type=int, default=15,
+        help="Hello interval in seconds, for both wired and wireless"
+             " connections. OpenVPN ping-exit option is set to 4 times the"
+             " hello interval. It takes between 3 and 4 times the"
+             " hello interval for Babel to re-establish connection with a"
+             " node for which the direct connection has been cut.")
+
+    _ = parser.add_argument_group('tunnelling').add_argument
+    _('--encrypt', action='store_true',
+        help='Specify that tunnels should be encrypted.')
+    _('--client-count', default=10, type=int,
+        help="Number of client tunnels to set up.")
+    _('--max-clients', type=int,
+        help="Maximum number of accepted clients per OpenVPN server. (default:"
+             " client-count * 2, which actually represents the average number"
+             " of tunnels to other peers)")
+    _('--tunnel-refresh', default=300, type=int,
+        help="Interval in seconds between two tunnel refresh: the worst"
+             " tunnel is closed if the number of client tunnels has reached"
+             " its maximum number (client-count).")
+
     config = parser.parse_args()
 
     if not version.min_protocol <= config.min_protocol <= version.protocol:
@@ -99,6 +121,9 @@ def main():
                      % (version.min_protocol, version.protocol))
 
     utils.setupLog(config.verbose, config.logfile)
+
+    if config.max_clients is None:
+        config.max_clients = config.client_count * 2
 
     server = registry.RegistryServer(config)
     def requestHandler(request, client_address, _):

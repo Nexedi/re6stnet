@@ -59,12 +59,6 @@ def getConfig():
     _('--control-socket', metavar='CTL_SOCK', default=ctl.SOCK_PATH,
         help="Socket path to use for communication between re6stnet and babeld"
              " (option -R of Babel).")
-    _('--hello', type=int, default=15,
-        help="Hello interval in seconds, for both wired and wireless"
-             " connections. OpenVPN ping-exit option is set to 4 times the"
-             " hello interval. It takes between 3 and 4 times the"
-             " hello interval for Babel to re-establish connection with a"
-             " node for which the direct connection has been cut.")
     _('--table', type=int, default=42,
         help="Use given table id. Set 0 to use the main table, if you want to"
              " access internet via this network (in this case, make sure you"
@@ -80,8 +74,6 @@ def getConfig():
              " subprocesses. Often used to configure verbosity.")
     _('--ovpnlog', action='store_true',
         help="Tell each OpenVPN subprocess to log to a dedicated file.")
-    _('--encrypt', action='store_true',
-        help='Specify that tunnels should be encrypted.')
     _('--pp', nargs=2, action='append', metavar=('PORT', 'PROTO'),
         help="Port and protocol to be announced to other peers, ordered by"
              " preference. For each protocol (udp, tcp, udp6, tcp6), start one"
@@ -95,16 +87,12 @@ def getConfig():
              " Common name defines the allocated prefix in the network.")
     _('--key', required=True,
         help="Local peer's private key in .pem format.")
-    _('--client-count', default=10, type=int,
-        help="Number of client tunnels to set up.")
+    _('--client-count', type=int,
+        help="Number of client tunnels to set up."
+             " (default: value from registry)")
     _('--max-clients', type=int,
-        help="Maximum number of accepted clients per OpenVPN server. (default:"
-             " client-count * 2, which actually represents the average number"
-             " of tunnels to other peers)")
-    _('--tunnel-refresh', default=300, type=int,
-        help="Interval in seconds between two tunnel refresh: the worst"
-             " tunnel is closed if the number of client tunnels has reached"
-             " its maximum number (client-count).")
+        help="Maximum number of accepted clients per OpenVPN server."
+             " (default: value from registry)")
     _('--remote-gateway', action='append', dest='gw_list',
         help="Force each tunnel to be created through one the given gateways,"
              " in a round-robin fashion.")
@@ -145,10 +133,13 @@ def main():
     exit.signal(-1, signal.SIGHUP, signal.SIGUSR2)
 
     next_renew = cert.maybeRenew(config.registry)
+    cache = Cache(db_path, config.registry, cert)
     network = cert.network
 
+    if config.client_count is None:
+        config.client_count = cache.client_count
     if config.max_clients is None:
-        config.max_clients = config.client_count * 2
+        config.max_clients = cache.max_clients
 
     if 'none' in config.disable_proto:
         config.disable_proto = ()
@@ -253,15 +244,13 @@ def main():
 
         # Init db and tunnels
         tunnel_interfaces = server_tunnels.keys()
-        timeout = 4 * config.hello
-        cache = Cache(db_path, config.registry, cert)
+        timeout = 4 * cache.hello
         cleanup = [lambda: cache.cacheMinimize(config.client_count)]
         if config.client_count and not config.client:
             tunnel_manager = tunnel.TunnelManager(config.control_socket,
                 cache, cert, next_renew, config.openvpn_args, timeout,
-                config.tunnel_refresh, config.client_count, config.iface_list,
-                address, ip_changed, config.encrypt, remote_gateway,
-                config.disable_proto, config.neighbour)
+                config.client_count, config.iface_list, address, ip_changed,
+                remote_gateway, config.disable_proto, config.neighbour)
             tunnel_interfaces += tunnel_manager.new_iface_list
             write_pipe = tunnel_manager.write_pipe
         else:
@@ -293,13 +282,13 @@ def main():
                     sys.exit("error: --disable_proto option disables"
                              " all addresses given by --client")
                 cleanup.append(plib.client('re6stnet',
-                    address_list, config.encrypt, '--ping-restart',
+                    address_list, cache.encrypt, '--ping-restart',
                     str(timeout), *config.openvpn_args).stop)
             elif server_tunnels:
                 required('dh')
                 for iface, (port, proto) in server_tunnels.iteritems():
                     cleanup.append(plib.server(iface, config.max_clients,
-                        config.dh, write_pipe, port, proto, config.encrypt,
+                        config.dh, write_pipe, port, proto, cache.encrypt,
                         '--ping-exit', str(timeout), *config.openvpn_args).stop)
 
             ip('addr', my_ip, 'dev', config.main_interface)
@@ -356,11 +345,11 @@ def main():
             ip('route', 'unreachable', *x)
 
             config.babel_args += config.iface_list
-            cleanup.append(plib.router(subnet, config.hello, config.table,
+            cleanup.append(plib.router(subnet, cache.hello, config.table,
                 os.path.join(config.log, 'babeld.log'),
                 os.path.join(config.state, 'babeld.state'),
                 config.babel_pidfile, tunnel_interfaces,
-                config.control_socket,
+                config.control_socket, cache.babel_default,
                 *config.babel_args).stop)
             if config.up:
                 exit.release()

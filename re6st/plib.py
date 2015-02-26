@@ -61,7 +61,7 @@ def client(iface, address_list, encrypt, *args, **kw):
 
 
 def router(subnet, hello_interval, table, log_path, state_path, pidfile,
-           tunnel_interfaces, control_socket, *args, **kw):
+           tunnel_interfaces, control_socket, default, *args, **kw):
     s = utils.ipFromBin(subnet)
     n = len(subnet)
     cmd = ['babeld',
@@ -71,7 +71,7 @@ def router(subnet, hello_interval, table, log_path, state_path, pidfile,
             '-S', state_path,
             '-I', pidfile,
             '-s',
-            '-C', 'default max-rtt-penalty 5000 rtt-max 500 rtt-decay 125',
+            '-C', 'default ' + default,
             '-C', 'redistribute local deny',
             '-C', 'redistribute ip %s/%u eq %u' % (s, n, n),
             '-C', 'redistribute deny']

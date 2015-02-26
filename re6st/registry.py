@@ -99,10 +99,12 @@ class RegistryServer(object):
 
     def updateNetworkConfig(self):
         kw = {
+            'babel_default': 'max-rtt-penalty 5000 rtt-max 500 rtt-decay 125',
             'protocol': version.protocol,
             'registry_prefix': self.prefix,
         }
-        for x in 'min_protocol',:
+        for x in ('client_count', 'encrypt', 'hello',
+                  'max_clients', 'min_protocol', 'tunnel_refresh'):
             kw[x] = getattr(self.config, x)
         config = json.dumps(kw, sort_keys=True)
         if config != self.getConfig('last_config', None):
