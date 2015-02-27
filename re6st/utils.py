@@ -190,9 +190,9 @@ def select(R, W, T):
         if next_refresh <= t:
             refresh()
 
-def makedirs(path):
+def makedirs(*args):
     try:
-        os.makedirs(path)
+        os.makedirs(*args)
     except OSError, e:
         if e.errno != errno.EEXIST:
             raise

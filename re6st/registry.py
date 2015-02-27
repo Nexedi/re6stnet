@@ -80,7 +80,7 @@ class RegistryServer(object):
         self.email = self.cert.ca.get_subject().emailAddress
 
         self.peers_lock = threading.Lock()
-        self.ctl = ctl.Babel(config.control_socket,
+        self.ctl = ctl.Babel(os.path.join(config.run, 'babeld.sock'),
             weakref.proxy(self), self.network)
 
         self.onTimeout()

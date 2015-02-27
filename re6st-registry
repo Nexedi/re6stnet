@@ -81,11 +81,11 @@ def main():
     _('--anonymous-prefix-length', type=int,
             help="Length of allocated anonymous prefixes."
                  " If 0 or unset, registration by email is required")
-    _('--control-socket', metavar='CTL_SOCK', default=ctl.SOCK_PATH,
-        help="Socket path to use for communication between re6stnet and babeld"
-             " (option -R of Babel).")
     _('-l', '--logfile', default='/var/log/re6stnet/registry.log',
             help="Path to logging file.")
+    _('-r', '--run', default='/var/run/re6stnet',
+        help="Path to re6stnet runtime directory:\n"
+             "- babeld.sock (option -R of babeld)\n")
     _('-v', '--verbose', default=1, type=int,
             help="Log level. 0 disables logging."
                  " Use SIGUSR1 to reopen log.")

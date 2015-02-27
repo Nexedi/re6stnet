@@ -1,8 +1,8 @@
 #!/usr/bin/python
-import atexit, errno, logging, os, signal, socket
-import subprocess, sys, time, threading
+import atexit, errno, logging, os, shutil, signal
+import socket, subprocess, sys, time, threading
 from collections import deque
-from re6st import ctl, plib, tunnel, utils, version, x509
+from re6st import plib, tunnel, utils, version, x509
 from re6st.cache import Cache
 from re6st.utils import exit, ReexecException
 
@@ -25,6 +25,10 @@ def getConfig():
              "- re6stnet.log: log file of re6stnet itself\n"
              "- babeld.log: log file of router\n"
              "- <iface>.log: 1 file per spawned OpenVPN\n")
+    _('-r', '--run', default='/var/run/re6stnet',
+        help="Path to re6stnet runtime directory:\n"
+             "- babeld.pid (option -I of babeld)\n"
+             "- babeld.sock (option -R of babeld)\n")
     _('-s', '--state', default='/var/lib/re6stnet',
         help="Path to re6stnet state directory:\n"
              "- cache.db: cache of network parameters and peer addresses\n"
@@ -53,12 +57,6 @@ def getConfig():
     _ = parser.add_argument_group('routing').add_argument
     _('-B', dest='babel_args', metavar='ARG', action='append', default=[],
         help="Extra arguments to forward to Babel.")
-    _('--babel-pidfile', metavar='PID', default='/var/run/re6st-babeld.pid',
-        help="Specify a file to write our process id to"
-             " (option -I of Babel).")
-    _('--control-socket', metavar='CTL_SOCK', default=ctl.SOCK_PATH,
-        help="Socket path to use for communication between re6stnet and babeld"
-             " (option -R of Babel).")
     _('--table', type=int, default=42,
         help="Use given table id. Set 0 to use the main table, if you want to"
              " access internet via this network (in this case, make sure you"
@@ -245,9 +243,12 @@ def main():
         # Init db and tunnels
         tunnel_interfaces = server_tunnels.keys()
         timeout = 4 * cache.hello
-        cleanup = [lambda: cache.cacheMinimize(config.client_count)]
+        cleanup = [lambda: cache.cacheMinimize(config.client_count),
+                   lambda: shutil.rmtree(config.run, True)]
+        utils.makedirs(config.run, 0700)
+        control_socket = os.path.join(config.run, 'babeld.sock')
         if config.client_count and not config.client:
-            tunnel_manager = tunnel.TunnelManager(config.control_socket,
+            tunnel_manager = tunnel.TunnelManager(control_socket,
                 cache, cert, next_renew, config.openvpn_args, timeout,
                 config.client_count, config.iface_list, address, ip_changed,
                 remote_gateway, config.disable_proto, config.neighbour)
@@ -348,8 +349,8 @@ def main():
             cleanup.append(plib.router(subnet, cache.hello, config.table,
                 os.path.join(config.log, 'babeld.log'),
                 os.path.join(config.state, 'babeld.state'),
-                config.babel_pidfile, tunnel_interfaces,
-                config.control_socket, cache.babel_default,
+                os.path.join(config.run, 'babeld.pid'),
+                tunnel_interfaces, control_socket, cache.babel_default,
                 *config.babel_args).stop)
             if config.up:
                 exit.release()

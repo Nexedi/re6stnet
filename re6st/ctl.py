@@ -2,8 +2,6 @@ import logging, socket, struct
 from collections import namedtuple
 from . import utils
 
-SOCK_PATH = '/var/run/re6st-babeld.sock'
-
 uint16 = struct.Struct("!H")
 header = struct.Struct("!HI")
 
