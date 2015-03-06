@@ -20,3 +20,8 @@
 
 - registry: add '--home PATH' command line option so that / display an HTML
   page from PATH (use new str.format for templating)
+
+- Better UI to revoke certificates, for example with a HTML form.
+  Currently, one have to forge the URL manually. Examples:
+    wget -O /dev/null http://re6st.example.com/revoke?cn_or_serial=123
+    wget -O /dev/null http://re6st.example.com/revoke?cn_or_serial=4/16

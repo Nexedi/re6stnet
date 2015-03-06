@@ -9,7 +9,7 @@ if script_type == 'up':
     os.execlp('ip', 'ip', 'link', 'set', os.environ['dev'], 'up',
               'mtu', os.environ['tun_mtu'])
 
-# Write into pipe external ip address received
-import time
-os.write(int(sys.argv[1]), "%s %s %s %s\n" % (script_type,
-  os.environ['common_name'], time.time(), os.environ['OPENVPN_external_ip']))
+if script_type == 'route-up':
+    import time
+    os.write(int(sys.argv[1]), repr((os.environ['common_name'], time.time(),
+        int(os.environ['tls_serial_0']), os.environ['OPENVPN_external_ip'])))

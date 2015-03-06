@@ -2,15 +2,16 @@
 import os, sys
 
 script_type = os.environ['script_type']
-external_ip = lambda: os.getenv('trusted_ip') or os.environ['trusted_ip6']
-
-if script_type == 'client-connect':
-    # Send client its external ip address
-    with open(sys.argv[2], 'w') as f:
-        f.write('push "setenv-safe external_ip %s"\n' % external_ip())
+external_ip = os.getenv('trusted_ip') or os.environ['trusted_ip6']
 
 # Write into pipe connect/disconnect events
-arg1 = sys.argv[1]
-if arg1 != 'None':
-    os.write(int(arg1), '%s %s %s\n' % (
-        script_type, os.environ['common_name'], external_ip()))
+fd = int(sys.argv[1])
+os.write(fd, repr((script_type, (os.environ['common_name'], os.environ['dev'],
+                   int(os.environ['tls_serial_0']), external_ip))))
+
+if script_type == 'client-connect':
+    if os.read(fd, 1) == '\0':
+        sys.exit(1)
+    # Send client its external ip address
+    with open(sys.argv[2], 'w') as f:
+        f.write('push "setenv-safe external_ip %s"\n' % external_ip)

@@ -4,6 +4,8 @@ from . import utils, version, x509
 
 class Cache(object):
 
+    crl = ()
+
     def __init__(self, db_path, registry, cert, db_size=200):
         self._prefix = cert.prefix
         self._db_size = db_size
@@ -40,6 +42,7 @@ class Cache(object):
                 # when it tried to send us new parameters.
                 or self._prefix == self.registry_prefix):
                 self.updateConfig()
+        self.next_renew = cert.maybeRenew(self._registry, self.crl)
         if version.protocol < self.min_protocol:
             logging.critical("Your version of re6stnet is too old."
                              " Please update.")
@@ -64,7 +67,11 @@ class Cache(object):
         cls = self.__class__
         logging.debug("Loading network parameters:")
         for k, v in config:
-            hasattr(cls, k) or setattr(self, k, v)
+            if k == 'crl':
+                v = set(json.loads(v))
+            elif hasattr(cls, k):
+                continue
+            setattr(self, k, v)
             logging.debug("- %s: %r", k, v)
 
     def updateConfig(self):
@@ -77,6 +84,7 @@ class Cache(object):
             config = dict((str(k), v.decode('base64') if k in base64 else
                                    str(v) if type(v) is unicode else v)
                           for k, v in config.iteritems())
+            config['crl'] = json.dumps(config['crl'])
         except socket.error, e:
             logging.warning(e)
             return

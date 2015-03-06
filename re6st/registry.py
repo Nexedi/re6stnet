@@ -25,6 +25,7 @@ from collections import defaultdict, deque
 from datetime import datetime
 from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
 from email.mime.text import MIMEText
+from operator import itemgetter
 from OpenSSL import crypto
 from urllib import splittype, splithost, splitport, urlencode
 from . import ctl, tunnel, utils, version, x509
@@ -71,6 +72,20 @@ class RegistryServer(object):
                 "email TEXT",
                 "cert TEXT"):
             self.db.execute("INSERT INTO cert VALUES ('',null,null)")
+        if utils.sqliteCreateTable(self.db, "crl",
+                "serial INTEGER PRIMARY KEY NOT NULL",
+                # Expiration date of revoked certificate.
+                # TODO: purge rows with dates in the past.
+                "date INTEGER NOT NULL"):
+            # Revoke certificates produced by previous version.
+            # They all have serial 0.
+            try:
+                date = max(x509.notAfter(x[0]) for x in self.iterCert())
+            except ValueError:
+                pass
+            else:
+                if time.time() < date:
+                    self.db.execute("INSERT INTO crl VALUES (0,?)", (date,))
 
         self.cert = x509.Cert(self.config.ca, self.config.key)
         # Get vpn network prefix
@@ -97,9 +112,11 @@ class RegistryServer(object):
         self.db.execute("INSERT OR REPLACE INTO config VALUES (?, ?)",
                         name_value)
 
-    def updateNetworkConfig(self):
+    def updateNetworkConfig(self, _it0=itemgetter(0)):
         kw = {
             'babel_default': 'max-rtt-penalty 5000 rtt-max 500 rtt-decay 125',
+            'crl': map(_it0, self.db.execute(
+                "SELECT serial FROM crl ORDER BY serial")),
             'protocol': version.protocol,
             'registry_prefix': self.prefix,
         }
@@ -220,7 +237,7 @@ class RegistryServer(object):
     def handle_request(self, request, method, kw,
                        _localhost=('127.0.0.1', '::1')):
         m = getattr(self, method)
-        if method in ('versions', 'topology'):
+        if method in ('revoke', 'versions', 'topology'):
             x_forwarded_for = request.headers.get('X-Forwarded-For')
             if request.client_address[0] not in _localhost or \
                x_forwarded_for and x_forwarded_for not in _localhost:
@@ -393,15 +410,16 @@ class RegistryServer(object):
     @rpc
     def renewCertificate(self, cn):
         with self.lock:
-            with self.db:
+            with self.db as db:
                 pem = self.getCert(cn)
                 cert = crypto.load_certificate(crypto.FILETYPE_PEM, pem)
                 if x509.notAfter(cert) - RENEW_PERIOD < time.time():
                     not_after = None
-                elif cert.get_serial_number():
-                    return pem
-                else:
+                elif db.execute("SELECT count(*) FROM crl WHERE serial=?",
+                                (cert.get_serial_number(),)).fetchone()[0]:
                     not_after = cert.get_notAfter()
+                else:
+                    return pem
                 return self.createCertificate(cn,
                     cert.get_subject(), cert.get_pubkey(), not_after)
 
@@ -451,6 +469,29 @@ class RegistryServer(object):
         msg = "%s %s" % (peer, msg)
         logging.info("Sending bootstrap peer: %s", msg)
         return x509.encrypt(cert, msg)
+
+    @rpc
+    def revoke(self, cn_or_serial):
+        with self.lock:
+          with self.db:
+            q = self.db.execute
+            try:
+                serial = int(cn_or_serial)
+            except ValueError:
+                prefix = utils.binFromSubnet(cn_or_serial)
+                cert = self.getCert(prefix)
+                q("UPDATE cert SET email=null, cert=null WHERE prefix=?",
+                  (prefix,))
+                cert = crypto.load_certificate(crypto.FILETYPE_PEM, cert)
+                serial = cert.get_serial_number()
+                self.sessions.pop(prefix, None)
+            else:
+                cert, = (cert for cert, prefix, email in self.iterCert()
+                              if cert.get_serial_number() == serial)
+            not_after = x509.notAfter(cert)
+            if time.time() < not_after:
+                q("INSERT INTO crl VALUES (?,?)", (serial, not_after))
+                self.updateNetworkConfig()
 
     @rpc
     def versions(self):

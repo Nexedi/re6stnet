@@ -25,10 +25,8 @@ def openvpn(iface, encrypt, *args, **kw):
 
 ovpn_link_mtu_dict = {'udp': 1481, 'udp6': 1450}
 
-def server(iface, max_clients, dh_path, pipe_fd, port, proto, encrypt, *args, **kw):
-    client_script = '%s %s' % (ovpn_server, pipe_fd)
-    if pipe_fd is not None:
-        args = ('--client-disconnect', client_script) + args
+def server(iface, max_clients, dh_path, fd, port, proto, encrypt, *args, **kw):
+    client_script = '%s %s' % (ovpn_server, fd)
     try:
         args = ('--link-mtu', str(ovpn_link_mtu_dict[proto]),
                 # mtu-disc ignored for udp6 due to a bug in OpenVPN
@@ -39,6 +37,7 @@ def server(iface, max_clients, dh_path, pipe_fd, port, proto, encrypt, *args, **
         '--tls-server',
         '--mode', 'server',
         '--client-connect', client_script,
+        '--client-disconnect', client_script,
         '--dh', dh_path,
         '--max-clients', str(max_clients),
         '--port', str(port),

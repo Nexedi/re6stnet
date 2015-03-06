@@ -42,10 +42,12 @@ def encrypt(cert, data):
 def fingerprint(cert, alg='sha1'):
     return hashlib.new(alg, crypto.dump_certificate(crypto.FILETYPE_ASN1, cert))
 
-def maybe_renew(path, cert, info, renew):
+def maybe_renew(path, cert, info, renew, force=False):
     from .registry import RENEW_PERIOD
     while True:
-        if cert.get_serial_number():
+        if force:
+            force = False
+        else:
             next_renew = notAfter(cert) - RENEW_PERIOD
             if time.time() < next_renew:
                 return cert, next_renew
@@ -110,11 +112,10 @@ class Cert(object):
                 '--cert', self.cert_path,
                 '--key', self.key_path)
 
-    def maybeRenew(self, registry):
-        from .registry import RegistryClient
-        registry = RegistryClient(registry, self)
+    def maybeRenew(self, registry, crl):
         self.cert, next_renew = maybe_renew(self.cert_path, self.cert,
-              "Certificate", lambda: registry.renewCertificate(self.prefix))
+              "Certificate", lambda: registry.renewCertificate(self.prefix),
+              self.cert.get_serial_number() in crl)
         self.ca, ca_renew = maybe_renew(self.ca_path, self.ca,
               "CA Certificate", registry.getCa)
         return min(next_renew, ca_renew)
@@ -181,6 +182,7 @@ class Peer(object):
     """
     _hello = _last = 0
     _key = newHmacSecret()
+    serial = None
     stop_date = float('inf')
     version = ''
 
