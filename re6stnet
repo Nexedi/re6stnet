@@ -79,7 +79,8 @@ def getConfig():
              " openvpn server on the first given port."
              " (default: --pp 1194 udp --pp 1194 tcp)")
     _('--dh',
-        help='File containing Diffie-Hellman parameters in .pem format')
+        help="File containing Diffie-Hellman parameters in .pem format"
+             " (default: DH from registry)")
     _('--ca', required=True, help=parser._ca_help)
     _('--cert', required=True,
         help="Local peer's signed certificate in .pem format."
@@ -220,9 +221,6 @@ def main():
             raise EnvironmentError("%r failed with error %u\n%s"
                                    % (' '.join(cmd), p.returncode, stderr))
         return stdout
-    def required(arg):
-        if not getattr(config, arg):
-            sys.exit("error: argument --%s is required" % arg)
     def ip(object, *args):
         args = ['ip', '-6', object, 'add'] + list(args)
         call(args)
@@ -285,11 +283,14 @@ def main():
                     address_list, cache.encrypt, '--ping-restart',
                     str(timeout), *config.openvpn_args).stop)
             elif server_tunnels:
-                required('dh')
+                dh = config.dh
+                if not dh:
+                    dh = os.path.join(config.state, "dh.pem")
+                    cache.getDh(dh)
                 for iface, (port, proto) in server_tunnels.iteritems():
                     r, x = socket.socketpair(socket.AF_UNIX, socket.SOCK_DGRAM)
                     cleanup.append(plib.server(iface, config.max_clients,
-                        config.dh, x.fileno(), port, proto, cache.encrypt,
+                        dh, x.fileno(), port, proto, cache.encrypt,
                         '--ping-exit', str(timeout), *config.openvpn_args,
                         preexec_fn=r.close).stop)
                     R[r] = partial(tunnel_manager.handleServerEvent, r)

@@ -50,7 +50,6 @@ def main():
     ca_path = 'ca.crt'
     cert_path = 'cert.crt'
     key_path = 'cert.key'
-    dh_path = 'dh2048.pem'
 
     # Establish connection with server
     s = registry.RegistryClient(config.registry)
@@ -80,12 +79,6 @@ def main():
     create(ca_path, crypto.dump_certificate(crypto.FILETYPE_PEM, ca))
     if config.ca_only:
         sys.exit()
-
-    # Generating dh file
-    if not os.access(dh_path, os.F_OK):
-        r = subprocess.call(('openssl', 'dhparam', '-out', dh_path, '2048'))
-        if r:
-            sys.exit(r)
 
     reserved = 'CN', 'serial'
     req = crypto.X509Req()
@@ -175,7 +168,6 @@ registry %s
 ca %s
 cert %s
 key %s
-dh %s
 # increase re6stnet verbosity:
 #verbose 3
 # enable OpenVPN logging:
@@ -183,7 +175,7 @@ dh %s
 # increase OpenVPN verbosity:
 #O--verb
 #O3
-""" % (config.registry, ca_path, cert_path, key_path, dh_path))
+""" % (config.registry, ca_path, cert_path, key_path))
         print "Sample configuration file created."
 
     cn = x509.subnetFromCert(cert)

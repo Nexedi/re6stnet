@@ -120,6 +120,22 @@ class Cache(object):
             logging.warning("There's a new version of re6stnet:"
                             " you should update.")
 
+    def getDh(self, path):
+        if not os.path.exists(path):
+            retry = 1
+            while True:
+                try:
+                    dh = self._registry.getDh(self._prefix)
+                    break
+                except socket.error, e:
+                    logging.warning(
+                        "Failed to get DH parameters from the registry."
+                        " Will retry in %s seconds", retry, exc_info=1)
+                    time.sleep(retry)
+                    retry = min(60, retry * 2)
+            with open(path, "wb") as f:
+                f.write(dh)
+
     def log(self):
         if logging.getLogger().isEnabledFor(5):
             logging.trace("Cache:")

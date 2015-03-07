@@ -69,6 +69,8 @@ def main():
     _('--db', default='/var/lib/re6stnet/registry.db',
         help="Path to SQLite database file. It is automatically initialized"
              " if the file does not exist.")
+    _('--dh',
+        help='File containing Diffie-Hellman parameters in .pem format')
     _('--ca', required=True, help=parser._ca_help)
     _('--key', required=True,
             help="CA private key in .pem format.")

@@ -428,6 +428,11 @@ class RegistryServer(object):
         return crypto.dump_certificate(crypto.FILETYPE_PEM, self.cert.ca)
 
     @rpc
+    def getDh(self, cn):
+        with open(self.config.dh) as f:
+            return f.read()
+
+    @rpc
     def getNetworkConfig(self, cn):
         return self.network_config
 
