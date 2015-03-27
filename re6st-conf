@@ -124,9 +124,10 @@ def main():
         except IOError, e:
             if e.errno != errno.ENOENT:
                 raise
-            print "Generating 2048-bit key ..."
+            bits = ca.get_pubkey().bits()
+            print "Generating %s-bit key ..." % bits
             pkey = crypto.PKey()
-            pkey.generate_key(crypto.TYPE_RSA, 2048)
+            pkey.generate_key(crypto.TYPE_RSA, bits)
             key = crypto.dump_privatekey(crypto.FILETYPE_PEM, pkey)
             create(key_path, key, 0600)
 
