@@ -38,6 +38,8 @@ def _add_interface(node, iface):
     return Node__add_interface(node, iface)
 nemu.Node._add_interface = _add_interface
 
+execfile("fixnemu.py")
+
 # create nodes
 for name in """internet=I registry=R
                           gateway1=g1 machine1=1 machine2=2
