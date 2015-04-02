@@ -323,6 +323,41 @@ class RegistryServer(object):
             s.sendmail(self.email, email, msg.as_string())
             s.quit()
 
+    @rpc
+    def requestAddToken(self, token, email):
+        with self.lock:
+            # Check if token is not in the database
+            try:
+                token_found, = self.db.execute(
+                    "SELECT token FROM token WHERE token = ?",
+                    (token,)).next()
+                if token_found:
+                  return token_found
+            except StopIteration:
+                pass
+            args = token, email, self.config.prefix_length, int(time.time())
+            # Updating database
+            try:
+                self.db.execute("INSERT INTO token VALUES (?,?,?,?)", args)
+            except sqlite3.IntegrityError:
+                return ''
+            return token
+
+    @rpc
+    def requestDeleteToken(self, token):
+        success = 'False'
+        with self.lock:
+            try:
+                token, = self.db.execute(
+                    "SELECT token FROM token WHERE token = ?",
+                    (token,)).next()
+            except StopIteration:
+                return success
+            # Updating database
+            self.db.execute("DELETE FROM token WHERE token = ?",
+                            (token,))
+        return 'True'
+
     def newPrefix(self, prefix_len):
         max_len = 128 - len(self.network)
         assert 0 < prefix_len <= max_len
