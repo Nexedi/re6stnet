@@ -239,7 +239,7 @@ def main():
         my_ip += '/%s' % len(subnet)
 
         # Init db and tunnels
-        tunnel_interfaces = server_tunnels.keys()
+        config.babel_args += server_tunnels
         timeout = 4 * cache.hello
         cleanup = [lambda: cache.cacheMinimize(config.client_count),
                    lambda: shutil.rmtree(config.run, True)]
@@ -250,7 +250,7 @@ def main():
                 cache, cert, config.openvpn_args, timeout,
                 config.client_count, config.iface_list, address, ip_changed,
                 remote_gateway, config.disable_proto, config.neighbour)
-            tunnel_interfaces += tunnel_manager.new_iface_list
+            config.babel_args += tunnel_manager.new_iface_list
         else:
             tunnel_manager = tunnel.BaseTunnelManager(cache, cert)
         cleanup.append(tunnel_manager.sock.close)
@@ -354,7 +354,7 @@ def main():
                 os.path.join(config.log, 'babeld.log'),
                 os.path.join(config.state, 'babeld.state'),
                 os.path.join(config.run, 'babeld.pid'),
-                tunnel_interfaces, control_socket, cache.babel_default,
+                control_socket, cache.babel_default,
                 *config.babel_args).stop)
             if config.up:
                 exit.release()
