@@ -36,13 +36,7 @@ def main():
              " which actually encodes your allocated prefix in the network."
              " You can repeat this option to add any field you want to its"
              " subject.")
-    _('--email',
-        help="Email address where your token is sent. Use -r option if you"
-             " want to show an email in your certificate.")
     _('--token', help="The token you received.")
-    _('--anonymous', action='store_true',
-        help="Request an anonymous certificate. No email is required but the"
-             " registry may deliver a longer prefix.")
     config = parser.parse_args()
     if config.dir:
         os.chdir(config.dir)
@@ -103,15 +97,7 @@ def main():
 
     cert_fd = token_advice = None
     try:
-        token = config.token
-        if config.anonymous:
-            if not (token is config.email is None):
-                parser.error("--anonymous conflicts with --email/--token")
-            token = ''
-        elif not token:
-            if not config.email:
-                config.email = raw_input('Please enter your email address: ')
-            s.requestToken(config.email)
+        if not token:
             token_advice = "Use --token to retry without asking a new token\n"
             while not token:
                 token = raw_input('Please enter your token: ')

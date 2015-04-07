@@ -290,38 +290,9 @@ class RegistryServer(object):
 
     @rpc
     def requestToken(self, email):
-        with self.lock:
-            while True:
-                # Generating token
-                token = ''.join(random.sample(string.ascii_lowercase, 8))
-                args = token, email, self.config.prefix_length, int(time.time())
-                # Updating database
-                try:
-                    self.db.execute("INSERT INTO token VALUES (?,?,?,?)", args)
-                    break
-                except sqlite3.IntegrityError:
-                    pass
-            self.timeout = 1
-
-        # Creating and sending email
-        msg = MIMEText('Hello, your token to join re6st network is: %s\n'
-                       % token)
-        msg['Subject'] = '[re6stnet] Token Request'
-        if self.email:
-            msg['From'] = self.email
-        msg['To'] = email
-        if os.path.isabs(self.config.mailhost) or \
-           os.path.isfile(self.config.mailhost):
-            with self.lock:
-                m = mailbox.mbox(self.config.mailhost)
-                try:
-                    m.add(msg)
-                finally:
-                    m.close()
-        else:
-            s = smtplib.SMTP(self.config.mailhost)
-            s.sendmail(self.email, email, msg.as_string())
-            s.quit()
+        logging.info("This re6st version doesn't allow client to request token. Email is %s" % 
+                      email)
+        return
 
     @rpc
     def requestAddToken(self, token, email):
@@ -381,20 +352,17 @@ class RegistryServer(object):
         req = crypto.load_certificate_request(crypto.FILETYPE_PEM, req)
         with self.lock:
             with self.db:
-                if token:
-                    try:
-                        token, email, prefix_len, _ = self.db.execute(
-                            "SELECT * FROM token WHERE token = ?",
-                            (token,)).next()
-                    except StopIteration:
-                        return
-                    self.db.execute("DELETE FROM token WHERE token = ?",
-                                    (token,))
-                else:
-                    prefix_len = self.config.anonymous_prefix_length
-                    if not prefix_len:
-                        return
-                    email = None
+                try:
+                    token, email, prefix_len, _ = self.db.execute(
+                        "SELECT * FROM token WHERE token = ?",
+                        (token,)).next()
+                except StopIteration:
+                    return
+                if not token:
+                    logging.info("Empty token is not allowed for this re6st version.")
+                    return
+                self.db.execute("DELETE FROM token WHERE token = ?",
+                                (token,))
                 prefix = self.newPrefix(prefix_len)
                 self.db.execute("UPDATE cert SET email = ? WHERE prefix = ?",
                                 (email, prefix))
