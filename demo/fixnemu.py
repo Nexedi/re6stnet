@@ -29,16 +29,17 @@ def _get_all_route_data():
         if line == "":
             continue
         # PATCH: parse 'from'
+        # PATCH: 'dev' is missing on 'unreachable' ipv4 routes
         match = re.match('(?:(unicast|local|broadcast|multicast|throw|'
             r'unreachable|prohibit|blackhole|nat) )?(\S+)(?: from (\S+))?'
-            r'(?: via (\S+))? dev (\S+).*(?: metric (\d+))?', line)
+            r'(?: via (\S+))?(?: dev (\S+))?.*(?: metric (\d+))?', line)
         if not match:
             raise RuntimeError("Invalid output from `ip route': `%s'" % line)
         tipe = match.group(1) or "unicast"
         prefix = match.group(2)
         #src = match.group(3)
         nexthop = match.group(4)
-        interface = ifdata[match.group(5)]
+        interface = ifdata[match.group(5) or "lo"]
         metric = match.group(6)
         if prefix == "default" or re.search(r'/0$', prefix):
             prefix = None

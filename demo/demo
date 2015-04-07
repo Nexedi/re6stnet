@@ -1,5 +1,5 @@
 #!/usr/bin/python
-import math, nemu, os, signal, socket, subprocess, sys, time, weakref
+import math, nemu, os, re, signal, socket, subprocess, sys, time, weakref
 from collections import defaultdict
 IPTABLES = 'iptables'
 SCREEN = 'screen'
@@ -50,6 +50,8 @@ for name in """internet=I registry=R
     globals()[name] = node = nemu.Node()
     node.name = name
     node.short = short
+    node.Popen(('sysctl', '-q',
+        'net.ipv4.icmp_echo_ignore_broadcasts=0')).wait()
     node._screen = node.Popen((SCREEN, '-DmS', name))
     node.screen = (lambda name: lambda *cmd:
         subprocess.call([SCREEN, '-r', name, '-X', 'eval'] + map(
@@ -237,7 +239,12 @@ def node_by_ll(addr):
                 for a in a:
                     p = a['prefix_len']
                     a = a['address']
-                    if a.startswith('2001:db8:'):
+                    if a.startswith('10.'):
+                        if a.startswith('10.42.'):
+                            assert not p % 8
+                            _ll[socket.inet_ntoa(socket.inet_aton(
+                                a)[:p/8].ljust(4, '\0'))] = n, t
+                    elif a.startswith('2001:db8:'):
                         assert not p % 8
                         a = socket.inet_ntop(socket.AF_INET6,
                             socket.inet_pton(socket.AF_INET6,
@@ -247,12 +254,13 @@ def node_by_ll(addr):
                     _ll[a] = n, t
     return _ll[addr]
 
-def route_svg(z = 4, default = type('', (), {'short': None})):
+def route_svg(ipv4, z = 4, default = type('', (), {'short': None})):
     graph = {}
     for n in nodes:
         g = graph[n] = defaultdict(list)
         for r in n.get_routes():
-            if r.prefix is None or r.prefix.startswith('2001:db8:'):
+            if (r.prefix and r.prefix.startswith('10.42.') if ipv4 else
+                r.prefix is None or r.prefix.startswith('2001:db8:')):
                 try:
                     g[node_by_ll(r.nexthop)].append(
                         node_by_ll(r.prefix)[0] if r.prefix else default)
@@ -297,13 +305,25 @@ if len(sys.argv) > 1:
     import SimpleHTTPServer, SocketServer
 
     class Handler(SimpleHTTPServer.SimpleHTTPRequestHandler):
+
+        _path_match = re.compile('/(.+)\.html$').match
+        pages = 'ipv6', 'ipv4', 'tunnels'
+
         def do_GET(self):
             svg = None
-            if self.path == '/route.html':
-                other = 'tunnel'
-                svg = route_svg()
-            elif self.path == '/tunnel.html':
-                other = 'route'
+            try:
+                page = self.pages.index(self._path_match(self.path).group(1))
+            except AttributeError, ValueError:
+                if self.path == '/':
+                    self.send_response(302)
+                    self.send_header('Location', self.pages[0] + '.html')
+                    self.end_headers()
+                else:
+                    self.send_error(404)
+                return
+            if page < 2:
+                svg = route_svg(page)
+            else:
                 gv = registry.Popen(('python', '-c', r"""if 1:
                     import math, json
                     from re6st.registry import RegistryClient
@@ -335,21 +355,16 @@ if len(sys.argv) > 1:
                 if not svg:
                     self.send_error(500)
                     return
-            else:
-                if self.path == '/':
-                    self.send_response(302)
-                    self.send_header('Location', 'route.html')
-                    self.end_headers()
-                else:
-                    self.send_error(404)
-                return
             mt = 'text/html'
             body = """<html>
 <head><meta http-equiv="refresh" content="10"/></head>
-<body><a style="position: absolute" href="%s.html">%ss</a>
+<body><span style="position: absolute">%s</span>
 %s
 </body>
-</html>""" % (other, other, svg[svg.find('<svg'):])
+</html>""" % (' '.join(x if i == page else
+                       '<a href="%s.html">%s</a>' % (x, x)
+                       for i, x in enumerate(self.pages)),
+              svg[svg.find('<svg'):])
             self.send_response(200)
             self.send_header('Content-Length', len(body))
             self.send_header('Content-type', mt + '; charset=utf-8')

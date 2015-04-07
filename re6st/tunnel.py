@@ -168,7 +168,8 @@ class BaseTunnelManager(object):
     # TODO: To minimize downtime when network parameters change, we should do
     #       our best to not restart any process. Ideally, this list should be
     #       empty and the affected subprocesses reloaded.
-    NEED_RESTART = frozenset(('babel_default', 'encrypt', 'hello'))
+    NEED_RESTART = frozenset(('babel_default', 'encrypt', 'hello',
+                              'ipv4', 'ipv4_sublen'))
 
     _forward = None
 

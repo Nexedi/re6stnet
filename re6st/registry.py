@@ -120,6 +120,8 @@ class RegistryServer(object):
             'protocol': version.protocol,
             'registry_prefix': self.prefix,
         }
+        if self.config.ipv4:
+            kw['ipv4'], kw['ipv4_sublen'] = self.config.ipv4
         for x in ('client_count', 'encrypt', 'hello',
                   'max_clients', 'min_protocol', 'tunnel_refresh'):
             kw[x] = getattr(self.config, x)
