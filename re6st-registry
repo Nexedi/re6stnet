@@ -64,7 +64,7 @@ def main():
         help="Port on which the server will listen.")
     _('-4', dest='bind4', default='0.0.0.0',
         help="Bind server to this IPv4.")
-    _('-6', dest='bind6', default='::',
+    _('-6', dest='bind6',
         help="Bind server to this IPv6.")
     _('--db', default='/var/lib/re6stnet/registry.db',
         help="Path to SQLite database file. It is automatically initialized"
