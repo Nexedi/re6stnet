@@ -59,10 +59,9 @@ def client(iface, address_list, encrypt, *args, **kw):
     return openvpn(iface, encrypt, *remote, **kw)
 
 
-def router(subnet, hello_interval, table, log_path, state_path, pidfile,
-           control_socket, default, *args, **kw):
-    s = utils.ipFromBin(subnet)
-    n = len(subnet)
+def router(ip, src, hello_interval, log_path, state_path,
+           pidfile, control_socket, default, *args, **kw):
+    ip, n = ip
     cmd = ['babeld',
             '-h', str(hello_interval),
             '-H', str(hello_interval),
@@ -72,12 +71,13 @@ def router(subnet, hello_interval, table, log_path, state_path, pidfile,
             '-s',
             '-C', 'default ' + default,
             '-C', 'redistribute local deny',
-            '-C', 'redistribute ip %s/%u eq %u' % (s, n, n),
-            '-C', 'redistribute deny']
-    if table:
-        cmd += '-t%u' % table, '-T%u' % table
-    else:
-        cmd[-2:-2] = '-C', 'redistribute ip ::/0 eq 0'
+            '-C', 'redistribute ip %s/%s eq %s' % (ip, n, n)]
+    if src:
+        cmd += '-C', 'install ip ::/0 eq 0 src-prefix ' + src
+    elif src is None:
+        cmd += '-C', 'redistribute ip ::/0 eq 0'
+    cmd += ('-C', 'redistribute deny',
+            '-C', 'install pref-src ' + ip)
     if control_socket:
         cmd += '-R', '%s' % control_socket
     cmd += args

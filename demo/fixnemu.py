@@ -28,16 +28,18 @@ def _get_all_route_data():
     for line in ipdata.split("\n"):
         if line == "":
             continue
-        match = re.match(r'(?:(unicast|local|broadcast|multicast|throw|' +
-                r'unreachable|prohibit|blackhole|nat) )?' +
-                r'(\S+)(?: via (\S+))? dev (\S+).*(?: metric (\d+))?', line)
+        # PATCH: parse 'from'
+        match = re.match('(?:(unicast|local|broadcast|multicast|throw|'
+            r'unreachable|prohibit|blackhole|nat) )?(\S+)(?: from (\S+))?'
+            r'(?: via (\S+))? dev (\S+).*(?: metric (\d+))?', line)
         if not match:
             raise RuntimeError("Invalid output from `ip route': `%s'" % line)
         tipe = match.group(1) or "unicast"
         prefix = match.group(2)
-        nexthop = match.group(3)
-        interface = ifdata[match.group(4)]
-        metric = match.group(5)
+        #src = match.group(3)
+        nexthop = match.group(4)
+        interface = ifdata[match.group(5)]
+        metric = match.group(6)
         if prefix == "default" or re.search(r'/0$', prefix):
             prefix = None
             prefix_len = 0
