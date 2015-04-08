@@ -27,7 +27,7 @@ class Cache(object):
         q("CREATE INDEX volatile.stat_try ON stat(try)")
         q("INSERT INTO volatile.stat (peer) SELECT prefix FROM peer")
         self._db.commit()
-        self._loadConfig(q("SELECT * FROM config"))
+        self._loadConfig(self._selectConfig(q))
         try:
             cert.verifyVersion(self.version)
         except (AttributeError, x509.VerifyError):
@@ -62,6 +62,11 @@ class Cache(object):
             "name TEXT PRIMARY KEY NOT NULL",
             "value")
         return db
+
+    @staticmethod
+    def _selectConfig(execute): # BBB: blob
+        return ((k, str(v) if type(v) is buffer else v)
+            for k, v in execute("SELECT * FROM config"))
 
     def _loadConfig(self, config):
         cls = self.__class__
@@ -98,7 +103,7 @@ class Cache(object):
         old = {}
         with self._db as db:
             remove = []
-            for k, v in db.execute("SELECT * FROM config"):
+            for k, v in self._selectConfig(db.execute):
                 if k in config:
                     old[k] = v
                     continue
@@ -109,8 +114,11 @@ class Cache(object):
                 remove.append(k)
             db.execute("DELETE FROM config WHERE name in ('%s')"
                        % "','".join(remove))
+            # BBB: Use buffer because of http://bugs.python.org/issue13676
+            #      on Python 2.6
             db.executemany("INSERT OR REPLACE INTO config VALUES(?,?)",
-                           config.iteritems())
+                           ((k, buffer(v) if k in base64 else v)
+                            for k, v in config.iteritems()))
         self._loadConfig(config.iteritems())
         return [k for k, v in config.iteritems()
                   if k not in old or old[k] != v]
