@@ -40,7 +40,6 @@ def rpc(f):
     f.getcallargs = eval("lambda %s: locals()" % ','.join(args[1:]))
     return f
 
-
 class RegistryServer(object):
 
     peers = 0, ()
@@ -236,8 +235,11 @@ class RegistryServer(object):
 
     def handle_request(self, request, method, kw,
                        _localhost=('127.0.0.1', '::1')):
+        if self.config.bind4:
+            _localhost += (self.config.bind4,)
         m = getattr(self, method)
-        if method in ('revoke', 'versions', 'topology'):
+        if method in ('revoke', 'versions', 'topology', 'requestAddToken',
+                      'requestDeleteToken'):
             x_forwarded_for = request.headers.get('X-Forwarded-For')
             if request.client_address[0] not in _localhost or \
                x_forwarded_for and x_forwarded_for not in _localhost:
