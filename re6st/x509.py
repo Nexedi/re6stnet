@@ -138,10 +138,10 @@ class Cert(object):
         return r
 
     def verify(self, sign, data):
-        crypto.verify(self.ca, sign, data, 'sha1')
+        crypto.verify(self.ca, sign, data, 'sha512')
 
     def sign(self, data):
-        return crypto.sign(self.key, data, 'sha1')
+        return crypto.sign(self.key, data, 'sha512')
 
     def decrypt(self, data):
         p = openssl('rsautl', '-decrypt', '-inkey', self.key_path)
@@ -179,6 +179,11 @@ class Peer(object):
     - hello0 packets (0 & 1) are subject to DoS, because verifying a
       certificate uses much CPU. A solution would be to use TCP until the
       secret is exchanged and continue with UDP.
+
+    The fingerprint is only used to quickly know if peer's certificate has
+    changed. It must be short enough to not exceed packet size when using
+    certificates with 4096-bit keys. A weak algorithm is ok as long as there
+    is no accidental collision. So SHA-1 looks fine.
     """
     _hello = _last = 0
     _key = newHmacSecret()
@@ -233,7 +238,7 @@ class Peer(object):
         self._last = None
 
     def verify(self, sign, data):
-        crypto.verify(self.cert, sign, data, 'sha1')
+        crypto.verify(self.cert, sign, data, 'sha512')
 
     seqno_struct = struct.Struct("!L")
 
