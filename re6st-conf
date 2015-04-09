@@ -96,6 +96,7 @@ def main():
             setattr(subj, k, v)
 
     cert_fd = token_advice = None
+    token = config.token
     try:
         if not token:
             token_advice = "Use --token to retry without asking a new token\n"
