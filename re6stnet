@@ -1,6 +1,6 @@
 #!/usr/bin/python
 import atexit, errno, logging, os, shutil, signal
-import socket, subprocess, sys, time, threading
+import socket, struct, subprocess, sys, time, threading
 from collections import deque
 from functools import partial
 from re6st import plib, tunnel, utils, version, x509
@@ -58,11 +58,13 @@ def getConfig():
     _ = parser.add_argument_group('routing').add_argument
     _('-B', dest='babel_args', metavar='ARG', action='append', default=[],
         help="Extra arguments to forward to Babel.")
-    _('--table', type=int, default=42,
-        help="Use given table id. Set 0 to use the main table, if you want to"
-             " access internet via this network (in this case, make sure you"
-             " don't already have a default route). Don't use this option with"
-             " --gateway (main table is automatically used).")
+    _('-D', '--default', action='store_true',
+        help="Access internet via this network (in this case, make sure you"
+             " don't already have a default route), or if your kernel was"
+             " compiled without support for source address based routing"
+             " (CONFIG_IPV6_SUBTREES). Meaningless with --gateway.")
+    _('--table', type=int, choices=(0,),
+        help="DEPRECATED: Use --default instead of --table=0")
     _('--gateway', action='store_true',
         help="Act as a gateway for this network (the default route will be"
              " exported). Do never use it if you don't know what it means.")
@@ -140,9 +142,15 @@ def main():
     if config.max_clients is None:
         config.max_clients = cache.max_clients
 
+    if config.table is not None:
+        logging.warning("--table option is deprecated: use --default instead")
+        config.default = True
+    if config.default and config.gateway:
+        sys.exit("error: conflicting options --default and --gateway")
+
     if 'none' in config.disable_proto:
         config.disable_proto = ()
-    if not config.table:
+    if config.default:
         # Make sure we won't tunnel over re6st.
         config.disable_proto = tuple(set(('tcp6', 'udp6')).union(
             config.disable_proto))
@@ -221,6 +229,11 @@ def main():
             raise EnvironmentError("%r failed with error %u\n%s"
                                    % (' '.join(cmd), p.returncode, stderr))
         return stdout
+    def ip4(object, *args):
+        args = ['ip', '-4', object, 'add'] + list(args)
+        call(args)
+        args[3] = 'del'
+        cleanup.append(lambda: subprocess.call(args))
     def ip(object, *args):
         args = ['ip', '-6', object, 'add'] + list(args)
         call(args)
@@ -236,10 +249,9 @@ def main():
         os.environ['re6stnet_iface'] = config.main_interface
         os.environ['re6stnet_subnet'] = my_subnet
         os.environ['re6stnet_network'] = my_network
-        my_ip += '/%s' % len(subnet)
 
         # Init db and tunnels
-        tunnel_interfaces = server_tunnels.keys()
+        config.babel_args += server_tunnels
         timeout = 4 * cache.hello
         cleanup = [lambda: cache.cacheMinimize(config.client_count),
                    lambda: shutil.rmtree(config.run, True)]
@@ -250,29 +262,48 @@ def main():
                 cache, cert, config.openvpn_args, timeout,
                 config.client_count, config.iface_list, address, ip_changed,
                 remote_gateway, config.disable_proto, config.neighbour)
-            tunnel_interfaces += tunnel_manager.new_iface_list
+            config.babel_args += tunnel_manager.new_iface_list
         else:
             tunnel_manager = tunnel.BaseTunnelManager(cache, cert)
         cleanup.append(tunnel_manager.sock.close)
 
         try:
             exit.acquire()
-            # Source address selection is defined by RFC 6724, and in most
-            # applications, it usually works  thanks to rule 5 (prefer outgoing
-            # interface). But here, it rarely applies because we use several
-            # interfaces to connect to a re6st network.
-            # Rule 7 is little strange because it prefers temporary addresses
-            # over IP with a longer matching prefix (rule 8, which is not even
-            # mandatory).
-            # So only rule 6 can make the difference, i.e. prefer same label.
-            # The value of the label does not matter, except that it must be
-            # different from ::/0's (normally equal to 1).
-            # XXX: This does not work with extra interfaces that already have
-            #      an public IP so Babel must be changed to set a source
-            #      address on routes it installs.
-            ip('addrlabel', 'prefix', my_network, 'label', '99')
+
+            ipv4 = getattr(cache, 'ipv4', None)
+            if ipv4:
+                serial = int(cert.cert.get_subject().serialNumber)
+                if cache.ipv4_sublen <= 16 and serial < 1 << cache.ipv4_sublen:
+                    dot4 = lambda x: socket.inet_ntoa(struct.pack('!I', x))
+                    ip4('route', 'unreachable', ipv4, 'proto', 'static')
+                    ipv4, n = ipv4.split('/')
+                    ipv4, = struct.unpack('!I', socket.inet_aton(ipv4))
+                    n = int(n) + cache.ipv4_sublen
+                    x = ipv4 | serial << 32 - n
+                    ipv4 = dot4(x | (n < 31))
+                    config.openvpn_args += '--ifconfig', \
+                        ipv4, dot4((1<<32) - (1<<32-n))
+                    ipv4 = ipv4, n
+                    if not isinstance(tunnel_manager, tunnel.TunnelManager):
+                        ip4('addr', "%s/%s" % ipv4,
+                            'dev', config.main_interface)
+                        if config.main_interface == "lo":
+                            ip4('route', 'unreachable', "%s/%s" % (dot4(x), n),
+                                'proto', 'static')
+                else:
+                    logging.warning(
+                        "IPv4 payload disabled due to wrong network parameters")
+                    ipv4 = None
+
+            if os.uname()[2] < '2.6.40': # BBB
+                logging.warning("Fallback to ip-addrlabel because Linux < 3.0"
+                    " does not support RTA_PREFSRC for ipv6. Note however that"
+                    " this workaround does not work with extra interfaces that"
+                    " already have a public IP")
+                ip('addrlabel', 'prefix', my_network, 'label', '99')
+                # No need to tell babeld not to set a preferred source IP in
+                # installed routes. The kernel will silently discard the option.
             R = {}
-            # prepare persistent interfaces
             if config.client:
                 address_list = [x for x in utils.parse_address(config.client)
                                   if x[2] not in config.disable_proto]
@@ -296,7 +327,8 @@ def main():
                     R[r] = partial(tunnel_manager.handleServerEvent, r)
                     x.close()
 
-            ip('addr', my_ip, 'dev', config.main_interface)
+            ip('addr', my_ip + '/%s' % len(subnet),
+               'dev', config.main_interface)
             if_rt = ['ip', '-6', 'route', 'del',
                      'fe80::/64', 'dev', config.main_interface]
             if config.main_interface == 'lo':
@@ -305,30 +337,13 @@ def main():
                 subprocess.call(if_rt)
             if_rt[4] = my_subnet
             cleanup.append(lambda: subprocess.call(if_rt))
-            x = [my_network]
-            if config.gateway:
-                config.table = 0
-            elif config.table:
-                x += 'table', str(config.table)
-                try:
-                    ip('rule', 'from', *x)
-                except EnvironmentError:
-                    logging.error("It seems that your kernel was compiled"
-                        " without support for source address based routing"
-                        " (CONFIG_IPV6_SUBTREES). Consider using --table=0"
-                        " option if you can't change your kernel.")
-                    raise
-                ip('rule', 'to', *x)
-                call(if_rt)
-                if_rt += x[1:]
-                call(if_rt[:3] + ['add', 'proto', 'static'] + if_rt[4:])
-            else:
+            if config.default:
                 def check_no_default_route():
                     for route in call(('ip', '-6', 'route', 'show',
                                         'default')).splitlines():
                         if ' proto 42 ' not in route:
                             sys.exit("Detected default route (%s)"
-                                " whereas you specified --table=0."
+                                " whereas you specified --default."
                                 " Fix your configuration." % route)
                 check_no_default_route()
                 def check_no_default_route_thread():
@@ -347,14 +362,17 @@ def main():
                 t = threading.Thread(target=check_no_default_route_thread)
                 t.daemon = True
                 t.start()
-            ip('route', 'unreachable', *x)
+            ip('route', 'unreachable', my_network)
 
             config.babel_args += config.iface_list
-            cleanup.append(plib.router(subnet, cache.hello, config.table,
+            cleanup.append(plib.router((my_ip, len(subnet)), ipv4,
+                None if config.gateway else
+                '' if config.default else
+                my_network, cache.hello,
                 os.path.join(config.log, 'babeld.log'),
                 os.path.join(config.state, 'babeld.state'),
                 os.path.join(config.run, 'babeld.pid'),
-                tunnel_interfaces, control_socket, cache.babel_default,
+                control_socket, cache.babel_default,
                 *config.babel_args).stop)
             if config.up:
                 exit.release()

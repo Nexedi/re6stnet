@@ -31,7 +31,7 @@ If you already have IPv6 connectivity by autoconfiguration and still want to
 use it for communications that are unrelated to this network, then:
 
 - your kernel must support source address based routing (because you can't
-  use ``--table 0`` option).
+  use ``--default`` option).
 - you must set ``net.ipv6.conf.<iface>.accept_ra`` sysctl to value 2 and
   trigger SLAAC with ``rdisc6 <iface>`` to restore the default route if the
   kernel removed while enabling forwarding.
@@ -70,7 +70,7 @@ Important note about NetworkManager
 It is required to configure properly every connection defined in NetworkManager
 because default settings are wrong and conflict with re6st:
 
-- If re6st routes all your IPv6 traffic, using ``--table 0`` option, then make
+- If re6st routes all your IPv6 traffic, using ``--default`` option, then make
   sure to disable IPv6 in NetworkManager.
 
 - Otherwise, the following options must be set in [ipv6] section::

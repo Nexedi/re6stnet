@@ -83,6 +83,9 @@ def main():
     _('--anonymous-prefix-length', type=int,
             help="Length of allocated anonymous prefixes."
                  " If 0 or unset, registration by email is required")
+    _('--ipv4', nargs=2, metavar=("IP/N", "PLEN"),
+        help="Enable ipv4. Each node is assigned a subnet of length PLEN"
+             " inside network IP/N.")
     _('-l', '--logfile', default='/var/log/re6stnet/registry.log',
             help="Path to logging file.")
     _('-r', '--run', default='/var/run/re6stnet',
@@ -121,6 +124,15 @@ def main():
     if not version.min_protocol <= config.min_protocol <= version.protocol:
         parser.error("--min-protocol: value must between %s and %s (included)"
                      % (version.min_protocol, version.protocol))
+
+    if config.ipv4:
+        ipv4, plen = config.ipv4
+        try:
+            ip, n = ipv4.split('/')
+            config.ipv4 = "%s/%s" % (socket.inet_ntoa(socket.inet_aton(ip)),
+                                     int(n)), int(plen)
+        except (socket.error, ValueError):
+            parser.error("invalid argument --ipv4")
 
     utils.setupLog(config.verbose, config.logfile)
 

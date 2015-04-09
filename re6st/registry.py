@@ -60,7 +60,7 @@ class RegistryServer(object):
                 "name TEXT PRIMARY KEY NOT NULL",
                 "value")
         self.prefix = self.getConfig("prefix", None)
-        self.version = self.getConfig("version", "\0")
+        self.version = str(self.getConfig("version", "\0")) # BBB: blob
         utils.sqliteCreateTable(self.db, "token",
                 "token TEXT PRIMARY KEY NOT NULL",
                 "email TEXT NOT NULL",
@@ -119,6 +119,8 @@ class RegistryServer(object):
             'protocol': version.protocol,
             'registry_prefix': self.prefix,
         }
+        if self.config.ipv4:
+            kw['ipv4'], kw['ipv4_sublen'] = self.config.ipv4
         for x in ('client_count', 'encrypt', 'hello',
                   'max_clients', 'min_protocol', 'tunnel_refresh'):
             kw[x] = getattr(self.config, x)
@@ -126,7 +128,9 @@ class RegistryServer(object):
         if config != self.getConfig('last_config', None):
             self.version = self.encodeVersion(
                 1 + self.decodeVersion(self.version))
-            self.setConfig('version', self.version)
+            # BBB: Use buffer because of http://bugs.python.org/issue13676
+            #      on Python 2.6
+            self.setConfig('version', buffer(self.version))
             self.setConfig('last_config', config)
             self.sendto(self.prefix, 0)
         kw[''] = 'version',
