@@ -4,7 +4,6 @@
 from setuptools import setup, find_packages
 from setuptools.command import sdist as _sdist, build_py as _build_py
 from distutils import log
-from re6st import version
 
 version = {"__file__": "re6st/version.py"}
 execfile(version["__file__"], version)
@@ -38,9 +37,16 @@ Topic :: Internet
 Topic :: System :: Networking
 """
 
+egg_version = "0.%(revision)s" % version
+
+git_rev = """
+
+Git Revision: %s == %s
+""" % (egg_version, version["short"])
+
 setup(
     name = 're6stnet',
-    version = version["version"],
+    version = egg_version,
     description = __doc__.strip(),
     author = 'Nexedi',
     author_email = 're6stnet@erp5.org',
@@ -49,7 +55,7 @@ setup(
     platforms = ["any"],
     classifiers=classifiers.splitlines(),
     long_description = ".. contents::\n\n" + open('README').read()
-                     + "\n" + open('CHANGES').read(),
+                     + "\n" + open('CHANGES').read() + git_rev,
     packages = find_packages(),
     scripts = [
             're6stnet',
