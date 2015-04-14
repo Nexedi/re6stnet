@@ -119,7 +119,7 @@ def main():
             create(key_path, key, 0600)
 
         req.set_pubkey(pkey)
-        req.sign(pkey, 'sha1')
+        req.sign(pkey, 'sha512')
         req = crypto.dump_certificate_request(crypto.FILETYPE_PEM, req)
 
         # First make sure we can open certificate file for writing,

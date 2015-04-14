@@ -409,7 +409,7 @@ class RegistryServer(object):
         serial = 1 + self.getConfig('serial', 0)
         self.setConfig('serial', serial)
         cert.set_serial_number(serial)
-        cert.sign(self.cert.key, 'sha1')
+        cert.sign(self.cert.key, 'sha512')
         cert = crypto.dump_certificate(crypto.FILETYPE_PEM, cert)
         self.db.execute("UPDATE cert SET cert = ? WHERE prefix = ?",
                         (cert, client_prefix))

@@ -172,7 +172,7 @@ if 1:
         " -set_serial 0x120010db80042 -days %u" % CA_DAYS, shell=True)
     with open('ca.crt') as f:
         ca = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
-    fingerprint = "sha1:" + hashlib.sha1(
+    fingerprint = "sha256:" + hashlib.sha256(
         crypto.dump_certificate(crypto.FILETYPE_ASN1, ca)).hexdigest()
     db_path = 'registry/registry.db'
     registry.screen('./py re6st-registry @registry/re6st-registry.conf'

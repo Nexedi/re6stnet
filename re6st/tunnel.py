@@ -607,12 +607,24 @@ class TunnelManager(BaseTunnelManager):
         return disconnected
 
     def _tunnelScore(self, prefix):
+        # First try to not kill a persistent tunnel (see --neighbour option).
+        # Then sort by the number of routed nodes.
         n = 0
         try:
             for x in self.ctl.neighbours[prefix][1]:
+                # Ignore the default route, which is redundant with the
+                # border gateway node.
                 if x:
                     n += 1
         except KeyError:
+            # XXX: The route for this neighbour is not direct. In this case,
+            #      a KeyError was raised because babeld dump doesn't give us
+            #      enough information to match the neighbour prefix with its
+            #      link-local address. This is a good candidate (so we return
+            #      ()), but for the same reason, such tunnel can't be killed.
+            #      In order not to remain indefinitely in a state where we
+            #      never delete any tunnel because we would always select an
+            #      unkillable one, we should return an higher score.
             pass
         return (prefix in self._neighbour_set, n) if n else ()
 
