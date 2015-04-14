@@ -71,6 +71,12 @@ def router(ip, ip4, src, hello_interval, log_path, state_path,
             '-S', state_path,
             '-I', pidfile,
             '-s',
+            # Force use of ipv6 subtrees because:
+            # - even Linux 2.6.32 has them
+            # - the fallback implementation using a separate table
+            #   is not equivalent, at least not the way we use babeld
+            #   (and we don't need RTA_SRC for ipv4).
+            '-C', 'ipv6-subtrees true',
             '-C', 'default ' + default,
             '-C', 'redistribute local deny',
             '-C', 'redistribute ip %s/%s eq %s' % (ip, n, n)]
