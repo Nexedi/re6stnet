@@ -192,7 +192,6 @@ class Peer(object):
     version = ''
 
     def __init__(self, prefix):
-        assert len(prefix) == 16 or prefix == ('0' * 14 + '1' + '0' * 65), prefix
         self.prefix = prefix
 
     @property
