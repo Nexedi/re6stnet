@@ -121,16 +121,23 @@ The registry can now be started::
 
   re6st-registry --ca ca.crt --key ca.key --mailhost smtp.example.com
 
-Like the registry, the first registered node should be always up because its
-presence is used by all other nodes to garantee they are connected to the
-network. It is therefore recommended to run it on the same machine as the
-registry::
+The registry uses the builtin HTTP server of Python. For security, it should be
+behind a proxy like Apache.
+
+The first registered node should be always up because its presence is used by
+all other nodes to garantee they are connected to the network. The registry
+also emits UDP packets that are forwarded via a localhost re6st node, and it is
+recommended that this is the first one::
 
   re6st-conf --registry http://localhost/
 
 If `re6st-conf` is run in the directory containing CA files, ca.crt will be
 overridden without harm. See previous section for more information to create
 a node.
+
+For bootstrapping, you may have to explicitly set an IP in the configuration
+of the first node, via the ``--ip`` option. Otherwise, additional nodes won't
+be able to connect to it.
 
 TROUBLESHOOTING
 ===============
