@@ -1,5 +1,5 @@
 import json, logging, os, sqlite3, socket, subprocess, time, zlib
-from re6st.registry import RegistryClient
+from .registry import RegistryClient
 from . import utils, version, x509
 
 class Cache(object):

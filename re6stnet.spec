@@ -14,6 +14,7 @@ Requires:  openssl
 Requires:  openvpn >= 2.3
 Requires:  python >= 2.7
 Requires:  pyOpenSSL >= 0.13
+Requires:  python-setuptools
 
 %description
 

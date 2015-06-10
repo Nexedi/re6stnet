@@ -7,7 +7,7 @@ Standards-Version: 3.9.1
 
 Package: re6stnet
 Architecture: all
-Depends: ${misc:Depends}, python (>= 2.6.6-3), python (<< 2.8), python-argparse, python-openssl (>= 0.13), openvpn (>= 2.3), babeld (= 1.6.0-nxd1), iproute2 | iproute, openssl
+Depends: ${misc:Depends}, python (>= 2.6.6-3), python-pkg-resources, python-argparse, python-openssl (>= 0.13), openvpn (>= 2.3), babeld (= 1.6.0-nxd1), iproute2 | iproute, openssl
 Recommends: ${python:Recommends}, logrotate
 Suggests: ndisc6
 Description: resilient, scalable, IPv6 network application

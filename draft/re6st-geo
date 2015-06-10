@@ -3,7 +3,8 @@
 import argparse, httplib,  select, socket, sqlite3, struct, sys, time, traceback
 import xml.etree.cElementTree as ET
 from collections import defaultdict
-import os; sys.path[0] = os.path.dirname(sys.path[0])
+if 're6st' not in sys.modules:
+    import os; sys.path[0] = os.path.dirname(sys.path[0])
 from re6st import ctl, tunnel, utils
 
 class iterRoutes(object):

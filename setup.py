@@ -57,11 +57,13 @@ setup(
     long_description = ".. contents::\n\n" + open('README').read()
                      + "\n" + open('CHANGES').read() + git_rev,
     packages = find_packages(),
-    scripts = [
-            're6stnet',
-            're6st-conf',
-            're6st-registry',
+    entry_points = {
+        'console_scripts': [
+            're6st-conf=re6st.cli.conf:main',
+            're6stnet=re6st.cli.node:main',
+            're6st-registry=re6st.cli.registry:main',
         ],
+    },
     package_data = {
         're6st': [
             'ovpn-server',

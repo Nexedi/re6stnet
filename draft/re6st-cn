@@ -1,6 +1,7 @@
 #!/usr/bin/python
 import sqlite3, sys
-import os; sys.path[0] = os.path.dirname(sys.path[0])
+if 're6st' not in sys.modules:
+    import os; sys.path[0] = os.path.dirname(sys.path[0])
 from re6st import utils, x509
 from OpenSSL import crypto
 
