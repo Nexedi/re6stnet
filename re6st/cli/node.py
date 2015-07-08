@@ -37,8 +37,8 @@ def getConfig():
              "- cache.db: cache of network parameters and peer addresses\n"
              "- babeld.state: see option -S of babeld\n")
     _('-v', '--verbose', default=1, type=int, metavar='LEVEL',
-        help="Log level of re6stnet itself. 0 disables logging."
-             " Use SIGUSR1 to reopen log."
+        help="Log level of re6stnet itself. 0 disables logging. 1=WARNING,"
+             " 2=INFO, 3=DEBUG, 4=TRACE. Use SIGUSR1 to reopen log."
              " See also --babel-verb and --verb for logs of spawned processes.")
     _('-i', '--interface', action='append', dest='iface_list', default=[],
         help="Extra interface for LAN discovery. Highly recommanded if there"

@@ -94,8 +94,8 @@ def main():
         help="Path to re6stnet runtime directory:\n"
              "- babeld.sock (option -R of babeld)\n")
     _('-v', '--verbose', default=1, type=int,
-            help="Log level. 0 disables logging."
-                 " Use SIGUSR1 to reopen log.")
+            help="Log level. 0 disables logging. 1=WARNING, 2=INFO,"
+                 " 3=DEBUG, 4=TRACE. Use SIGUSR1 to reopen log.")
     _('--min-protocol', default=version.min_protocol, type=int,
         help="Reject nodes that are too old. Current is %s." % version.protocol)
 
