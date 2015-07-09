@@ -285,13 +285,12 @@ def main():
                     ipv4 = dot4(x | (n < 31))
                     config.openvpn_args += '--ifconfig', \
                         ipv4, dot4((1<<32) - (1<<32-n))
-                    ipv4 = ipv4, n
                     if not isinstance(tunnel_manager, tunnel.TunnelManager):
-                        ip4('addr', "%s/%s" % ipv4,
-                            'dev', config.main_interface)
+                        ip4('addr', ipv4, 'dev', config.main_interface)
                         if config.main_interface == "lo":
                             ip4('route', 'unreachable', "%s/%s" % (dot4(x), n),
                                 'proto', 'static')
+                    ipv4 = ipv4, n
                 else:
                     logging.warning(
                         "IPv4 payload disabled due to wrong network parameters")
