@@ -343,7 +343,8 @@ def main():
                 def check_no_default_route():
                     for route in call(('ip', '-6', 'route', 'show',
                                         'default')).splitlines():
-                        if ' proto 42 ' not in route:
+                        if not (' proto babel ' in route
+                             or ' proto 42 ' in route):
                             sys.exit("Detected default route (%s)"
                                 " whereas you specified --default."
                                 " Fix your configuration." % route)
