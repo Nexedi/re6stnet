@@ -91,7 +91,7 @@ def router(ip, ip4, src, hello_interval, log_path, state_path,
     if ip4:
         cmd += '-C', 'install pref-src ' + ip4
     if control_socket:
-        cmd += '-R', '%s' % control_socket
+        cmd += '-X', '%s' % control_socket
     cmd += args
     # WKRD: babeld fails to start if pidfile already exists
     try:
