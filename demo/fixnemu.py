@@ -17,7 +17,9 @@
 # Nemu.  If not, see <http://www.gnu.org/licenses/>.
 
 import re
-from nemu.iproute import backticks, get_if_data, get_all_route_data, route
+from new import function
+from nemu.iproute import backticks, get_if_data, route, \
+    get_addr_data, get_all_route_data, interface
 
 def _get_all_route_data():
     ipdata = backticks([IP_PATH, "-o", "route", "list"]) # "table", "all"
@@ -53,3 +55,17 @@ def _get_all_route_data():
     return ret
 
 get_all_route_data.func_code = _get_all_route_data.func_code
+
+interface__init__ = interface.__init__
+def __init__(self, *args, **kw):
+    interface__init__(self, *args, **kw)
+    if self.name:
+        self.name = self.name.split('@',1)[0]
+interface.__init__ = __init__
+
+get_addr_data.orig = function(get_addr_data.func_code,
+                              get_addr_data.func_globals)
+def _get_addr_data():
+    byidx, bynam = get_addr_data.orig()
+    return byidx, {name.split('@',1)[0]: a for name, a in bynam.iteritems()}
+get_addr_data.func_code = _get_addr_data.func_code
