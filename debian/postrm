@@ -1,10 +1,13 @@
-#!/bin/sh -e
+#!/bin/sh
+set -e
 
-[ "$DPKG_MAINTSCRIPT_PACKAGE" ]
-
-[ "$1" = purge ] && for d in lib log; do
-  d=/var/$d/$DPKG_MAINTSCRIPT_PACKAGE
-  [ ! -d "$d" ] || rm -r "$d" || :
-done
+if [ "$1" = purge ]; then
+  # https://lists.debian.org/debian-mentors/2015/12/msg00367.html
+  [ -x /usr/sbin/re6stnet ] && exit
+  for d in lib log; do
+    d=/var/$d/re6stnet
+    [ ! -d "$d" ] || rm -r "$d" || :
+  done
+fi
 
 #DEBHELPER#

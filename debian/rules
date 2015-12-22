@@ -1,63 +1,19 @@
 #!/usr/bin/make -f
 # -*- makefile -*-
-# source package automatically created by stdeb 0.6.0+git
-MANPAGELIST := $(patsubst %.rst, %.1, $(wildcard docs/*.rst))
-
-# Uncomment this to turn on verbose mode.
 #export DH_VERBOSE=1
 
-INIT=debian/re6stnet/etc/init.d
-NM=/etc/NetworkManager/dispatcher.d/50re6stnet
-
-.PHONY: debian/changelog
+VERSION = $(shell python re6st/version.py)
 
 build-package: debian/changelog
 	dpkg-buildpackage -us -uc -b
 
-debian/changelog:
-	printf 're6stnet (%s) nexedi; urgency=low\n\n -- %s  %s\n' \
-	"`python re6st/version.py`" \
-	"`git var GIT_COMMITTER_IDENT |sed 's/\(.*>\) .*/\\1/'`" \
-	"`date -R`" >debian/changelog
-
-override_dh_auto_clean:
-	dh_auto_clean
-	rm -f $(MANPAGELIST)
-
-%.1: %.rst
-	rst2man $< $@
-
-override_dh_install:
-	dh_install
-	install -d debian/re6stnet/usr/sbin
-	mv debian/re6stnet/usr/bin/re6stnet debian/re6stnet/usr/sbin
-	install -Dpm 0644 daemon/README.conf debian/re6stnet/etc/re6stnet/README
-	install -Dpm 0644 daemon/logrotate.conf debian/re6stnet/etc/logrotate.d/re6stnet
-	install -Dp daemon/network-manager debian/re6stnet$(NM)
-	for a in up down; do \
-	set debian/re6stnet/etc/network/if-$$a.d/re6stnet; \
-	install -d $${1%/*}; \
-	printf '#!/bin/sh -e\n[ "$$METHOD" = NetworkManager -o "$$IFACE" = lo ] ||exec $(NM) "$$IFACE" %s\n' $$a >$$1; \
-	chmod +x $$1; \
-	done
-
-override_dh_installinit:
-	install -d $(INIT)
-	sed 's/#NAME#/re6st-registry/; s/#DEPENDS#//; s,#DAEMON_DIR#,/usr/bin,' \
-		<debian/init.d >$(INIT)/re6st-registry
-	sed 's/#NAME#/re6stnet/; s/#DEPENDS#/re6st-registry/; s,#DAEMON_DIR#,/usr/sbin,; /^case/i\
-	cd $$CONFDIR; $$DAEMON @$$NAME.conf --test "main_interface != '\'lo\''" ||\
-	case "$$1" in start) exit 0;; restart|force-reload) set stop;; esac\
-	' <debian/init.d >$(INIT)/re6stnet
-	for x in re6st-registry re6stnet; \
-	do chmod +x $(INIT)/$$x && dh_installinit --onlyscripts --name=$$x; \
-	done
-
-override_dh_installman: $(MANPAGELIST)
-	dh_installman $^
+include debian/common.mk
 
 override_dh_python2:
 	dh_python2 --no-guessing-deps --depends=pyOpenSSL --recommends=miniupnpc
+
+override_dh_auto_clean:
+	make clean
 
 %:
 	dh $@ --with python2 --buildsystem=python_distutils
