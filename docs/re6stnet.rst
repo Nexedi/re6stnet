@@ -116,6 +116,8 @@ certificates, as follows: translate the significant part to hexadecimal
   openssl req -nodes -new -x509 -key ca.key -set_serial 0x120010db80042 \
               -days 365 -out ca.crt
 
+(see ``re6st-registry --help`` for examples to create key/dh files)
+
 The CA email will be used as sender for mails containing tokens.
 The registry can now be started::
 

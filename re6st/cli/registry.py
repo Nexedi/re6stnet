@@ -72,10 +72,13 @@ def main():
         help="Path to SQLite database file. It is automatically initialized"
              " if the file does not exist.")
     _('--dh',
-        help='File containing Diffie-Hellman parameters in .pem format')
+        help="File containing Diffie-Hellman parameters in .pem format."
+             " To generate them, you can use something like:\n"
+             "openssl dhparam -out dh2048.pem 2048")
     _('--ca', required=True, help=parser._ca_help)
     _('--key', required=True,
-            help="CA private key in .pem format.")
+            help="CA private key in .pem format. For example:\nopenssl"
+            " genpkey -out ca.key -algorithm rsa -pkeyopt rsa_keygen_bits:2048")
     _('--mailhost', required=True,
             help="SMTP host to send confirmation emails. For debugging"
                  " purpose, it can also be an absolute or existing path to"
