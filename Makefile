@@ -1,6 +1,7 @@
 DESTDIR = /
 PREFIX = /usr/local
 MANDIR = $(PREFIX)/share/man
+UNITDIR = /lib/systemd/system
 
 MANPAGELIST := $(patsubst %,docs/%,re6st-conf.1 re6st-registry.1 re6stnet.8)
 NM = /etc/NetworkManager/dispatcher.d/50re6stnet
@@ -12,7 +13,7 @@ all: $(MANPAGELIST)
 
 install: install-noinit
 	for x in daemon/*.service; \
-	do install -Dpm 0644 $$x $(DESTDIR)/lib/systemd/system/$${x##*/}; \
+	do install -Dpm 0644 $$x $(DESTDIR)$(UNITDIR)/$${x##*/}; \
 	done
 
 install-noinit: install-man

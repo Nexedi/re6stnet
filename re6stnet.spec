@@ -1,5 +1,6 @@
 %define _builddir %(pwd)
 %define ver %(python re6st/version.py)
+%define units re6stnet.service re6st-registry.service
 
 Summary:    resilient, scalable, IPv6 network application
 Name:       re6stnet
@@ -25,7 +26,7 @@ make
 
 %install
 set $RPM_BUILD_ROOT
-make install PREFIX=%_prefix MANDIR=%_mandir DESTDIR=$1
+make install PREFIX=%_prefix MANDIR=%_mandir DESTDIR=$1 %{?_unitdir:UNITDIR=%{_unitdir}}
 # Exclude man pages because they will be compressed.
 find $1 -mindepth 1 -path \*%_mandir -prune -o \
   -name re6st\* -prune -printf /%%P\\n > INSTALLED
@@ -39,18 +40,17 @@ rm -rf "$RPM_BUILD_ROOT" INSTALLED
 
 %post
 if [ $1 -eq 1 ]; then
-    /bin/systemctl enable re6stnet.service re6st-registry.service || :
+    /bin/systemctl preset %{units} || :
 fi >/dev/null 2>&1
 
 %preun
 if [ $1 -eq 0 ]; then
-    /bin/systemctl --no-reload disable re6stnet.service re6st-registry.service || :
-    /bin/systemctl stop re6stnet.service re6st-registry.service || :
+    /bin/systemctl --no-reload disable %{units} || :
+    /bin/systemctl stop %{units} || :
 fi >/dev/null 2>&1
 
 %postun
 /bin/systemctl daemon-reload >/dev/null 2>&1 || :
-if [ $1 -ge 1 ] ; then
-    # only try to restart the registry (doing same for re6stnet could be troublesome)
-    /bin/systemctl try-restart re6st-registry.service >/dev/null 2>&1 || :
+if [ $1 -ge 1 ]; then
+    /bin/systemctl try-restart %{units} >/dev/null 2>&1 || :
 fi
