@@ -2,12 +2,13 @@ Source: re6stnet
 Maintainer: Julien Muchembled <jm@nexedi.com>
 Section: net
 Priority: optional
-Build-Depends: python-setuptools (>= 0.6b3), python-all (>= 2.6.6-3), debhelper (>= 8), python-docutils | python3-docutils
+Build-Depends: debhelper (>= 8), python (>= 2.7), python-setuptools, python-docutils | python3-docutils
 Standards-Version: 3.9.1
+X-Python-Version: >= 2.7
 
 Package: re6stnet
 Architecture: all
-Depends: ${misc:Depends}, python (>= 2.6.6-3), python-pkg-resources, python-argparse, python-openssl (>= 0.13), openvpn (>= 2.3), babeld (= 1.6.2-nxd1), iproute2 | iproute, openssl
+Depends: ${misc:Depends}, python (>= 2.7), python-pkg-resources, python-openssl (>= 0.13), openvpn (>= 2.3), babeld (= 1.6.2-nxd1), iproute2 | iproute, openssl
 Recommends: ${python:Recommends}, logrotate
 Suggests: ndisc6
 Conflicts: re6st-node
