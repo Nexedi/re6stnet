@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python2
 import httplib, logging, os, socket, sys
 from BaseHTTPServer import BaseHTTPRequestHandler
 from SocketServer import ThreadingTCPServer

@@ -1,6 +1,7 @@
 """Resilient, Scalable, IPv6 Network
 """
-
+import os, stat
+from distutils.command.build_scripts import first_line_re
 from setuptools import setup, find_packages
 from setuptools.command import sdist as _sdist, build_py as _build_py
 from distutils import log
@@ -17,6 +18,19 @@ def copy_file(self, infile, outfile, *args, **kw):
                     if not x[0].startswith("_"):
                         f.write("%s = %r\n" % x)
         return outfile, 1
+    elif isinstance(self, build_py) and \
+         os.stat(infile).st_mode & stat.S_IEXEC:
+        # Adjust interpreter of OpenVPN hooks.
+        with open(infile) as src:
+            first_line = src.readline()
+            m = first_line_re.match(first_line)
+            if m and not self.dry_run:
+                log.info("copying and adjusting %s -> %s", infile, outfile)
+                executable = self.distribution.command_obj['build'].executable
+                with open(outfile, "wb") as dst:
+                    dst.write("#!%s%s\n" % (executable, m.group(1) or ''))
+                    dst.write(src.read())
+                return outfile, 1
     cls, = self.__class__.__bases__
     return cls.copy_file(self, infile, outfile, *args, **kw)
 

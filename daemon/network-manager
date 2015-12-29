@@ -1,4 +1,4 @@
-#!/usr/bin/python -S
+#!/usr/bin/python2 -S
 import errno, glob, os, signal, socket, subprocess, sys, time
 
 DAEMON = "re6stnet"

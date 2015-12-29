@@ -17,12 +17,14 @@ install: install-noinit
 	done
 
 install-noinit: install-man
+	install -Dp daemon/network-manager $(DESTDIR)$(NM)
 	set -e $(DESTDIR)$(PREFIX) /bin/re6stnet; [ -x $$1$$2 ] || \
-	python2.7 setup.py install --prefix=$(PREFIX) --root=$(DESTDIR); \
+	$(or $(PYTHON),python2) setup.py install \
+		--prefix=$(PREFIX) --root=$(DESTDIR); \
+	$(and $(PYTHON),sed -ri '1s:^#!\S+:#!$(PYTHON):' $(DESTDIR)$(NM);) \
 	install -d $$1/sbin; mv $$1$$2 $$1/sbin
 	install -Dpm 0644 daemon/README.conf $(DESTDIR)/etc/re6stnet/README
 	install -Dpm 0644 daemon/logrotate.conf $(DESTDIR)/etc/logrotate.d/re6stnet
-	install -Dp daemon/network-manager $(DESTDIR)$(NM)
 
 install-man: $(MANPAGELIST)
 	set -e; for x in $^; \

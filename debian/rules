@@ -15,5 +15,8 @@ override_dh_python2:
 override_dh_auto_clean:
 	make clean
 
+# Do not build twice ('setup.py install' builds automatically)
+override_dh_auto_build:
+
 %:
 	dh $@ --with python2 --buildsystem=python_distutils

@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python2
 import argparse, atexit, binascii, errno, hashlib
 import os, subprocess, sqlite3, sys, time
 from OpenSSL import crypto

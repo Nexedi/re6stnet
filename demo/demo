@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python2
 import math, nemu, os, re, signal, socket, subprocess, sys, time, weakref
 from collections import defaultdict
 IPTABLES = 'iptables'

@@ -1,5 +1,5 @@
 %define _builddir %(pwd)
-%define ver %(python re6st/version.py)
+%define ver %(python2 re6st/version.py)
 %define units re6stnet.service re6st-registry.service
 
 Summary:    resilient, scalable, IPv6 network application

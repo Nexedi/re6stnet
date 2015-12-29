@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python2
 import atexit, errno, logging, os, shutil, signal
 import socket, struct, subprocess, sys, time, threading
 from collections import deque
