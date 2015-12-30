@@ -7,7 +7,7 @@ ifdef VERSION
 define CHANGELOG
 $(PACKAGE) ($(VERSION)) nexedi; urgency=low
 
- -- $(shell git var GIT_COMMITTER_IDENT |sed 's/[^>]*$$//')  $(shell date -R)
+ -- $(shell git log -1 --pretty='%cN <%cE>  %cD')
 endef
 export CHANGELOG
 
