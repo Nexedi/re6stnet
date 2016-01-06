@@ -27,9 +27,13 @@ def copy_file(self, infile, outfile, *args, **kw):
             if m and not self.dry_run:
                 log.info("copying and adjusting %s -> %s", infile, outfile)
                 executable = self.distribution.command_obj['build'].executable
-                with open(outfile, "wb") as dst:
-                    dst.write("#!%s%s\n" % (executable, m.group(1) or ''))
-                    dst.write(src.read())
+                patched = "#!%s%s\n" % (executable, m.group(1) or '')
+                patched += src.read()
+                dst = os.open(outfile, os.O_CREAT | os.O_WRONLY | os.O_TRUNC)
+                try:
+                    os.write(dst, patched)
+                finally:
+                    os.close(dst)
                 return outfile, 1
     cls, = self.__class__.__bases__
     return cls.copy_file(self, infile, outfile, *args, **kw)
