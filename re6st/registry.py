@@ -29,6 +29,11 @@ from operator import itemgetter
 from OpenSSL import crypto
 from urllib import splittype, splithost, splitport, urlencode
 from . import ctl, tunnel, utils, version, x509
+import zope.interface
+from interface.registry_backend import IRegistryBackend
+from interface.registry_dispatcher import IRegistryDispatcher
+from interface.rpc_administration import IRPCAdministration
+from interface.rpc_manager import IRPCManager
 
 HMAC_HEADER = "Re6stHMAC"
 RENEW_PERIOD = 30 * 86400
@@ -42,6 +47,9 @@ def rpc(f):
 
 
 class RegistryServer(object):
+
+    zope.interface.implements(IRegistryBackend, IRegistryDispatcher,
+                              IRPCAdministration, IRPCManager)
 
     peers = 0, ()
     cert_duration = 365 * 86400
@@ -560,6 +568,8 @@ class RegistryServer(object):
 
 
 class RegistryClient(object):
+
+    zope.interface.implements(IRPCManager)
 
     _hmac = None
     user_agent = "re6stnet/" + version.version

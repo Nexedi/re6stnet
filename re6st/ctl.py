@@ -1,6 +1,8 @@
 import logging, socket, struct
 from collections import namedtuple
 from . import utils
+import zope.interface
+from interface.routing_protocol import IRoutingProtocol
 
 uint16 = struct.Struct("!H")
 header = struct.Struct("!HI")
@@ -183,6 +185,8 @@ class ConnectionClosed(BabelException):
 
 
 class Babel(object):
+
+    zope.interface.implements(IRoutingProtocol)
 
     _decode = None
 

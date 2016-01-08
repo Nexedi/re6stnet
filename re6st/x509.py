@@ -4,6 +4,9 @@ from collections import deque
 from datetime import datetime
 from OpenSSL import crypto
 from . import utils
+import zope.interface
+from interface.identity import IIdentity
+from interface.peer import IPeer
 
 def newHmacSecret():
     x = datetime.utcnow()
@@ -85,6 +88,8 @@ class NewSessionError(Exception):
 
 
 class Cert(object):
+
+    zope.interface.implements(IIdentity)
 
     def __init__(self, ca, key, cert=None):
         self.ca_path = ca
@@ -185,6 +190,9 @@ class Peer(object):
     certificates with 4096-bit keys. A weak algorithm is ok as long as there
     is no accidental collision. So SHA-1 looks fine.
     """
+
+    zope.interface.implements(IPeer)
+
     _hello = _last = 0
     _key = newHmacSecret()
     serial = None

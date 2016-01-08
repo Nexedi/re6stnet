@@ -1,8 +1,12 @@
 import json, logging, os, sqlite3, socket, subprocess, time, zlib
 from .registry import RegistryClient
 from . import utils, version, x509
+import zope.interface
+from interface.cache import ICache
 
 class Cache(object):
+
+    zope.interface.implements(ICache)
 
     crl = ()
 

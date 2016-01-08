@@ -3,6 +3,11 @@ from collections import defaultdict, deque
 from bisect import bisect, insort
 from OpenSSL import crypto
 from . import ctl, plib, utils, version, x509
+import zope.interface
+from interface.tunnel_connection import IConnection
+from interface.tunnel_killer import ITunnelKiller
+from interface.base_tunnel_manager import IBaseTunnelManager
+from interface.tunnel_manager import ITunnelManager
 
 PORT = 326
 
@@ -38,6 +43,8 @@ class MultiGatewayManager(dict):
                 pass
 
 class Connection(object):
+
+    zope.interface.implements(IConnection)
 
     _retry = 0
     serial = None
@@ -111,6 +118,8 @@ class Connection(object):
 
 class TunnelKiller(object):
 
+    zope.interface.implements(ITunnelKiller)
+
     state = None
 
     def __init__(self, peer, tunnel_manager, client=False):
@@ -164,6 +173,8 @@ class TunnelKiller(object):
 
 
 class BaseTunnelManager(object):
+
+    zope.interface.implements(IBaseTunnelManager)
 
     # TODO: To minimize downtime when network parameters change, we should do
     #       our best to not restart any process. Ideally, this list should be
@@ -478,6 +489,8 @@ class BaseTunnelManager(object):
 
 
 class TunnelManager(BaseTunnelManager):
+
+    zope.interface.implements(ITunnelManager)
 
     NEED_RESTART = BaseTunnelManager.NEED_RESTART.union((
         'client_count', 'max_clients', 'tunnel_refresh'))
