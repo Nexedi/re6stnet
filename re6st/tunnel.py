@@ -808,6 +808,12 @@ class TunnelManager(BaseTunnelManager):
                 self._address[family] = utils.dump_address(address)
 
     def _newVersion(self):
+        # BUG: In the case of a LAN without any node using TunnelManager
+        #      (i.e. no creation/destruction of tunnels) and at least one
+        #      connected to outside with --client, the new version is not
+        #      propagated. This first loop should be moved to the base class,
+        #      which would query Babel for neighbours only on this event,
+        #      and not periodically like TunnelManager.
         for prefix in self.ctl.neighbours:
             if prefix:
                 peer = self._getPeer(prefix)
