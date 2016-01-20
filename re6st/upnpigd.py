@@ -14,12 +14,20 @@ class Forwarder(object):
 
     next_refresh = 0
     _next_retry = -1
-    _next_port = random.randrange(0, 8192)
+    _lcg_n = 0
 
     @classmethod
     def _getExternalPort(cls):
-        port = cls._next_port = (cls._next_port + 1) % 8192
-        return 32768 + port
+        # Since _refresh() does not test all ports in a row, we prefer to
+        # return random ports to maximize the chance to find a free port.
+        # A linear congruential generator should be random enough, without
+        # wasting memory/cpu by keeping a full 'shuffle'd list of integers.
+        n = cls._lcg_n
+        if not n:
+            cls._lcg_a = 1 + 4 * random.randrange(0, 2048)
+            cls._lcg_c = 1 + 2 * random.randrange(0, 4096)
+        n = cls._lcg_n = (n * cls._lcg_a + cls._lcg_c) % 8192
+        return 32768 + n
 
     def __init__(self, description):
         self._description = description
@@ -75,13 +83,18 @@ class Forwarder(object):
             self.clear()
 
     def _refresh(self):
-        force = self.next_refresh < time.time()
+        t = time.time()
+        force = self.next_refresh < t
         if force:
-            self.next_refresh = time.time() + 500
+            self.next_refresh = t + 500
             logging.debug('Refreshing port forwarding')
         ip = self.externalipaddress()
         lanaddr = self._u.lanaddr
-        retry = 8191
+        # It's too expensive (CPU/network) to try a full range every minute
+        # when the router really has no free port. Or with slow routers, it
+        # can take more than 15 minutes. So let's use some saner limits:
+        t += 1
+        retry = 15
         for r in self._rules:
             local, proto, port = r
             if port and not force:
@@ -90,7 +103,7 @@ class Forwarder(object):
             args = proto.upper(), lanaddr, local, desc, ''
             while True:
                 if port is None:
-                    if not retry:
+                    if not retry or t < time.time():
                         raise UPnPException('No free port to redirect %s'
                                             % desc)
                     retry -= 1
