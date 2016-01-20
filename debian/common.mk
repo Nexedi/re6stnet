@@ -29,7 +29,6 @@ override_dh_installinit:
 	cd $$CONFDIR; $$DAEMON @$$NAME.conf --test "main_interface != '\'lo\''" ||\
 	case "$$1" in start) exit 0;; restart|force-reload) set stop;; esac\
 	' <debian/init.d >$(INIT)/re6stnet
-# First install *.service then update scripts.
-	for x in $(INIT)/*; do set dh_installinit --name=$${x##*/} && \
-		chmod +x $$x && "$$@" --noscripts && "$$@" --onlyscripts; \
+	for x in $(INIT)/*; \
+	do chmod +x $$x && dh_installinit --onlyscripts --name=$${x##*/}; \
 	done
