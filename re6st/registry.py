@@ -27,7 +27,7 @@ from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
 from email.mime.text import MIMEText
 from operator import itemgetter
 from OpenSSL import crypto
-from urllib import splittype, splithost, splitport, urlencode
+from urllib import splittype, splithost, unquote, urlencode
 from . import ctl, tunnel, utils, version, x509
 
 HMAC_HEADER = "Re6stHMAC"
@@ -569,10 +569,9 @@ class RegistryClient(object):
         self.auto_close = auto_close
         scheme, host = splittype(url)
         host, path = splithost(host)
-        host, port = splitport(host)
         self._conn = dict(http=httplib.HTTPConnection,
                           https=httplib.HTTPSConnection,
-                          )[scheme](host, port, timeout=60)
+                          )[scheme](unquote(host), timeout=60)
         self._path = path.rstrip('/')
 
     def __getattr__(self, name):
