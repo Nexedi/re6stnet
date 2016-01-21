@@ -72,20 +72,11 @@ class RegistryServer(object):
                 "email TEXT",
                 "cert TEXT"):
             self.db.execute("INSERT INTO cert VALUES ('',null,null)")
-        if utils.sqliteCreateTable(self.db, "crl",
+        utils.sqliteCreateTable(self.db, "crl",
                 "serial INTEGER PRIMARY KEY NOT NULL",
                 # Expiration date of revoked certificate.
                 # TODO: purge rows with dates in the past.
-                "date INTEGER NOT NULL"):
-            # Revoke certificates produced by previous version.
-            # They all have serial 0.
-            try:
-                date = max(x509.notAfter(x[0]) for x in self.iterCert())
-            except ValueError:
-                pass
-            else:
-                if time.time() < date:
-                    self.db.execute("INSERT INTO crl VALUES (0,?)", (date,))
+                "date INTEGER NOT NULL")
 
         self.cert = x509.Cert(self.config.ca, self.config.key)
         # Get vpn network prefix
