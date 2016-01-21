@@ -26,7 +26,7 @@ override_dh_installinit:
 	sed 's/#NAME#/re6st-registry/; s/#DEPENDS#//; s,#DAEMON_DIR#,/usr/bin,' \
 		<debian/init.d >$(INIT)/re6st-registry
 	sed 's/#NAME#/re6stnet/; s/#DEPENDS#/re6st-registry/; s,#DAEMON_DIR#,/usr/sbin,; /^case/i\
-	cd $$CONFDIR; $$DAEMON @$$NAME.conf --test "main_interface != '\'lo\''" ||\
+	cd $$CONFDIR; PYTHONDONTWRITEBYTECODE=1 $$DAEMON @$$NAME.conf --test "main_interface != '\'lo\''" ||\
 	case "$$1" in start) exit 0;; restart|force-reload) set stop;; esac\
 	' <debian/init.d >$(INIT)/re6stnet
 	for x in $(INIT)/*; \
