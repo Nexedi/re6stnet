@@ -71,7 +71,7 @@ def main():
     _('--db', default='/var/lib/re6stnet/registry.db',
         help="Path to SQLite database file. It is automatically initialized"
              " if the file does not exist.")
-    _('--dh',
+    _('--dh', required=True,
         help="File containing Diffie-Hellman parameters in .pem format."
              " To generate them, you can use something like:\n"
              "openssl dhparam -out dh2048.pem 2048")

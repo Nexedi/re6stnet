@@ -1,4 +1,4 @@
-import json, logging, os, sqlite3, socket, subprocess, time, zlib
+import json, logging, os, sqlite3, socket, subprocess, sys, time, zlib
 from .registry import RegistryClient
 from . import utils, version, x509
 
@@ -129,18 +129,25 @@ class Cache(object):
                             " you should update.")
 
     def getDh(self, path):
+        # We'd like to do a full check here but
+        #   from OpenSSL import SSL
+        #   SSL.Context(SSL.TLSv1_METHOD).load_tmp_dh(path)
+        # segfaults if file is corrupted.
         if not os.path.exists(path):
             retry = 1
             while True:
                 try:
                     dh = self._registry.getDh(self._prefix)
-                    break
-                except socket.error, e:
-                    logging.warning(
-                        "Failed to get DH parameters from the registry."
-                        " Will retry in %s seconds", retry, exc_info=1)
-                    time.sleep(retry)
-                    retry = min(60, retry * 2)
+                    if dh:
+                        break
+                    e = None
+                except socket.error:
+                    e = sys.exc_info()
+                logging.warning(
+                    "Failed to get DH parameters from the registry."
+                    " Will retry in %s seconds", retry, exc_info=e)
+                time.sleep(retry)
+                retry = min(60, retry * 2)
             with open(path, "wb") as f:
                 f.write(dh)
 
