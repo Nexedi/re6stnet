@@ -72,8 +72,8 @@ setup(
     license = 'GPL 2+',
     platforms = ["any"],
     classifiers=classifiers.splitlines(),
-    long_description = ".. contents::\n\n" + open('README').read()
-                     + "\n" + open('CHANGES').read() + git_rev,
+    long_description = ".. contents::\n\n" + open('README.rst').read()
+                     + "\n" + open('CHANGES.rst').read() + git_rev,
     packages = find_packages(),
     entry_points = {
         'console_scripts': [
