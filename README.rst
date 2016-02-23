@@ -6,7 +6,7 @@
 Resilient, Scalable, IPv6 Network application
 ---------------------------------------------
 
-:Author: Julien Muchembled <jm@nexedi.com>
+:Contact: Julien Muchembled <jm@nexedi.com>
 
 Overview
 ========
