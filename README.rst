@@ -6,7 +6,7 @@
 Resilient, Scalable, IPv6 Network application
 ---------------------------------------------
 
-:Author: Nexedi <re6stnet@erp5.org>
+:Author: Julien Muchembled <jm@nexedi.com>
 
 Overview
 ========
@@ -23,12 +23,15 @@ re6stnet can be used to:
 - create large networks
 - give ipv6 addresses to machines with only ipv4 available
 
+Building an ipv4 network is also supported if you have software that does not
+support ipv6.
+
 HOW IT WORKS
 ============
 
 A re6stnet network consists of at least one server (re6st-registry) and many
 nodes (re6stnet). The server is only used to deliver certificates for secure
-authentification in establishing tunnels, and to bootstrap new nodes.
+authentication in establishing tunnels, and to bootstrap new nodes.
 re6stnet can detect and take into account nodes present on the local network.
 
 Resilience
@@ -41,38 +44,38 @@ connected is very low for big enough networks (more than a hundred nodes).
 Scalability
 -----------
 
-Since each node has very few data about the network, re6stnet is easily
-scalable to tens of thousand of nodes
+Since nodes don't need to know the whole graph of the network, re6stnet is
+easily scalable to tens of thousand of nodes.
 
 Requirements
 ============
 
 - Python 2.6 or 2.7
 - OpenSSL binary and development libraries
-- OpenVPN
+- OpenVPN >= 2.3
 - Babel_ (with Nexedi patches)
 - python-miniupnpc for UPnP support (optional)
-- for the demo: miniupnpd_, Graphviz, Screen, Nemu_
+- for the demo: miniupnpd_, Graphviz, Screen_, Nemu_
 
 See also `setup.py` for Python dependencies.
 
-.. _Babel: http://git.erp5.org/gitweb/babeld.git
-.. _Nemu: http://code.google.com/p/nemu/
+.. _Babel: https://lab.nexedi.com/nexedi/babeld
+.. _Nemu: https://github.com/thetincho/nemu
 .. _miniupnpd: http://miniupnp.free.fr/
+.. _Screen: http://savannah.gnu.org/projects/screen
 
 Installation
 ============
 
-re6stnet is distributed as a Python egg, and is also packaged for DEB & RPM
-based distributions:
+| Official packaging is implemented at
+|   https://lab.nexedi.com/nexedi/slapos.package/tree/master/obs/re6st
+| and packages are built for many Linux distributions at
+|   https://build.opensuse.org/package/show/home:VIFIBnexedi/Re6stnet
 
-See `re6st-registry` to set up a re6st network
-and `re6st-conf` to join an existing network.
+| re6stnet is also distributed as a Python egg:
+|   https://pypi.python.org/pypi/re6stnet
 
-On Debian Squeeze, you will have to install `babeld` package from Wheezy.
+Usage
+=====
 
-In order to build DEB snapshot package whose version is derived from current
-Git revision, the `debian/changelog` file must be generated automatically,
-that's why you can't use `dpkg-buildpackage` directly: run ``debian/rules``
-instead. RPM does not have this limitation: do `rpmbuild -bb re6stnet.spec``
-as usual.
+See ``re6stnet``\ (8) man page.

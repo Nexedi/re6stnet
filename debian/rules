@@ -4,6 +4,10 @@
 
 VERSION = $(shell python re6st/version.py)
 
+# In order to build DEB snapshot package whose version is derived from current
+# Git revision, the `debian/changelog` file must be generated automatically,
+# that's why you can't use `dpkg-buildpackage` directly: run `debian/rules`
+# instead.
 build-package: debian/changelog
 	dpkg-buildpackage -us -uc -b
 
