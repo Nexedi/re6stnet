@@ -306,13 +306,14 @@ if len(sys.argv) > 1:
 
     class Handler(SimpleHTTPServer.SimpleHTTPRequestHandler):
 
-        _path_match = re.compile('/(.+)\.html$').match
+        _path_match = re.compile('/(.+)\.(html|svg)$').match
         pages = 'ipv6', 'ipv4', 'tunnels'
 
         def do_GET(self):
             svg = None
             try:
-                page = self.pages.index(self._path_match(self.path).group(1))
+                name, ext = self._path_match(self.path).groups()
+                page = self.pages.index(name)
             except AttributeError, ValueError:
                 if self.path == '/':
                     self.send_response(302)
@@ -322,7 +323,7 @@ if len(sys.argv) > 1:
                     self.send_error(404)
                 return
             if page < 2:
-                svg = route_svg(page)
+                body = route_svg(page)
             else:
                 gv = registry.Popen(('python', '-c', r"""if 1:
                     import math, json
@@ -349,22 +350,38 @@ if len(sys.argv) > 1:
                     print '}'
                 """), stdout=subprocess.PIPE, cwd="..").communicate()[0]
                 if gv:
-                    svg = subprocess.Popen(('neato', '-Tsvg'),
+                    body = subprocess.Popen(('neato', '-Tsvg'),
                         stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                         ).communicate(gv)[0]
-                if not svg:
+                if not body:
                     self.send_error(500)
                     return
-            mt = 'text/html'
-            body = """<html>
-<head><meta http-equiv="refresh" content="10"/></head>
-<body><span style="position: absolute">%s</span>
+            if ext == 'svg':
+                mt = 'image/svg+xml'
+            else:
+                mt = 'text/html'
+                body = """<html>
+<head><script>function refresh() {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', '%s.svg', true);
+    xhr.addEventListener("load", function(e) {
+        if (e.target.status == 200)
+            document.getElementsByTagName("svg")[0].outerHTML =
+                e.target.responseXML.documentElement.outerHTML;
+    });
+    xhr.addEventListener("error", function(e) {
+            clearTimeout(refresh_timer);
+    });
+    xhr.send();
+}</script></head>
+<body onload="refresh_timer = setInterval(refresh, 10000)">
+<span style="position: absolute">%s</span>
 %s
 </body>
-</html>""" % (' '.join(x if i == page else
+</html>""" % (name, ' '.join(x if i == page else
                        '<a href="%s.html">%s</a>' % (x, x)
                        for i, x in enumerate(self.pages)),
-              svg[svg.find('<svg'):])
+                  body[body.find('<svg'):])
             self.send_response(200)
             self.send_header('Content-Length', len(body))
             self.send_header('Content-type', mt + '; charset=utf-8')
