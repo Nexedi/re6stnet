@@ -266,7 +266,7 @@ def main():
                 remote_gateway, config.disable_proto, config.neighbour)
             config.babel_args += tunnel_manager.new_iface_list
         else:
-            tunnel_manager = tunnel.BaseTunnelManager(cache, cert)
+            tunnel_manager = tunnel.BaseTunnelManager(cache, cert, address)
         cleanup.append(tunnel_manager.sock.close)
 
         try:
