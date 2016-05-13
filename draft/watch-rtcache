@@ -1,0 +1,102 @@
+#!/usr/bin/python
+import bisect, smtplib, socket, sqlite3, struct, subprocess, sys
+from email.mime.text import MIMEText
+from email.utils import formatdate
+
+net = '2001:67c:1254:'
+
+def binFromIp(ip):
+    ip = socket.inet_pton(socket.AF_INET6, ip)
+    ip1, ip2 = struct.unpack('>QQ', ip)
+    return bin(ip1)[2:].rjust(64, '0') + bin(ip2)[2:].rjust(64, '0')
+
+def ipFromBin(ip):
+    ip += '0' * (128 - len(ip))
+    return socket.inet_ntop(socket.AF_INET6,
+        struct.pack('>QQ', int(ip[:64], 2), int(ip[64:], 2)))
+
+def ip6route(*args):
+  r = {}
+  for route in subprocess.check_output(('ip', '-6', '-o', 'r') + args
+                                       ).splitlines():
+    route = route.split()
+    unreachable = route[0] == 'unreachable'
+    dst = route[unreachable]
+    if dst.startswith(net):
+      try:
+        dst, n = dst.split('/')
+      except ValueError:
+        n = 128
+      r[binFromIp(dst)[:int(n)]] = None \
+        if unreachable else (route[2], route[4])
+  return sorted(r.iteritems())
+
+def lookup(r, dst):
+  i = bisect.bisect(r, (dst,))
+  if i == len(r) or dst < r[i][0]:
+    i -= 1
+  if dst.startswith(r[i][0]):
+    return r[i][1]
+
+def via_str(via):
+  return 'unreachable' if via is None else '%s (%s)' % via
+
+class Invalid(dict):
+
+  def __init__(self):
+    before = ip6route()
+    cache = ip6route('l', 'cached')
+    after = ip6route()
+    for dst, via in cache:
+      expected = lookup(before, dst)
+      if expected != via != lookup(after, dst):
+        self[ipFromBin(dst)] = expected, via
+
+  def __str__(self):
+    return "\n".join(
+      "%s: expected %s, got %s" % (ip, via_str(expected), via_str(via))
+      for ip, (expected, via) in sorted(self.iteritems()))
+
+if __name__ == "__main__":
+  if len(sys.argv) > 1:
+    from time import time, sleep
+    db, smtp, to = sys.argv[1:]
+    db = sqlite3.connect(db)
+    db.execute("CREATE TABLE IF NOT EXISTS invalid (ip, start, end)")
+    host = socket.gethostname()
+    t = 0
+    while 1:
+      now = time()
+      t += 60
+      if now < t:
+        sleep(t - now)
+        now = time()
+      else:
+        t = now
+      invalid = Invalid()
+      with db:
+        for ip, in db.execute("SELECT ip FROM invalid WHERE end IS NULL"):
+          try:
+            del invalid[ip]
+          except KeyError:
+            db.execute("UPDATE invalid SET end=? WHERE ip=? and end IS NULL",
+                       (int(now), ip))
+        if not invalid:
+          continue
+        db.executemany("INSERT INTO invalid VALUES (?, ?, NULL)", (
+          (ip, int(now)) for ip in invalid))
+      msg = MIMEText(str(invalid))
+      msg['Subject'] =  "%s invalid routes in cache" % len(invalid)
+      msg['From'] = host
+      msg['Date'] = formatdate(now)
+      try:
+        s = smtplib.SMTP(smtp)
+        s.sendmail(None, to, msg.as_string())
+        s.close()
+      except socket.error:
+        pass
+
+  else:
+    invalid = Invalid()
+    if invalid:
+      print(invalid)
