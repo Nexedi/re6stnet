@@ -32,7 +32,7 @@ if dirty:
 # they are intended to the network admin.
 # Only 'protocol' is important and it must be increased whenever they would be
 # a wish to force an update of nodes.
-protocol = 1
+protocol = 2
 min_protocol = 1
 
 if __name__ == "__main__":
