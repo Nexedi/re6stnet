@@ -200,9 +200,19 @@ class BaseTunnelManager(object):
         self._peers = [p]
         self._timeouts = [(p.stop_date, self.invalidatePeers)]
 
+        # Only to check routing cache. Should go back to
+        # TunnelManager when we don't need to check it anymore.
+        self._next_refresh = time.time()
+
     def select(self, r, w, t):
         r[self.sock] = self.handlePeerEvent
         t += self._timeouts
+        if self._next_refresh: # same comment as in __init__
+            t.append((self._next_refresh, self.refresh))
+
+    def refresh(self):
+        self._next_refresh = time.time() + 5
+        self.checkRoutingCache()
 
     def selectTimeout(self, next, callback, force=True):
         t = self._timeouts
@@ -402,6 +412,10 @@ class BaseTunnelManager(object):
                     ' %s/%s' % (int(x, 2), len(x))
                     for x in (self._connection_dict, self._served)
                     for x in x)
+        elif code == 7:
+            # XXX: Quick'n dirty way to log in a common place.
+            if peer and self._prefix == self.cache.registry_prefix:
+                logging.info("%s/%s: %s", int(peer, 2), len(peer), msg)
 
     @staticmethod
     def _restart():
@@ -476,6 +490,41 @@ class BaseTunnelManager(object):
             if self._gateway_manager is not None:
                 self._gateway_manager.remove(trusted_ip)
 
+    def checkRoutingCache(self):
+        # WRKD: Check that routes in cache match the routing table.
+        #       There were changes in Linux 4.2 to not cache routes uselessly
+        #       and the bug may have been fixed at the same time. At least,
+        #       it happens less often than with previous versions.
+        #       babeld has a distinct issue (no atomic update of route) that
+        #       increases the probability of invalid entries in the cache:
+        #        https://lists.alioth.debian.org/pipermail/babel-users/2016-June/002547.html
+        with open('/proc/net/ipv6_route', "r", 4096) as f:
+            routing_table = f.read()
+        cache = []
+        other = []
+        n = self._network
+        a = len(n)
+        for line in routing_table.splitlines():
+            line = line.split()
+            dst = bin(int(line[0], 16))[2:].rjust(128, '0')
+            if dst.startswith(n):
+                flags = int(line[8], 16)
+                if not (flags & 0x80000000): # RTF_LOCAL
+                    (cache if flags & 0x1000000 # RTF_CACHE
+                     else other).append((dst[a:int(line[1], 16)], line[4]))
+        other.sort()
+        for dst, via in cache:
+            i = bisect(other, (dst,))
+            if i == len(other) or dst < other[i][0]:
+                i -= 1
+            if dst.startswith(other[i][0]) and via != other[i][1]:
+                msg = "Invalid route in cache for " + utils.ipFromBin(n + dst)
+                logging.error("%s. Flushing...", msg)
+                subprocess.call(("ip", "-6", "route", "flush", "cached"))
+                self.sendto(self.cache.registry_prefix,
+                    '\7%s (%s)' % (msg, os.uname()[2]))
+                break
+
 
 class TunnelManager(BaseTunnelManager):
 
@@ -502,7 +551,6 @@ class TunnelManager(BaseTunnelManager):
         self._neighbour_set = set(map(utils.binFromSubnet, neighbour_list))
         self._killing = {}
 
-        self._next_refresh = time.time()
         self.resetTunnelRefresh()
 
         self._client_count = client_count
@@ -553,8 +601,6 @@ class TunnelManager(BaseTunnelManager):
     def select(self, r, w, t):
         super(TunnelManager, self).select(r, w, t)
         r[self._read_sock] = self.handleClientEvent
-        if self._next_refresh:
-            t.append((self._next_refresh, self.refresh))
         self.ctl.select(r, w, t)
 
     def refresh(self):
@@ -567,6 +613,7 @@ class TunnelManager(BaseTunnelManager):
             self.ctl.request_dump() # calls babel_dump immediately at startup
         else:
             self._next_refresh = time.time() + 5
+        self.checkRoutingCache()
 
     def babel_dump(self):
         t = time.time()
