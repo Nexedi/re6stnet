@@ -499,7 +499,15 @@ class BaseTunnelManager(object):
         #       increases the probability of invalid entries in the cache:
         #        https://lists.alioth.debian.org/pipermail/babel-users/2016-June/002547.html
         with open('/proc/net/ipv6_route', "r", 4096) as f:
-            routing_table = f.read()
+            try:
+                routing_table = f.read()
+            except IOError, e:
+                # ???: If someone can explain why the kernel sometimes fails
+                #      even when there's a lot of free memory.
+                if e.errno != errno.ENOMEM:
+                    raise
+                logging.error("Ignoring ENOMEM when checking routing cache")
+                return
         cache = []
         other = []
         n = self._network
