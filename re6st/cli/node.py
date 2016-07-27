@@ -56,6 +56,11 @@ def getConfig():
         help="Exit after configuration parsing. Status code is the"
              " result of the given Python expression. For example:\n"
              "  main_interface != 'eth0'")
+    _('--console', metavar='SOCK',
+        help="Socket path to Python console that can be used to inspect or"
+             " patch this process. Use:\n"
+             "   socat - UNIX:<SOCK>\n"
+             "to access it.")
 
     _ = parser.add_argument_group('routing').add_argument
     _('-B', dest='babel_args', metavar='ARG', action='append', default=[],
@@ -389,10 +394,23 @@ def main():
                                   tunnel_manager.killAll)
             except AttributeError:
                 pass
+            if config.console:
+                from re6st.debug import Console
+                def console(socket, frame=sys._getframe()):
+                    try:
+                        import pdb; pdb.Pdb(stdin=socket,
+                                            stdout=socket).set_trace()
+                        frame.f_locals # main() locals
+                    finally:
+                        socket.close()
+                console = Console(config.console, console)
+                cleanup.append(console.close)
 
             # main loop
             exit.release()
             select_list = [forwarder.select] if forwarder else []
+            if config.console:
+                select_list.append(console.select)
             select_list += tunnel_manager.select, utils.select
             while True:
                 args = R.copy(), {}, []
