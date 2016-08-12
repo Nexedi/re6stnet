@@ -82,6 +82,8 @@ References
 |   http://www.j-io.org/P-ViFiB-Resilient.Overlay.Network/Base_download
 | GrandeNet - The Internet on Steroids
 |   https://www.nexedi.com/blog/NXD-Document.Blog.Grandenet.Internet.On.Steroids
+| Grandenet success case
+|  https://www.nexedi.com/success/erp5-GKR.Success.Case
 
 Usage
 =====
