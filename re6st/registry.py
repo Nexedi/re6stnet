@@ -41,6 +41,10 @@ def rpc(f):
     return f
 
 
+class HTTPError(Exception):
+    pass
+
+
 class RegistryServer(object):
 
     peers = 0, ()
@@ -251,6 +255,8 @@ class RegistryServer(object):
                 session[:] = hashlib.sha1(key).digest(),
         try:
             result = m(**kw)
+        except HTTPError, e:
+            return request.send_error(*e.args)
         except:
             logging.warning(request.requestline, exc_info=1)
             return request.send_error(httplib.INTERNAL_SERVER_ERROR)
@@ -285,11 +291,14 @@ class RegistryServer(object):
 
     @rpc
     def requestToken(self, email):
+        prefix_len = self.config.prefix_length
+        if not prefix_len:
+            raise HTTPError(httplib.FORBIDDEN)
         with self.lock:
             while True:
                 # Generating token
                 token = ''.join(random.sample(string.ascii_lowercase, 8))
-                args = token, email, self.config.prefix_length, int(time.time())
+                args = token, email, prefix_len, int(time.time())
                 # Updating database
                 try:
                     self.db.execute("INSERT INTO token VALUES (?,?,?,?)", args)
@@ -342,6 +351,8 @@ class RegistryServer(object):
         with self.lock:
             with self.db:
                 if token:
+                    if not self.config.prefix_length:
+                        raise HTTPError(httplib.FORBIDDEN)
                     try:
                         token, email, prefix_len, _ = self.db.execute(
                             "SELECT * FROM token WHERE token = ?",
@@ -353,7 +364,7 @@ class RegistryServer(object):
                 else:
                     prefix_len = self.config.anonymous_prefix_length
                     if not prefix_len:
-                        return
+                        raise HTTPError(httplib.FORBIDDEN)
                     email = None
                 prefix = self.newPrefix(prefix_len)
                 self.db.execute("UPDATE cert SET email = ? WHERE prefix = ?",
@@ -599,15 +610,23 @@ class RegistryClient(object):
                     self._conn.endheaders()
                     response = self._conn.getresponse()
                     body = response.read()
-                    if response.status in (httplib.OK, httplib.NO_CONTENT) and (
-                          not client_prefix or
-                          hmac.HMAC(key, body, hashlib.sha1).digest() ==
-                          base64.b64decode(response.msg[HMAC_HEADER])):
-                        if self.auto_close and name != 'hello':
-                            self._conn.close()
-                        return body
+                    if response.status in (httplib.OK, httplib.NO_CONTENT):
+                        if (not client_prefix or
+                                hmac.HMAC(key, body, hashlib.sha1).digest() ==
+                                base64.b64decode(response.msg[HMAC_HEADER])):
+                            if self.auto_close and name != 'hello':
+                                self._conn.close()
+                            return body
+                    elif response.status == httplib.FORBIDDEN:
+                        # XXX: We should improve error handling, while making
+                        #      sure re6st nodes don't crash on temporary errors.
+                        #      This is currently good enough for re6st-conf, to
+                        #      inform the user when registration is disabled.
+                        raise HTTPError(response.status, response.reason)
                     if client_prefix:
                         self._hmac = None
+            except HTTPError:
+                raise
             except Exception:
                 logging.info(url, exc_info=1)
             else:

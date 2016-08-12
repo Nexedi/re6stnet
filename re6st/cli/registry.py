@@ -84,10 +84,11 @@ def main():
                  " purpose, it can also be an absolute or existing path to"
                  " a mailbox file")
     _('--prefix-length', default=16, type=int,
-            help="Default length of allocated prefixes.")
+            help="Default length of allocated prefixes."
+                 " If 0, registration by email is disabled.")
     _('--anonymous-prefix-length', type=int,
             help="Length of allocated anonymous prefixes."
-                 " If 0 or unset, registration by email is required")
+                 " If 0 or unset, anonymous registration is disabled.")
     _('--ipv4', nargs=2, metavar=("IP/N", "PLEN"),
         help="Enable ipv4. Each node is assigned a subnet of length PLEN"
              " inside network IP/N.")
