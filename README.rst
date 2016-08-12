@@ -75,6 +75,14 @@ Installation
 | re6stnet is also distributed as a Python egg:
 |   https://pypi.python.org/pypi/re6stnet
 
+References
+==========
+
+| Building a resilient overlay network : Re6stnet
+|   http://www.j-io.org/discussion_thread_module/231/1/
+| GrandeNet - The Internet on Steroids
+|   https://www.nexedi.com/blog/NXD-Document.Blog.Grandenet.Internet.On.Steroids
+
 Usage
 =====
 
