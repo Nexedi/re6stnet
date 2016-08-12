@@ -84,6 +84,8 @@ References
 |   https://www.nexedi.com/blog/NXD-Document.Blog.Grandenet.Internet.On.Steroids
 | Grandenet success case
 |  https://www.nexedi.com/success/erp5-GKR.Success.Case
+| n-Order Re6st - Achieving Resiliency and Scaliblity
+|  https://www.nexedi.com/blog/NXD-Document.Blog.N.Order.Res6st.Resiliency.And.Scalability
 
 Usage
 =====
