@@ -79,7 +79,7 @@ References
 ==========
 
 | Building a resilient overlay network : Re6stnet
-|   http://www.j-io.org/discussion_thread_module/231/1/
+|   http://www.j-io.org/P-ViFiB-Resilient.Overlay.Network/Base_download
 | GrandeNet - The Internet on Steroids
 |   https://www.nexedi.com/blog/NXD-Document.Blog.Grandenet.Internet.On.Steroids
 
