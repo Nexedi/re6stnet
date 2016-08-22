@@ -57,7 +57,8 @@ class RegistryServer(object):
         self.sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
 
         # Database initializing
-        utils.makedirs(os.path.dirname(self.config.db))
+        db_dir = os.path.dirname(self.config.db)
+        db_dir and utils.makedirs(db_dir)
         self.db = sqlite3.connect(self.config.db, isolation_level=None,
                                                   check_same_thread=False)
         self.db.text_factory = str
