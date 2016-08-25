@@ -106,6 +106,10 @@ class Cert(object):
         return networkFromCa(self.ca)
 
     @property
+    def subject_serial(self):
+        return int(self.cert.get_subject().serialNumber)
+
+    @property
     def openvpn_args(self):
         return ('--ca', self.ca_path,
                 '--cert', self.cert_path,
@@ -196,6 +200,8 @@ class Peer(object):
     @property
     def connected(self):
         return self._last is None or time.time() < self._last + 60
+
+    subject_serial = Cert.subject_serial
 
     def __ne__(self, other):
         raise AssertionError

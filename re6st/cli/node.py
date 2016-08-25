@@ -271,7 +271,8 @@ def main():
                 remote_gateway, config.disable_proto, config.neighbour)
             config.babel_args += tunnel_manager.new_iface_list
         else:
-            tunnel_manager = tunnel.BaseTunnelManager(cache, cert, address)
+            tunnel_manager = tunnel.BaseTunnelManager(control_socket,
+                cache, cert, address)
         cleanup.append(tunnel_manager.sock.close)
 
         try:
@@ -279,7 +280,7 @@ def main():
 
             ipv4 = getattr(cache, 'ipv4', None)
             if ipv4:
-                serial = int(cert.cert.get_subject().serialNumber)
+                serial = cert.subject_serial
                 if cache.ipv4_sublen <= 16 and serial < 1 << cache.ipv4_sublen:
                     dot4 = lambda x: socket.inet_ntoa(struct.pack('!I', x))
                     ip4('route', 'unreachable', ipv4, 'proto', 'static')

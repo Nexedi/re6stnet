@@ -1,8 +1,9 @@
-import errno, logging, os, random, socket, subprocess, struct, time, weakref
+import errno, json, logging, os, random
+import socket, subprocess, struct, time, weakref
 from collections import defaultdict, deque
 from bisect import bisect, insort
 from OpenSSL import crypto
-from . import ctl, plib, utils, version, x509
+from . import ctl, plib, rina, utils, version, x509
 
 PORT = 326
 
@@ -172,8 +173,9 @@ class BaseTunnelManager(object):
                               'ipv4', 'ipv4_sublen'))
 
     _forward = None
+    _next_rina = True
 
-    def __init__(self, cache, cert, address=()):
+    def __init__(self, control_socket, cache, cert, address=()):
         self.cert = cert
         self._network = cert.network
         self._prefix = cert.prefix
@@ -200,6 +202,8 @@ class BaseTunnelManager(object):
         self._peers = [p]
         self._timeouts = [(p.stop_date, self.invalidatePeers)]
 
+        self.ctl = ctl.Babel(control_socket, weakref.proxy(self), self._network)
+
         # Only to check routing cache. Should go back to
         # TunnelManager when we don't need to check it anymore.
         self._next_refresh = time.time()
@@ -209,10 +213,18 @@ class BaseTunnelManager(object):
         t += self._timeouts
         if self._next_refresh: # same comment as in __init__
             t.append((self._next_refresh, self.refresh))
+        self.ctl.select(r, w, t)
 
     def refresh(self):
-        self._next_refresh = time.time() + 5
+        if self._next_rina and rina.update(self, False):
+            self._next_rina = False
+            self.ctl.request_dump()
+        self._next_refresh = time.time() + self.cache.hello
         self.checkRoutingCache()
+
+    def babel_dump(self):
+        rina.update(self, True)
+        self._next_rina = True
 
     def selectTimeout(self, next, callback, force=True):
         t = self._timeouts
@@ -403,7 +415,17 @@ class BaseTunnelManager(object):
                     if code == 3 and tunnel_killer.state == 'locked': # response
                         self._kill(peer)
         elif code == 4: # node information
-            if not msg:
+            if msg:
+                if not peer:
+                    return
+                try:
+                    ask, ver, protocol, rina_enabled = json.loads(msg)
+                except ValueError:
+                    ask = rina_enabled = False
+                rina.enabled(self, peer, rina_enabled)
+                if ask:
+                    return self._info(False)
+            else:
                 return version.version
         elif code == 5:
             # the registry wants to know the topology for debugging purpose
@@ -416,6 +438,16 @@ class BaseTunnelManager(object):
             # XXX: Quick'n dirty way to log in a common place.
             if peer and self._prefix == self.cache.registry_prefix:
                 logging.info("%s/%s: %s", int(peer, 2), len(peer), msg)
+
+    def askInfo(self, prefix):
+        return self.sendto(prefix, '\4' + self._info(True))
+
+    def _info(self, ask):
+        return json.dumps((ask,
+            version.version,
+            version.protocol,
+            rina.shim is not None,
+            ))
 
     @staticmethod
     def _restart():
@@ -542,8 +574,8 @@ class TunnelManager(BaseTunnelManager):
     def __init__(self, control_socket, cache, cert, openvpn_args,
                  timeout, client_count, iface_list, address, ip_changed,
                  remote_gateway, disable_proto, neighbour_list=()):
-        super(TunnelManager, self).__init__(cache, cert, address)
-        self.ctl = ctl.Babel(control_socket, weakref.proxy(self), self._network)
+        super(TunnelManager, self).__init__(control_socket,
+                                            cache, cert, address)
         self.ovpn_args = openvpn_args
         self.timeout = timeout
         self._read_sock, self.write_sock = socket.socketpair(
@@ -609,7 +641,6 @@ class TunnelManager(BaseTunnelManager):
     def select(self, r, w, t):
         super(TunnelManager, self).select(r, w, t)
         r[self._read_sock] = self.handleClientEvent
-        self.ctl.select(r, w, t)
 
     def refresh(self):
         logging.debug('Checking tunnels...')
@@ -651,6 +682,7 @@ class TunnelManager(BaseTunnelManager):
         #if remove and len(self._connecting) < len(self._free_iface_list):
         #    self._tuntap(self._free_iface_list.pop())
         self._next_refresh = time.time() + 5
+        rina.update(self, True)
 
     def _cleanDeads(self):
         disconnected = False
