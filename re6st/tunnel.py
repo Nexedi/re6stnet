@@ -372,7 +372,7 @@ class BaseTunnelManager(object):
                     self._makeTunnel(peer, msg)
             else:
                 return ';'.join(self._address.itervalues())
-        elif not code: # ver
+        elif not code: # network version
             if peer:
                 try:
                     if msg == self._version:
@@ -402,7 +402,7 @@ class BaseTunnelManager(object):
                 else:
                     if code == 3 and tunnel_killer.state == 'locked': # response
                         self._kill(peer)
-        elif code == 4:
+        elif code == 4: # node information
             if not msg:
                 return version.version
         elif code == 5:

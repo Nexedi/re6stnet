@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import calendar, hashlib, hmac, logging, os, struct, subprocess, threading, time
-from collections import deque
 from datetime import datetime
 from OpenSSL import crypto
 from . import utils
@@ -164,12 +163,12 @@ class Peer(object):
 
     hello0:    0, A
                1, fingerprint(B), A
-    hello:     2, X = E(B)(secret), S(A)(X)
-    !hello:    #, ver, type, value, HMAC(secret)(payload)
-               └──── payload ────┘
+    hello:     2, X = encrypt(B, secret), sign(A, X)
+    !hello:    #, type, value, hmac(secret, payload)
+               └── payload ──┘
 
     new secret > old secret
-    (concat timestamp with random bits)
+    (timestamp + random bits)
 
     Reject messages with # smaller or equal than previously processed.
 
