@@ -14,7 +14,8 @@ build-package: debian/changelog
 include debian/common.mk
 
 override_dh_python2:
-	dh_python2 --no-guessing-deps --depends=pyOpenSSL --recommends=miniupnpc
+	sed -i /^miniupnpc$$/d `find $(TMP)/usr -name requires.txt`
+	dh_python2 --recommends=miniupnpc
 
 override_dh_auto_clean:
 	make clean
