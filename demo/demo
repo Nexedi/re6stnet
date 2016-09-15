@@ -211,8 +211,9 @@ if 1:
             p.communicate(str(token[0]))
             os.remove(dh_path)
             os.remove(folder + '/ca.crt')
-        node.screen('./py re6stnet @%s/re6stnet.conf -v%u --registry %s %s'
-                    % (folder, VERBOSE, registry, args))
+        node.screen('./py re6stnet @%s/re6stnet.conf -v%u --registry %s'
+                    ' --console %s/run/console.sock %s' % (
+                      folder, VERBOSE, registry, folder, args))
     re6stnet(registry, 'registry', '--ip ' + REGISTRY, registry='http://localhost/')
     re6stnet(machine1, 'm1', '-I%s' % m1_if_0.name)
     re6stnet(machine2, 'm2', '--remote-gateway 10.1.1.1', prefix_len=80)
