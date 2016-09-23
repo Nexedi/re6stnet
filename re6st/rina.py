@@ -111,6 +111,7 @@ class Shim(object):
     def __init__(self, ipcp_id, dif):
         self.ipcp_id = ipcp_id
         self.dif = dif
+        self._asking_info = {}
         self._enabled = weakref.WeakValueDictionary()
 
     def _kernel(self, **kw):
@@ -131,7 +132,7 @@ class Shim(object):
                 len(ap), ap, len(ip), ip, len(port), port))
         self._enabled[prefix] = tm._getPeer(prefix)
 
-    def update(self, tm):
+    def init(self, tm):
         global resolve_thread
         if resolve_thread is None:
             s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -142,80 +143,79 @@ class Shim(object):
             resolve_thread.start()
         prefix = tm._prefix
         self._enabled[prefix] = tm.cert
-        self._asking_info = {prefix: float('inf')}
-        def update(tm):
-            ap = ap_name(tm._prefix)
-            name = ap + "-1--"
-            step = 0 # do never retry immediately
-            while 1:
-                normal_id = None
-                for ipcp in ipcm.iterIpcp():
-                    if ipcp[0] == self.ipcp_id:
-                        registered = name in ipcp[4]
-                    elif ipcp[1] == name:
-                        normal_id = ipcp[0]
-                        normal_status = ipcp[3]
-                if registered:
-                    break
-                if normal_id is None:
-                    if step or not ipcm("create-ipcp", ap, 1, "normal-ipc"):
+        self._asking_info[prefix] = float('inf')
+
+    def update(self, tm):
+        enabled = self._enabled
+        ap = ap_name(tm._prefix)
+        name = ap + "-1--"
+        step = 0 # do never retry immediately
+        while 1:
+            normal_id = None
+            for ipcp in ipcm.iterIpcp():
+                if ipcp[0] == self.ipcp_id:
+                    registered = ipcp[4]
+                elif ipcp[1] == name:
+                    normal_id = ipcp[0]
+                    normal_status = ipcp[3]
+                elif ipcp[1] in registered:
+                    if step or not ipcm("destroy-ipcp", ipcp[0]):
                         return
                     step = 1
-                elif normal_status == "INITIALIZED":
-                    if step > 1 or not ipcm("assign-to-dif", normal_id,
-                                            NORMAL_DIF, DEFAULT_DIF):
-                        return
-                    step = 2
-                elif normal_status.startswith("ASSIGNED TO DIF"):
-                    if step > 2 or not ipcm("register-at-dif",
-                                            normal_id, self.dif):
-                        return
-                    step = 3
-                else:
+            if name in registered:
+                break
+            if normal_id is None:
+                if step > 1 or not ipcm("create-ipcp", ap, 1, "normal-ipc"):
                     return
-            asking_info = self._asking_info
-            enabled = self._enabled
-            enrolled = set(ap_prefix(neigh[0].split('-', 1)[0])
-                for neigh in ipcm.iterNeigh(normal_id))
-            now = time.time()
-            for neigh_routes in tm.ctl.neighbours.itervalues():
-                for prefix in neigh_routes[1]:
-                    if not prefix or prefix in enrolled:
-                        continue
-                    if prefix in enabled:
-                        # Avoid enrollment to a neighbour
-                        # that does not know our address.
-                        if prefix not in asking_info:
-                            r = ipcm("enroll-to-dif", normal_id,
-                                     NORMAL_DIF, self.dif, ap_name(prefix), 1)
-                            if r and 'failed' in r[0]:
-                                del enabled[prefix]
-                            # Enrolling may take a while
-                            # so don't block for too long.
-                            if now + 1 < time.time():
-                                return
-                        continue
-                    if asking_info.get(prefix, 0) < now and tm.askInfo(prefix):
-                        self._enroll(tm, prefix)
-                        self._asking_info[prefix] = now + 60
-        ap = ap_name(prefix)
-        port = str(PORT)
-        self._kernel(hostname=utils.ipFromBin(tm._network + prefix, '1'),
-            expReg="1:%s:%s0:%s:%s" % (len(ap), ap, len(port), port))
-        self.update = update
-        update(tm)
+                step = 2
+            elif normal_status == "INITIALIZED":
+                if step > 2 or not ipcm("assign-to-dif", normal_id,
+                                        NORMAL_DIF, DEFAULT_DIF):
+                    return
+                step = 3
+            elif normal_status.startswith("ASSIGNED TO DIF"):
+                enabled.clear()
+                self.init(tm)
+                port = str(PORT)
+                self._kernel(
+                    hostname=utils.ipFromBin(tm._network + tm._prefix, '1'),
+                    expReg="1:%s:%s0:%s:%s" % (len(ap), ap, len(port), port))
+                if step > 3 or not ipcm("register-at-dif", normal_id, self.dif):
+                    return
+                step = 4
+            else:
+                return
+        asking_info = self._asking_info
+        enrolled = set(ap_prefix(neigh[0].split('-', 1)[0])
+            for neigh in ipcm.iterNeigh(normal_id))
+        now = time.time()
+        for neigh_routes in tm.ctl.neighbours.itervalues():
+            for prefix in neigh_routes[1]:
+                if not prefix or prefix in enrolled:
+                    continue
+                if prefix in enabled:
+                    # Avoid enrollment to a neighbour
+                    # that does not know our address.
+                    if prefix not in asking_info:
+                        r = ipcm("enroll-to-dif", normal_id,
+                                 NORMAL_DIF, self.dif, ap_name(prefix), 1)
+                        if r and 'failed' in r[0]:
+                            del enabled[prefix]
+                        # Enrolling may take a while
+                        # so don't block for too long.
+                        if now + 1 < time.time():
+                            return
+                elif asking_info.get(prefix, 0) < now and tm.askInfo(prefix):
+                    self._enroll(tm, prefix)
+                    asking_info[prefix] = now + 60
 
     def enabled(self, tm, prefix, enroll):
         logging.debug("RINA: enabled(%s, %s)", prefix, enroll)
-        try:
-            asking_info = self._asking_info
-        except AttributeError:
-            return
         if enroll:
-            asking_info.pop(prefix, None)
+            self._asking_info.pop(prefix, None)
             self._enroll(tm, prefix)
         else:
-            asking_info[prefix] = float('inf')
+            self._asking_info[prefix] = float('inf')
 
     @staticmethod
     def _resolve(sock):
@@ -287,9 +287,9 @@ if os.path.isdir("/sys/rina"):
                     return False
                 dif = sysfs_read(ipcp + "/dif")
                 if dif.endswith("///"):
-                    host_name = sysfs_read(ipcp + "/host_name")
-                    if not host_name:
+                    if shim is None:
                         shim = Shim(int(ipcp.rsplit("/", 1)[1]), dif[:-3])
+                        shim.init(tunnel_manager)
                     if route_dumped:
                         shim.update(tunnel_manager)
                     return True
