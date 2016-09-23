@@ -55,7 +55,7 @@ class ipcm(object):
                         logging.debug("%s", x)
                     return r
         except socket.error, e:
-            logging.info("%s", e)
+            logging.info("RINA: %s", e)
         del self._socket
 
     def iterIpcp(self):
@@ -295,7 +295,7 @@ if os.path.isdir("/sys/rina"):
                     return True
             shim = None
         except Exception, e:
-            logging.info("%s", e)
+            logging.info("RINA: %s", e)
         return False
 
 def enabled(*args):
@@ -303,4 +303,4 @@ def enabled(*args):
         try:
             shim.enabled(*args)
         except Exception, e:
-            logging.info("%s", e)
+            logging.info("RINA: %s", e)
