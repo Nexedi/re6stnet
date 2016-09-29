@@ -205,7 +205,8 @@ class Shim(object):
                         # so don't block for too long.
                         if now + 1 < time.time():
                             return
-                elif asking_info.get(prefix, 0) < now and tm.askInfo(prefix):
+                        continue
+                if asking_info.get(prefix, 0) < now and tm.askInfo(prefix):
                     self._enroll(tm, prefix)
                     asking_info[prefix] = now + 60
 
@@ -216,6 +217,7 @@ class Shim(object):
             self._enroll(tm, prefix)
         else:
             self._asking_info[prefix] = float('inf')
+            self._enabled.pop(prefix, None)
 
     @staticmethod
     def _resolve(sock):
