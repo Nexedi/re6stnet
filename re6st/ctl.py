@@ -206,7 +206,7 @@ class Babel(object):
             try:
                 s.connect(self.socket_path)
             except socket.error, e:
-                logging.debug("%s", e)
+                logging.debug("Can't connect to %r (%r)", self.socket_path, e)
                 return e
             s.send("\1")
             s.setblocking(0)
