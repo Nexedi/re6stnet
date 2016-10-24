@@ -26,6 +26,8 @@ re6stnet can be used to:
 Building an ipv4 network is also supported if you have software that does not
 support ipv6.
 
+How to pronounce `re6st`? Like `resist`.
+
 HOW IT WORKS
 ============
 
