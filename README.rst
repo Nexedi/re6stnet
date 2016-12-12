@@ -23,7 +23,7 @@ re6stnet can be used to:
 - create large networks
 - give ipv6 addresses to machines with only ipv4 available
 
-Building an ipv4 network is also supported if you have software that does not
+Building an ipv4 network is also supported if one has software that does not
 support ipv6.
 
 How to pronounce `re6st`? Like `resist`.
@@ -33,14 +33,14 @@ HOW IT WORKS
 
 A re6stnet network consists of at least one server (re6st-registry) and many
 nodes (re6stnet). The server is only used to deliver certificates for secure
-authentication in establishing tunnels, and to bootstrap new nodes.
+authentication of peers, and to bootstrap new nodes.
 re6stnet can detect and take into account nodes present on the local network.
 
 Resilience
 ----------
 re6stnet guarantees that if there exists a route between two machines,
 traffic will be correctly routed between these two machines.
-Even if the registry node is down, the probability that the network isn't
+Even if the registry node is down, the probability that the network is not
 connected is very low for big enough networks (more than a hundred nodes).
 
 Scalability
