@@ -239,12 +239,13 @@ class RegistryServer(object):
             self.timeout = not_after and not_after + GRACE_PERIOD
 
     def handle_request(self, request, method, kw,
-                       _localhost=('127.0.0.1', '::1')):
+                       _localhost=[]):
         m = getattr(self, method)
+        authorized_origin =  self.config.authorized_origin + list(_localhost)
         if hasattr(method, '_private'):
             x_forwarded_for = request.headers.get('X-Forwarded-For')
-            if request.client_address[0] not in _localhost or \
-               x_forwarded_for and x_forwarded_for not in _localhost:
+            if request.client_address[0] not in authorized_origin or \
+               x_forwarded_for and x_forwarded_for not in authorized_origin:
                 return request.send_error(httplib.FORBIDDEN)
         key = m.getcallargs(**kw).get('cn')
         if key:
