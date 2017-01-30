@@ -469,6 +469,9 @@ class RegistryServer(object):
         with open(self.config.dh) as f:
             return f.read()
 
+    def getNetworkBin(self):
+        return x509.networkFromCa(self.cert.ca)
+
     @rpc
     def getNetworkConfig(self, cn):
         return self.network_config
@@ -513,6 +516,18 @@ class RegistryServer(object):
         return x509.encrypt(cert, msg)
 
     @rpc_private
+    def isPeer(self, prefix):
+        with self.peers_lock:
+           self.request_dump()
+           peer_list = [iprefix
+                        for neigh_routes in self.ctl.neighbours.itervalues()
+                        for iprefix in neigh_routes[1]
+                          if iprefix == prefix]
+           if peer_list:
+             return True
+        return False
+
+    @rpc_private
     def revoke(self, cn_or_serial):
         with self.lock:
           with self.db:
@@ -534,6 +549,53 @@ class RegistryServer(object):
             if time.time() < not_after:
                 q("INSERT INTO crl VALUES (?,?)", (serial, not_after))
                 self.updateNetworkConfig()
+
+    @rpc_private
+    def getIPv6Prefix(self, email):
+        with self.lock:
+          with self.db:
+            q = self.db.execute
+            try:
+              cert, = q("SELECT cert FROM cert WHERE email = ?",
+                                                         (email,)).next()
+            except StopIteration:
+              # return HTTPCODE 404 maybe
+              logging.info("cert not found %s" % email)
+              cert = None
+
+        if cert:
+          certificate = crypto.load_certificate(crypto.FILETYPE_PEM, cert)
+          cn = x509.subnetFromCert(certificate)
+          return utils.binFromSubnet(cn)
+
+    @rpc_private
+    def getIPv6Address(self, email):
+        ipv6_prefix = self.getIPv6Prefix(email)
+        if ipv6_prefix is None:
+          return
+        return utils.ipFromBin(self.getNetworkBin() + ipv6_prefix)
+
+
+    @rpc_private
+    def getIPv4Information(self, peer):
+        with self.lock:
+            self.sendto(peer, 1)
+            s = self.sock,
+            timeout = 5
+            end = timeout + time.time()
+
+            while select.select(s, (), (), timeout)[0]:
+                prefix, msg = self.recv(self.sock, 1)
+                if prefix == peer:
+                    break
+                timeout = max(0, end - time.time())
+            else:
+                logging.info("Timeout while querying address for %s/%s",
+                                                int(peer, 2), len(peer))
+                return
+
+            if "," in msg:
+                return msg.split(',')[0]
 
     @rpc_private
     def versions(self):
