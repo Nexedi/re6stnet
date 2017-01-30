@@ -40,6 +40,10 @@ def rpc(f):
     f.getcallargs = eval("lambda %s: locals()" % ','.join(args[1:]))
     return f
 
+def rpc_private(f):
+    f._private = None
+    return rpc(f)
+
 
 class HTTPError(Exception):
     pass
@@ -237,7 +241,7 @@ class RegistryServer(object):
     def handle_request(self, request, method, kw,
                        _localhost=('127.0.0.1', '::1')):
         m = getattr(self, method)
-        if method in ('revoke', 'versions', 'topology'):
+        if hasattr(method, '_private'):
             x_forwarded_for = request.headers.get('X-Forwarded-For')
             if request.client_address[0] not in _localhost or \
                x_forwarded_for and x_forwarded_for not in _localhost:
@@ -482,7 +486,7 @@ class RegistryServer(object):
         logging.info("Sending bootstrap peer: %s", msg)
         return x509.encrypt(cert, msg)
 
-    @rpc
+    @rpc_private
     def revoke(self, cn_or_serial):
         with self.lock:
           with self.db:
@@ -505,7 +509,7 @@ class RegistryServer(object):
                 q("INSERT INTO crl VALUES (?,?)", (serial, not_after))
                 self.updateNetworkConfig()
 
-    @rpc
+    @rpc_private
     def versions(self):
         with self.peers_lock:
             self.request_dump()
@@ -531,7 +535,7 @@ class RegistryServer(object):
                     break
         return json.dumps(peer_dict)
 
-    @rpc
+    @rpc_private
     def topology(self):
         p = lambda p: '%s/%s' % (int(p, 2), len(p))
         peers = deque((p(self.prefix),))
