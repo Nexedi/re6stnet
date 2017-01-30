@@ -79,10 +79,10 @@ def main():
     _('--key', required=True,
             help="CA private key in .pem format. For example:\nopenssl"
             " genpkey -out ca.key -algorithm rsa -pkeyopt rsa_keygen_bits:2048")
-    _('--mailhost', required=True,
+    _('--mailhost', default=None,
             help="SMTP host to send confirmation emails. For debugging"
                  " purpose, it can also be an absolute or existing path to"
-                 " a mailbox file")
+                 " a mailbox file. If unset, registration by mail is disabled.")
     _('--prefix-length', default=16, type=int,
             help="Default length of allocated prefixes."
                  " If 0, registration by email is disabled.")
@@ -102,7 +102,6 @@ def main():
                  " 3=DEBUG, 4=TRACE. Use SIGUSR1 to reopen log.")
     _('--min-protocol', default=version.min_protocol, type=int,
         help="Reject nodes that are too old. Current is %s." % version.protocol)
-
     _ = parser.add_argument_group('routing').add_argument
     _('--hello', type=int, default=15,
         help="Hello interval in seconds, for both wired and wireless"
