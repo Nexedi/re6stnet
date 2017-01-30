@@ -471,6 +471,20 @@ class RegistryServer(object):
     def getNetworkConfig(self, cn):
         return self.network_config
 
+    def _queryAddress(self, peer):
+        self.sendto(peer, 1)
+        s = self.sock,
+        timeout = 3
+        end = timeout + time.time()
+        # Loop because there may be answers from previous requests.
+        while select.select(s, (), (), timeout)[0]:
+            prefix, msg = self.recv(1)
+            if prefix == peer:
+                return msg
+            timeout = max(0, end - time.time())
+        logging.info("Timeout while querying address for %s/%s",
+                     int(peer, 2), len(peer))
+
     @rpc
     def getBootstrapPeer(self, cn):
         with self.peers_lock:
@@ -491,19 +505,8 @@ class RegistryServer(object):
                 # (in case 'peers' is empty).
                 peer = self.prefix
         with self.lock:
-            self.sendto(peer, 1)
-            s = self.sock,
-            timeout = 3
-            end = timeout + time.time()
-            # Loop because there may be answers from previous requests.
-            while select.select(s, (), (), timeout)[0]:
-                prefix, msg = self.recv(1)
-                if prefix == peer:
-                    break
-                timeout = max(0, end - time.time())
-            else:
-                logging.info("Timeout while querying address for %s/%s",
-                             int(peer, 2), len(peer))
+            msg = self._queryAddress(peer)
+            if msg is None:
                 return
             cert = self.getCert(cn)
         msg = "%s %s" % (peer, msg)
@@ -532,6 +535,45 @@ class RegistryServer(object):
             if time.time() < not_after:
                 q("INSERT INTO crl VALUES (?,?)", (serial, not_after))
                 self.updateNetworkConfig()
+
+    @rpc_private
+    def getNodePrefix(self, email):
+        with self.lock:
+          with self.db:
+            try:
+                cert, = self.db.execute("SELECT cert FROM cert WHERE email = ?",
+                                        (email,)).next()
+            except StopIteration:
+                return
+        certificate = crypto.load_certificate(crypto.FILETYPE_PEM, cert)
+        return x509.subnetFromCert(certificate)
+
+    @rpc_private
+    def getIPv6Address(self, email):
+        cn = self.getNodePrefix(email)
+        if cn:
+            return utils.ipFromBin(
+                x509.networkFromCa(self.cert.ca)
+                + utils.binFromSubnet(cn))
+
+    @rpc_private
+    def getIPv4Information(self, email):
+        peer = self.getNodePrefix(email)
+        if peer:
+            peer = utils.binFromSubnet(peer)
+            with self.peers_lock:
+                self.request_dump()
+                for neigh_routes in self.ctl.neighbours.itervalues():
+                    for prefix in neigh_routes[1]:
+                        if prefix == peer:
+                            break
+                else:
+                    return
+            logging.info("%s %s", email, peer)
+            with self.lock:
+                msg = self._queryAddress(peer)
+            if msg:
+                return msg.split(',')[0]
 
     @rpc_private
     def versions(self):
