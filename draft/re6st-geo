@@ -7,26 +7,6 @@ if 're6st' not in sys.modules:
     import os; sys.path[0] = os.path.dirname(sys.path[0])
 from re6st import ctl, tunnel, utils
 
-class iterRoutes(object):
-
-    _waiting = True
-
-    def __new__(cls, control_socket, network):
-        self = object.__new__(cls)
-        c = ctl.Babel(control_socket, self, network)
-        c.request_dump()
-        while self._waiting:
-            args = {}, {}, ()
-            c.select(*args)
-            utils.select(*args)
-        return (prefix
-            for neigh_routes in c.neighbours.itervalues()
-            for prefix in neigh_routes[1]
-            if prefix)
-
-    def babel_dump(self):
-        self._waiting = False
-
 
 def cmd_update(db, config):
     s = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
@@ -36,7 +16,7 @@ def cmd_update(db, config):
     p = dict(q("SELECT prefix, mode FROM ip"))
     peers = set()
     now = int(time.time())
-    for prefix in iterRoutes(config.control_socket, network):
+    for prefix in ctl.iterRoutes(config.control_socket, network):
         if prefix in p:
             q("UPDATE ip SET last=? WHERE prefix=?", (now, prefix))
             if not p[prefix]:

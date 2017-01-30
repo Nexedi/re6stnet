@@ -297,3 +297,24 @@ class Babel(object):
 
     def handle_set_cost_multiplier(self, flags):
         pass
+
+
+class iterRoutes(object):
+
+    _waiting = True
+
+    def __new__(cls, control_socket, network):
+        self = object.__new__(cls)
+        c = Babel(control_socket, self, network)
+        c.request_dump()
+        while self._waiting:
+            args = {}, {}, ()
+            c.select(*args)
+            utils.select(*args)
+        return (prefix
+            for neigh_routes in c.neighbours.itervalues()
+            for prefix in neigh_routes[1]
+            if prefix)
+
+    def babel_dump(self):
+        self._waiting = False
