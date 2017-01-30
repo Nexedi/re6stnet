@@ -294,15 +294,33 @@ class RegistryServer(object):
                                " WHERE prefix=? AND cert IS NOT NULL",
                                (client_prefix,)).next()[0]
 
-    @rpc
-    def requestToken(self, email):
+    @rpc_private
+    def isToken(self, token):
+        with self.lock:
+            try:
+                token_found, = self.db.execute("SELECT token FROM token WHERE token = ?",
+                    (token,)).next()
+                if token_found == token:
+                    return True
+            except StopIteration:
+                pass
+
+    @rpc_private
+    def deleteToken(self, token):
+        if not self.isValidToken(token):
+            raise HTTPError(httplib.NOTFOUND)
+        with self.lock:
+            self.db.execute("DELETE FROM token WHERE token = ?", (token,))
+            return True
+
+    @rpc_private
+    def addToken(self, email, token):
         prefix_len = self.config.prefix_length
         if not prefix_len:
             raise HTTPError(httplib.FORBIDDEN)
         with self.lock:
             while True:
                 # Generating token
-                token = ''.join(random.sample(string.ascii_lowercase, 8))
                 args = token, email, prefix_len, int(time.time())
                 # Updating database
                 try:
@@ -311,6 +329,14 @@ class RegistryServer(object):
                 except sqlite3.IntegrityError:
                     pass
             self.timeout = 1
+
+    @rpc
+    def requestToken(self, email):
+        if self.config.mailhost is None:
+            raise HTTPError(httplib.FORBIDDEN)
+
+        token = ''.join(random.sample(string.ascii_lowercase, 8))
+        self.requestAddToken(email, token)
 
         # Creating and sending email
         msg = MIMEText('Hello, your token to join re6st network is: %s\n'
