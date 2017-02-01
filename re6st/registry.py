@@ -334,7 +334,7 @@ class RegistryServer(object):
             raise HTTPError(httplib.FORBIDDEN)
 
         token = ''.join(random.sample(string.ascii_lowercase, 8))
-        self.requestAddToken(email, token)
+        self.addToken(email, token)
 
         # Creating and sending email
         msg = MIMEText('Hello, your token to join re6st network is: %s\n'
