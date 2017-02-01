@@ -307,8 +307,6 @@ class RegistryServer(object):
 
     @rpc_private
     def deleteToken(self, token):
-        if not self.isValidToken(token):
-            raise HTTPError(httplib.NOTFOUND)
         with self.lock:
             self.db.execute("DELETE FROM token WHERE token = ?", (token,))
             return True
