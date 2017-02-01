@@ -585,7 +585,7 @@ class RegistryServer(object):
             end = timeout + time.time()
 
             while select.select(s, (), (), timeout)[0]:
-                prefix, msg = self.recv(self.sock, 1)
+                prefix, msg = self.recv(1)
                 if prefix == peer:
                     break
                 timeout = max(0, end - time.time())
