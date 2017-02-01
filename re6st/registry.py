@@ -301,7 +301,7 @@ class RegistryServer(object):
                 token_found, = self.db.execute("SELECT token FROM token WHERE token = ?",
                     (token,)).next()
                 if token_found == token:
-                    return True
+                    return "1"
             except StopIteration:
                 pass
 
@@ -309,7 +309,6 @@ class RegistryServer(object):
     def deleteToken(self, token):
         with self.lock:
             self.db.execute("DELETE FROM token WHERE token = ?", (token,))
-            return True
 
     @rpc_private
     def addToken(self, email, token):
