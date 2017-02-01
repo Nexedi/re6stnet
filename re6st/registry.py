@@ -512,17 +512,16 @@ class RegistryServer(object):
         logging.info("Sending bootstrap peer: %s", msg)
         return x509.encrypt(cert, msg)
 
-    @rpc_private
     def isPeer(self, prefix):
+        if prefix is None:
+            return
         with self.peers_lock:
            self.request_dump()
-           peer_list = [iprefix
-                        for neigh_routes in self.ctl.neighbours.itervalues()
-                        for iprefix in neigh_routes[1]
-                          if iprefix == prefix]
-           if peer_list:
-             return True
-        return False
+           for neigh_routes in self.ctl.neighbours.itervalues():
+             for _prefix in neigh_routes[1]:
+               if _prefix == prefix:
+                 return 1
+
 
     @rpc_private
     def revoke(self, cn_or_serial):
@@ -553,17 +552,16 @@ class RegistryServer(object):
           with self.db:
             q = self.db.execute
             try:
-              cert, = q("SELECT cert FROM cert WHERE email = ?",
+                cert, = q("SELECT cert FROM cert WHERE email = ?",
                                                          (email,)).next()
             except StopIteration:
-              # return HTTPCODE 404 maybe
-              logging.info("cert not found %s" % email)
-              cert = None
+                # return HTTPCODE 404 maybe
+                cert = None
 
         if cert:
-          certificate = crypto.load_certificate(crypto.FILETYPE_PEM, cert)
-          cn = x509.subnetFromCert(certificate)
-          return utils.binFromSubnet(cn)
+            certificate = crypto.load_certificate(crypto.FILETYPE_PEM, cert)
+            cn = x509.subnetFromCert(certificate)
+            return utils.binFromSubnet(cn)
 
     @rpc_private
     def getIPv6Address(self, email):
@@ -574,7 +572,12 @@ class RegistryServer(object):
 
 
     @rpc_private
-    def getIPv4Information(self, peer):
+    def getIPv4Information(self, email):
+        peer = self.getIPv6Prefix(email)
+        if not self.isPeer(peer):
+          return
+ 
+        logging.info("%s %s %s" % (email, peer, self.isPeer(peer)))
         with self.lock:
             self.sendto(peer, 1)
             s = self.sock,
