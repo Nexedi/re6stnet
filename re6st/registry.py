@@ -297,13 +297,16 @@ class RegistryServer(object):
     @rpc_private
     def isToken(self, token):
         with self.lock:
-            try:
-                token_found, = self.db.execute("SELECT token FROM token WHERE token = ?",
-                    (token,)).next()
-                if token_found == token:
-                    return "1"
-            except StopIteration:
-                pass
+            return self._isToken(token)
+
+    def _isToken(self, token):
+       try:
+           token_found, = self.db.execute("SELECT token FROM token WHERE token = ?",
+               (token,)).next()
+           if token_found == token:
+               return "1"
+       except StopIteration:
+           pass
 
     @rpc_private
     def deleteToken(self, token):
@@ -324,6 +327,8 @@ class RegistryServer(object):
                     self.db.execute("INSERT INTO token VALUES (?,?,?,?)", args)
                     break
                 except sqlite3.IntegrityError:
+                    if self._isToken(token):
+                      raise HTTPError(httplib.CONFLICT)
                     pass
             self.timeout = 1
 
