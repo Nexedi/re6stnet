@@ -218,13 +218,27 @@ class BaseTunnelManager(object):
     def refresh(self):
         if self._next_rina and rina.update(self, False):
             self._next_rina = False
-            self.ctl.request_dump()
+            self.__request_dump('rina')
         self._next_refresh = time.time() + self.cache.hello
         self.checkRoutingCache()
 
-    def babel_dump(self):
+    def __request_dump(self, reason):
+        try:
+            requesting_dump = self.__requesting_dump
+        except AttributeError:
+            requesting_dump = self.__requesting_dump = set()
+        if not requesting_dump:
+            self.ctl.request_dump()
+        requesting_dump.add(reason)
+
+    def _babel_dump_rina(self):
         rina.update(self, True)
         self._next_rina = True
+
+    def babel_dump(self):
+        for x in self.__requesting_dump:
+            getattr(self, '_babel_dump_' + x)()
+        self.__requesting_dump.clear()
 
     def selectTimeout(self, next, callback, force=True):
         t = self._timeouts
@@ -454,8 +468,18 @@ class BaseTunnelManager(object):
         raise utils.ReexecException(
             "Restart with new network parameters")
 
-    def _newVersion(self):
-        pass
+    def _babel_dump_new_version(self):
+        for prefix in self.ctl.neighbours:
+            if prefix:
+                peer = self._getPeer(prefix)
+                if peer.prefix != prefix:
+                    self.sendto(prefix, None)
+                elif (peer.version < self._version and
+                      self.sendto(prefix, '\0' + self._version)):
+                    peer.version = self._version
+
+    def broadcastNewVersion(self):
+        self.__request_dump('new_version')
 
     def newVersion(self):
         changed = self.cache.updateConfig()
@@ -466,7 +490,7 @@ class BaseTunnelManager(object):
         logging.info("changed: %r", changed)
         self.selectTimeout(None, self.newVersion)
         self._version = self.cache.version
-        self._newVersion()
+        self.broadcastNewVersion()
         self.cache.warnProtocol()
         crl = self.cache.crl
         for i in reversed([i for i, peer in enumerate(self._peers)
@@ -894,21 +918,8 @@ class TunnelManager(BaseTunnelManager):
             if address:
                 self._address[family] = utils.dump_address(address)
 
-    def _newVersion(self):
-        # BUG: In the case of a LAN without any node using TunnelManager
-        #      (i.e. no creation/destruction of tunnels) and at least one
-        #      connected to outside with --client, the new version is not
-        #      propagated. This first loop should be moved to the base class,
-        #      which would query Babel for neighbours only on this event,
-        #      and not periodically like TunnelManager.
-        for prefix in self.ctl.neighbours:
-            if prefix:
-                peer = self._getPeer(prefix)
-                if peer.prefix != prefix:
-                    self.sendto(prefix, None)
-                elif (peer.version < self._version and
-                      self.sendto(prefix, '\0' + self._version)):
-                    peer.version = self._version
+    def broadcastNewVersion(self):
+        self._babel_dump_new_version()
         for prefix, c in self._connection_dict.items():
             if c.serial in self.cache.crl:
                 self._kill(prefix)
