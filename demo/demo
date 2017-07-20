@@ -326,7 +326,7 @@ if len(sys.argv) > 1:
             if page < 2:
                 body = route_svg(page)
             else:
-                gv = registry.Popen(('python', '-c', r"""if 1:
+                body = registry.Popen(('python', '-c', r"""if 1:
                     import math, json
                     from re6st.registry import RegistryClient
                     g = json.loads(RegistryClient(
@@ -350,10 +350,10 @@ if len(sys.argv) > 1:
                             print '"%s" -> "%s";' % (n, title(v))
                     print '}'
                 """), stdout=subprocess.PIPE, cwd="..").communicate()[0]
-                if gv:
+                if body:
                     body = subprocess.Popen(('neato', '-Tsvg'),
                         stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                        ).communicate(gv)[0]
+                        ).communicate(body)[0]
                 if not body:
                     self.send_error(500)
                     return
