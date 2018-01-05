@@ -276,7 +276,20 @@ class Babel(object):
                 prefix = ip[a:route.plen]
                 if prefix and not route.refmetric:
                     neighbours[prefix] = neigh_routes
-                    unidentified.remove(address)
+                    # XXX: Temporary logging to understand when a KeyError
+                    #      happens. Then, we'll problably replace 'remove' by
+                    #      'discard'.
+                    try:
+                        unidentified.remove(address)
+                    except KeyError as e:
+                        logging.warning("address: %s; prefix: %s",
+                                        address, prefix)
+                        logging.warning("neighbours: %r", neighbours)
+                        logging.warning("routes: %r", routes)
+                        try:
+                            tm.sendto(tm.cache.registry_prefix, '\7%s' % e)
+                        except AttributeError:
+                            pass
             else:
                 prefix = None
             neigh_routes[1][prefix] = route
