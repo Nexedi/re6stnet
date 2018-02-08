@@ -1,0 +1,16 @@
+# force NetworkManager to ignore re6stnet interfaces
+#
+# On Debian 8.9 (NetworkManager 0.9.10.0) even though `nmcli d` says re6stnet*
+# interfaces are unmanaged, log shows NetworkManager tries to mess with them
+# and frequently brings this interfaces down.
+iface re6stnet-tcp inet manual
+iface re6stnet1 inet manual
+iface re6stnet2 inet manual
+iface re6stnet3 inet manual
+iface re6stnet4 inet manual
+iface re6stnet5 inet manual
+iface re6stnet6 inet manual
+iface re6stnet7 inet manual
+iface re6stnet8 inet manual
+iface re6stnet9 inet manual
+iface re6stnet10 inet manual

@@ -18,6 +18,7 @@ install: install-noinit
 
 install-noinit: install-man
 	install -Dp daemon/network-manager $(DESTDIR)$(NM)
+	install -Dpm 0644 daemon/interfaces $(DESTDIR)/etc/network/interfaces.d/re6stnet
 	set -e $(DESTDIR)$(PREFIX) /bin/re6stnet; [ -x $$1$$2 ] || \
 	$(or $(PYTHON),python2) setup.py install \
 		--prefix=$(PREFIX) --root=$(DESTDIR); \
