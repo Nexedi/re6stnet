@@ -93,3 +93,95 @@ Usage
 =====
 
 See ``re6stnet``\ (8) man page.
+
+In order to share the connectivity with others, it is necessary for re6stnet
+port ``1194`` to be reachable from outside. If the node has a public IPv4
+address, then there is nothing to do, otherwise if UPNP is not already set up
+on the gateway:
+
+- If no public IPv4 address but direct access (for example on AWS): add ``ip
+  XXX`` where ``XXX`` is the IPv4 public address to ``/etc/re6stnet/re6stnet.conf``.
+
+- If within a LAN: set up an UPNP server on the gateway. See the next section
+  for further reference.
+
+You can check connectivity with other re6st nodes of the network with
+``netstat -tn | grep 1194``.
+
+Setting up an UPNP server
+-------------------------
+
+Sample configuration file for miniupnpd_:
+
+::
+
+  ext_ifname=ppp0
+  listening_ip=eth0
+  clean_ruleset_interval=600
+  allow 1024-65535 192.168.0.0/24 1024-65535
+  deny 0-65535 0.0.0.0/0 0-65535
+
+After restarting ``re6stnet`` service on the clients within the LAN, you can
+either check ``/var/log/re6stnet.log`` or the ``iptables`` ``NAT`` table to
+see that the port ``1194`` is properly redirected, for example:
+
+::
+
+  # iptables -t nat -L -nv
+  [...]
+  Chain MINIUPNPD (1 references)
+  target     prot opt source               destination
+  DNAT       tcp  --  anywhere             anywhere             tcp dpt:37194 to:192.168.0.5:1194
+  DNAT       tcp  --  anywhere             anywhere             tcp dpt:34310 to:192.168.0.233:1194
+
+Firewall
+--------
+
+Sample ``iptables/ip6tables`` rules:
+
+::
+
+  ## IPv4
+  iptables -P INPUT DROP
+  iptables -P FORWARD DROP
+  iptables -P OUTPUT DROP
+
+  iptables -A INPUT -i lo -j ACCEPT
+  iptables -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
+  # re6st
+  iptables -A INPUT -p tcp -m tcp --dport 1194 -j ACCEPT
+  # UPNP
+  iptables -A INPUT -p udp -m udp --sport 1900 -s $GATEWAY_IP -j ACCEPT
+
+  iptables -A OUTPUT -o lo -j ACCEPT
+  iptables -A OUTPUT -m state --state NEW,RELATED,ESTABLISHED -j ACCEPT
+
+  ## IPv6
+  ip6tables INPUT DROP
+  ip6tables FORWARD DROP
+  ip6tables OUTPUT DROP
+
+  ip6tables -A INPUT -i lo -j ACCEPT
+  ip6tables -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
+  ip6tables -A INPUT -p udp -m udp --dport babel --src fe80::/10 -j ACCEPT
+  # Babel
+  ip6tables -A INPUT -i re6stnet+ -p udp -m udp --dport 326 -j ACCEPT
+  ip6tables -A INPUT -p ipv6-icmp -m icmp6 --icmpv6-type destination-unreachable -j ACCEPT
+  ip6tables -A INPUT -p ipv6-icmp -m icmp6 --icmpv6-type packet-too-big -j ACCEPT
+  ip6tables -A INPUT -p ipv6-icmp -m icmp6 --icmpv6-type time-exceeded -j ACCEPT
+  ip6tables -A INPUT -p ipv6-icmp -m icmp6 --icmpv6-type parameter-problem -j ACCEPT
+  ip6tables -A INPUT -p icmpv6 --icmpv6-type echo-request -m limit --limit 900/min -j ACCEPT
+  ip6tables -A INPUT -p icmpv6 --icmpv6-type echo-reply -m limit --limit 900/min -j ACCEPT
+  ip6tables -A INPUT -p icmpv6 --icmpv6-type neighbor-solicitation -m hl --hl-eq 255 -j ACCEPT
+  ip6tables -A INPUT -p icmpv6 --icmpv6-type neighbor-advertisement -m hl --hl-eq 255 -j ACCEPT
+
+  ip6tables -A FORWARD -i re6stnet+ -o re6stnet+ -j ACCEPT
+
+  ip6tables -A OUTPUT -o lo -j ACCEPT
+  ip6tables -A OUTPUT -m state --state NEW,RELATED,ESTABLISHED -j ACCEPT
+  ip6tables -A OUTPUT -p ipv6-icmp -m icmp6 --icmpv6-type destination-unreachable -j ACCEPT
+  ip6tables -A OUTPUT -p ipv6-icmp -m icmp6 --icmpv6-type packet-too-big -j ACCEPT
+  ip6tables -A OUTPUT -p ipv6-icmp -m icmp6 --icmpv6-type time-exceeded -j ACCEPT
+  ip6tables -A OUTPUT -p ipv6-icmp -m icmp6 --icmpv6-type parameter-problem -j ACCEPT
+  ip6tables -A OUTPUT -p icmpv6 --icmpv6-type neighbor-solicitation -m hl --hl-eq 255 -j ACCEPT
+  ip6tables -A OUTPUT -p icmpv6 --icmpv6-type neighbor-advertisement -m hl --hl-eq 255 -j ACCEPT
