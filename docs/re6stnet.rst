@@ -48,6 +48,36 @@ re6stnet_subnet
 re6stnet_network
   the re6st network you belong to, written in CIDR notation
 
+Setting up a UPnP server
+------------------------
+
+In order to share the connectivity with others, it is necessary for re6stnet
+port (as specified by ``--pp`` option and default to `1194`) to be reachable
+from outside. If the node has a public IPv4 address, then this is not
+necessary, otherwise a UPnP server should be set up on the gateway.
+
+You can check the connectivity with other re6st nodes of the network with
+``netstat -tn | grep 1194``.
+
+Sample configuration file for `miniupnpd`::
+
+  ext_ifname=ppp0
+  listening_ip=eth0
+  clean_ruleset_interval=600
+  allow 1024-65535 192.168.0.0/24 1024-65535
+  deny 0-65535 0.0.0.0/0 0-65535
+
+After restarting ``re6stnet`` service on the clients within the LAN, you can
+either check ``/var/log/re6stnet.log`` or the ``iptables`` ``NAT`` table to
+see that the port ``1194`` is properly redirected, for example::
+
+  # iptables -t nat -L -nv
+  [...]
+  Chain MINIUPNPD (1 references)
+  target     prot opt source               destination
+  DNAT       tcp  --  anywhere             anywhere             tcp dpt:37194 to:192.168.0.5:1194
+  DNAT       tcp  --  anywhere             anywhere             tcp dpt:34310 to:192.168.0.233:1194
+
 Starting re6st automatically
 ----------------------------
 
