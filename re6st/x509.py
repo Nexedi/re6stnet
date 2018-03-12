@@ -1,13 +1,10 @@
 # -*- coding: utf-8 -*-
 import calendar, hashlib, hmac, logging, os, struct, subprocess, threading, time
-from datetime import datetime
 from OpenSSL import crypto
 from . import utils
 
 def newHmacSecret():
-    x = datetime.utcnow()
-    return utils.newHmacSecret(int(time.mktime(x.timetuple())) * 1000000
-                                + x.microsecond)
+    return utils.newHmacSecret(int(time.time() * 1000000))
 
 def networkFromCa(ca):
     return bin(ca.get_serial_number())[3:]
