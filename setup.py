@@ -20,6 +20,8 @@ def copy_file(self, infile, outfile, *args, **kw):
         return outfile, 1
     elif isinstance(self, build_py) and \
          os.stat(infile).st_mode & stat.S_IEXEC:
+        if os.path.isdir(infile) and os.path.isdir(outfile):
+            return (outfile, 0)
         # Adjust interpreter of OpenVPN hooks.
         with open(infile) as src:
             first_line = src.readline()
