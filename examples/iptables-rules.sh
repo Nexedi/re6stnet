@@ -1,7 +1,8 @@
 #!/bin/sh
 #
 # Example iptables/ip6tables rules on a desktop computer when re6st is only
-# used to build an IPv6 overlay network. REJECT everything by default:
+# used to build an IPv6 overlay network. REJECT for INPUT and DROP everything
+# by default:
 #
 # - Incoming traffic (INPUT): only open ports needed for re6st and also allow
 #   packets associated with an existing connection (ESTABLISHED, RELATED).
@@ -19,8 +20,8 @@
 GATEWAY_IP=192.168.0.1
 
 ## IPv4
-iptables -P INPUT REJECT
-iptables -P OUTPUT REJECT
+iptables -P INPUT DROP
+iptables -P OUTPUT DROP
 
 iptables -A INPUT -i lo -j ACCEPT
 iptables -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
@@ -31,15 +32,18 @@ iptables -A INPUT -p tcp -m tcp --dport 1194 -j ACCEPT
 # UPnP
 iptables -A INPUT -p udp -m udp --sport 1900 -s $GATEWAY_IP -j ACCEPT
 
+# Add custom INPUT rules before
+iptables -A INPUT -j REJECT
+
 iptables -A OUTPUT -o lo -j ACCEPT
 iptables -A OUTPUT -m state --state NEW,RELATED,ESTABLISHED -j ACCEPT
 
 # more rules needed if you set up a private IPv4 network
 
 ## IPv6
-ip6tables -P INPUT REJECT
-ip6tables -P FORWARD REJECT
-ip6tables -P OUTPUT REJECT
+ip6tables -P INPUT DROP
+ip6tables -P FORWARD DROP
+ip6tables -P OUTPUT DROP
 
 ip6tables -N RE6ST
 ip6tables -A RE6ST -i re6stnet+ -j ACCEPT
@@ -59,6 +63,9 @@ ip6tables -A INPUT -p icmpv6 --icmpv6-type echo-request -m limit --limit 900/min
 ip6tables -A INPUT -p icmpv6 --icmpv6-type echo-reply -m limit --limit 900/min -j ACCEPT
 ip6tables -A INPUT -p icmpv6 --icmpv6-type neighbor-solicitation -m hl --hl-eq 255 -j ACCEPT
 ip6tables -A INPUT -p icmpv6 --icmpv6-type neighbor-advertisement -m hl --hl-eq 255 -j ACCEPT
+
+# Add custom INPUT rules before
+ip6tables -A INPUT -j REJECT
 
 ip6tables -A FORWARD -o re6stnet+ -j RE6ST
 # Same as in RE6ST chain.
