@@ -353,6 +353,10 @@ class RegistryServer(object):
                     m.close()
         else:
             s = smtplib.SMTP(self.config.mailhost)
+            if self.config.smtp_starttls:
+                s.starttls()
+            if self.config.smtp_user:
+                s.login(self.config.smtp_user, self.config.smtp_pwd)
             s.sendmail(self.email, email, msg.as_string())
             s.quit()
 

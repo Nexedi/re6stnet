@@ -79,10 +79,16 @@ def main():
     _('--key', required=True,
             help="CA private key in .pem format. For example:\nopenssl"
             " genpkey -out ca.key -algorithm rsa -pkeyopt rsa_keygen_bits:2048")
-    _('--mailhost', default=None,
+    _('--mailhost',
             help="SMTP host to send confirmation emails. For debugging"
                  " purpose, it can also be an absolute or existing path to"
                  " a mailbox file. If unset, registration by mail is disabled.")
+    _('--smtp-user',
+            help="SMTP login.")
+    _('--smtp-pwd',
+            help="SMTP password.")
+    _('--smtp-starttls', action='store_true',
+            help="Use STARTTLS for SMTP connections.")
     _('--prefix-length', default=16, type=int,
             help="Default length of allocated prefixes."
                  " If 0, registration by email is disabled.")
