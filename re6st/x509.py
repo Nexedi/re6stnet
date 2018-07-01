@@ -130,7 +130,10 @@ class Cert(object):
         p = openssl('verify', '-CAfile', self.ca_path)
         out, err = p.communicate(cert)
         if p.returncode or strict:
-            for x in out.splitlines():
+          # BBB: With old versions of openssl, detailed
+          #      error is printed to standard output.
+          for err in err, out:
+            for x in err.splitlines():
                 if x.startswith('error '):
                     x, msg = x.split(':', 1)
                     _, code, _, depth, _ = x.split(None, 4)
