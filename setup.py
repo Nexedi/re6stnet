@@ -93,6 +93,9 @@ setup(
     # BBB: use MANIFEST.in only so that egg_info works with very old setuptools
     include_package_data = True,
     install_requires = ['pyOpenSSL >= 0.13', 'miniupnpc'],
+    extras_require = {
+        'geoip': ['geoip2'],
+    },
     #dependency_links = [
     #    "http://miniupnp.free.fr/files/download.php?file=miniupnpc-1.7.20120714.tar.gz#egg=miniupnpc-1.7",
     #    ],

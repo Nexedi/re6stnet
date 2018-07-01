@@ -5,7 +5,7 @@ from SocketServer import ThreadingTCPServer
 from urlparse import parse_qsl
 if 're6st' not in sys.modules:
     sys.path[0] = os.path.dirname(os.path.dirname(sys.path[0]))
-from re6st import ctl, registry, utils, version
+from re6st import registry, utils, version
 
 # To generate server ca and key with serial for 2001:db8:42::/48
 #  openssl req -nodes -new -x509 -key ca.key -set_serial 0x120010db80042 -days 3650 -out ca.crt
@@ -132,6 +132,8 @@ def main():
         help="Interval in seconds between two tunnel refresh: the worst"
              " tunnel is closed if the number of client tunnels has reached"
              " its maximum number (client-count).")
+    _('--same-country', action='append', metavar="CODE",
+        help="prevent tunnelling accross borders of listed countries")
 
     config = parser.parse_args()
 

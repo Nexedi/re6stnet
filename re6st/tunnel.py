@@ -1,5 +1,5 @@
-import errno, json, logging, os, random
-import socket, subprocess, struct, time, weakref
+import errno, json, logging, os, random, socket
+import subprocess, struct, sys, time, weakref
 from collections import defaultdict, deque
 from bisect import bisect, insort
 from OpenSSL import crypto
@@ -7,6 +7,27 @@ from . import ctl, plib, rina, utils, version, x509
 
 PORT = 326
 
+family_dict = {
+    socket.AF_INET: 'IPv4',
+    socket.AF_INET6: 'IPv6',
+}
+
+proto_dict = {
+    'tcp4': (socket.AF_INET, socket.SOL_TCP),
+    'udp4': (socket.AF_INET, socket.SOL_UDP),
+    'tcp6': (socket.AF_INET6, socket.SOL_TCP),
+    'udp6': (socket.AF_INET6, socket.SOL_UDP),
+}
+proto_dict['tcp'] = proto_dict['tcp4']
+proto_dict['udp'] = proto_dict['udp4']
+
+def resolve(ip, port, proto):
+    try:
+        family, proto = proto_dict[proto]
+    except KeyError:
+        return None, ()
+    return family, (x[-1][0]
+        for x in socket.getaddrinfo(ip, port, family, 0, proto))
 
 class MultiGatewayManager(dict):
 
@@ -172,6 +193,7 @@ class BaseTunnelManager(object):
     NEED_RESTART = frozenset(('babel_default', 'encrypt', 'hello',
                               'ipv4', 'ipv4_sublen'))
 
+    _geoiplookup = None
     _forward = None
     _next_rina = True
 
@@ -188,6 +210,31 @@ class BaseTunnelManager(object):
         address_dict = defaultdict(list)
         for family, address in address:
             address_dict[family] += address
+        if any(address_dict.itervalues()):
+            del cache.my_address
+        else:
+            for address in utils.parse_address(cache.my_address):
+                try:
+                    proto = proto_dict[address[2]]
+                except KeyError:
+                    continue
+                address_dict[proto[0]].append(address)
+        db = os.getenv('GEOIP2_MMDB')
+        if db:
+            from geoip2 import database, errors
+            country = database.Reader(db).country
+            def geoiplookup(ip):
+                try:
+                    return country(ip).country.iso_code
+                except errors.AddressNotFoundError:
+                    return
+            self._geoiplookup = geoiplookup
+            self._country = {}
+            for address in address_dict.itervalues():
+                self._updateCountry(address)
+        elif cache.same_country:
+            sys.exit("Can not respect 'same_country' network configuration"
+                     " (GEOIP2_MMDB not set)")
         self._address = dict((family, utils.dump_address(address))
                              for family, address in address_dict.iteritems()
                              if address)
@@ -589,11 +636,23 @@ class BaseTunnelManager(object):
                     '\7%s (%s)' % (msg, os.uname()[2]))
                 break
 
+    def _updateCountry(self, address):
+        for address in address:
+            family, ip = resolve(*address)
+            for ip in ip:
+                country = self._geoiplookup(ip)
+                if country:
+                    if self._country.get(family) != country:
+                        self._country[family] = country
+                        logging.info('%s country: %s',
+                            family_dict[family], country)
+                    return
+
 
 class TunnelManager(BaseTunnelManager):
 
     NEED_RESTART = BaseTunnelManager.NEED_RESTART.union((
-        'client_count', 'max_clients', 'tunnel_refresh'))
+        'client_count', 'max_clients', 'same_country', 'tunnel_refresh'))
 
     def __init__(self, control_socket, cache, cert, openvpn_args,
                  timeout, client_count, iface_list, address, ip_changed,
@@ -780,16 +839,35 @@ class TunnelManager(BaseTunnelManager):
         if prefix in self._served or prefix in self._connection_dict:
             return False
         assert prefix != self._prefix, self.__dict__
-        address = [x for x in utils.parse_address(address)
-                     if x[2] not in self._disable_proto]
+        address_list = []
+        same_country  = self.cache.same_country
+        for x in utils.parse_address(address):
+            if x[2] in self._disable_proto:
+                continue
+            if same_country:
+                family, ip = resolve(*x)
+                my_country = self._country.get(family)
+                if my_country:
+                    for ip in ip:
+                        country = self._geoiplookup(ip)
+                        if country and (country != my_country
+                                        if my_country in same_country else
+                                        country in same_country):
+                            logging.debug('Do not tunnel to %s (%s -> %s)',
+                                          ip, my_country, country)
+                        else:
+                            address_list.append((ip, x[1], x[2]))
+                    continue
+            address_list.append(x)
         self.cache.connecting(prefix, 1)
-        if not address:
+        if not address_list:
             return False
         logging.info('Establishing a connection with %u/%u',
                      int(prefix, 2), len(prefix))
         with utils.exit:
             iface = self._getFreeInterface(prefix)
-            self._connection_dict[prefix] = c = Connection(self, address, iface, prefix)
+            self._connection_dict[prefix] = c = Connection(
+                self, address_list, iface, prefix)
         if self._gateway_manager is not None:
             for ip in c:
                 self._gateway_manager.add(ip, True)
@@ -917,6 +995,9 @@ class TunnelManager(BaseTunnelManager):
             family, address = self._ip_changed(ip)
             if address:
                 self._address[family] = utils.dump_address(address)
+                if self._geoiplookup:
+                    self._updateCountry(address)
+                self.cache.my_address = ';'.join(self._address.itervalues())
 
     def broadcastNewVersion(self):
         self._babel_dump_new_version()

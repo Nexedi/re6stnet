@@ -10,7 +10,7 @@ Package: re6stnet
 Architecture: all
 Depends: ${misc:Depends}, ${python:Depends}, python-pkg-resources, python-openssl (>= 0.13), openvpn (>= 2.3), babeld (= 1.6.2-nxd1), iproute2 | iproute, openssl
 Recommends: ${python:Recommends}, logrotate
-Suggests: ndisc6
+Suggests: ${python:Suggests}, ndisc6
 Conflicts: re6st-node
 Replaces: re6st-node
 Description: resilient, scalable, IPv6 network application

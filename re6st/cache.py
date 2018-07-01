@@ -1,10 +1,9 @@
 import json, logging, os, sqlite3, socket, subprocess, sys, time, zlib
+from itertools import chain
 from .registry import RegistryClient
 from . import utils, version, x509
 
 class Cache(object):
-
-    crl = ()
 
     def __init__(self, db_path, registry, cert, db_size=200):
         self._prefix = cert.prefix
@@ -25,7 +24,8 @@ class Cache(object):
             peer TEXT PRIMARY KEY NOT NULL,
             try INTEGER NOT NULL DEFAULT 0)""")
         q("CREATE INDEX volatile.stat_try ON stat(try)")
-        q("INSERT INTO volatile.stat (peer) SELECT prefix FROM peer")
+        q("INSERT INTO volatile.stat (peer)"
+          " SELECT prefix FROM peer WHERE prefix")
         self._db.commit()
         self._loadConfig(self._selectConfig(q))
         try:
@@ -71,10 +71,16 @@ class Cache(object):
     def _loadConfig(self, config):
         cls = self.__class__
         logging.debug("Loading network parameters:")
+        self.crl = self.same_country = ()
         for k, v in config:
-            if k == 'crl':
-                v = set(json.loads(v))
-            elif hasattr(cls, k):
+            if k == 'crl': # BBB
+                k = 'crl:json'
+            if k.endswith(':json'):
+                k = k[:-5]
+                v = json.loads(v)
+                if k == 'crl':
+                    v = set(v)
+            if hasattr(cls, k):
                 continue
             setattr(self, k, v)
             logging.debug("- %s: %r", k, v)
@@ -83,13 +89,20 @@ class Cache(object):
         logging.info("Getting new network parameters from registry...")
         try:
             # TODO: When possible, the registry should be queried via the re6st.
-            config = json.loads(zlib.decompress(
+            x = json.loads(zlib.decompress(
                 self._registry.getNetworkConfig(self._prefix)))
-            base64 = config.pop('', ())
-            config = dict((str(k), v.decode('base64') if k in base64 else
-                                   str(v) if type(v) is unicode else v)
-                          for k, v in config.iteritems())
-            config['crl'] = json.dumps(config['crl'])
+            base64 = x.pop('', ())
+            config = {}
+            for k, v in x.iteritems():
+                k = str(k)
+                if k in base64:
+                    v = v.decode('base64')
+                elif type(v) is unicode:
+                    v = str(v)
+                elif isinstance(v, (list, dict)):
+                    k += ':json'
+                    v = json.dumps(v)
+                config[k] = v
         except socket.error, e:
             logging.warning(e)
             return
@@ -185,6 +198,22 @@ class Cache(object):
                              " WHERE prefix=? AND prefix=peer AND try=0",
                              (prefix,)).fetchone()
         return r and r[0]
+
+    @property
+    def my_address(self):
+        for x, in self._db.execute("SELECT address FROM peer WHERE NOT prefix"):
+            return x
+        return ''
+
+    @my_address.setter
+    def my_address(self, *args):
+        with self._db as db:
+            db.execute("INSERT OR REPLACE INTO peer VALUES ('', ?)", args)
+
+    @my_address.deleter
+    def my_address(self):
+        with self._db as db:
+            db.execute("DELETE FROM peer WHERE NOT prefix")
 
     # Exclude our own address from results in case it is there, which may
     # happen if a node change its certificate without clearing the cache.

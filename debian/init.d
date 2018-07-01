@@ -31,6 +31,9 @@ SCRIPTNAME=/etc/init.d/$NAME
 #
 do_start()
 {
+	if [ -r $CONFDIR/GeoLite2-Country.mmdb ]
+	then export GEOIP2_MMDB=$CONFDIR/GeoLite2-Country.mmdb
+	fi
 	# Return
 	#   0 if daemon has been started
 	#   1 if daemon was already running

@@ -76,11 +76,11 @@ class RegistryServer(object):
                 "email TEXT NOT NULL",
                 "prefix_len INTEGER NOT NULL",
                 "date INTEGER NOT NULL")
-        if utils.sqliteCreateTable(self.db, "cert",
+        utils.sqliteCreateTable(self.db, "cert",
                 "prefix TEXT PRIMARY KEY NOT NULL",
                 "email TEXT",
-                "cert TEXT"):
-            self.db.execute("INSERT INTO cert VALUES ('',null,null)")
+                "cert TEXT")
+        self.db.execute("INSERT OR IGNORE INTO cert VALUES ('',null,null)")
         utils.sqliteCreateTable(self.db, "crl",
                 "serial INTEGER PRIMARY KEY NOT NULL",
                 # Expiration date of revoked certificate.
@@ -122,6 +122,8 @@ class RegistryServer(object):
         }
         if self.config.ipv4:
             kw['ipv4'], kw['ipv4_sublen'] = self.config.ipv4
+        if self.config.same_country:
+            kw['same_country'] = self.config.same_country
         for x in ('client_count', 'encrypt', 'hello',
                   'max_clients', 'min_protocol', 'tunnel_refresh'):
             kw[x] = getattr(self.config, x)
@@ -138,7 +140,7 @@ class RegistryServer(object):
         # Example to avoid all nodes to restart at the same time:
         # kw['delay_restart'] = 600 * random.random()
         kw['version'] = self.version.encode('base64')
-        self.network_config = zlib.compress(json.dumps(kw))
+        self.network_config = zlib.compress(json.dumps(kw), 9)
 
     # The 3 first bits code the number of bytes.
     def encodeVersion(self, version):
