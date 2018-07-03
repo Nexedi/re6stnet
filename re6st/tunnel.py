@@ -213,12 +213,14 @@ class BaseTunnelManager(object):
         if any(address_dict.itervalues()):
             del cache.my_address
         else:
-            for address in utils.parse_address(cache.my_address):
-                try:
-                    proto = proto_dict[address[2]]
-                except KeyError:
-                    continue
-                address_dict[proto[0]].append(address)
+            address = cache.my_address
+            if address:
+                for address in utils.parse_address(address):
+                    try:
+                        proto = proto_dict[address[2]]
+                    except KeyError:
+                        continue
+                    address_dict[proto[0]].append(address)
         db = os.getenv('GEOIP2_MMDB')
         if db:
             from geoip2 import database, errors

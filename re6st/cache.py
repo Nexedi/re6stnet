@@ -203,12 +203,15 @@ class Cache(object):
     def my_address(self):
         for x, in self._db.execute("SELECT address FROM peer WHERE NOT prefix"):
             return x
-        return ''
 
     @my_address.setter
-    def my_address(self, *args):
-        with self._db as db:
-            db.execute("INSERT OR REPLACE INTO peer VALUES ('', ?)", args)
+    def my_address(self, value):
+        if value:
+            with self._db as db:
+                db.execute("INSERT OR REPLACE INTO peer VALUES ('', ?)",
+                           (value,))
+        else:
+            del self.my_address
 
     @my_address.deleter
     def my_address(self):
