@@ -48,16 +48,14 @@ class Forwarder(object):
         t.append((self.next_refresh, self.refresh))
 
     def checkExternalIp(self, ip=None):
-        if ip:
-            try:
-                socket.inet_aton(ip)
-            except socket.error:
-                ip = None
-        else:
+        if not ip:
             ip = self.refresh()
-        # If port is None, we assume we're not NATed.
-        return socket.AF_INET, [(ip, str(port or local), proto)
-            for local, proto, port in self._rules] if ip else ()
+        try:
+            socket.inet_aton(ip)
+        except socket.error:
+            ip = ()
+        return socket.AF_INET, ip and [(ip, str(port or local), proto)
+            for local, proto, port in self._rules]
 
     def addRule(self, local_port, proto):
         self._rules.append([local_port, proto, None])
