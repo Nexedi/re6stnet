@@ -133,8 +133,8 @@ class Cache(object):
                            ((k, buffer(v) if k in base64 else v)
                             for k, v in config.iteritems()))
         self._loadConfig(config.iteritems())
-        return [k for k, v in config.iteritems()
-                  if k not in old or old[k] != v]
+        return [k.rstrip(':json') for k, v in config.iteritems()
+                                  if k not in old or old[k] != v]
 
     def warnProtocol(self):
         if version.protocol < self.protocol:
