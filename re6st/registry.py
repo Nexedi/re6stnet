@@ -136,9 +136,8 @@ class RegistryServer(object):
             self.setConfig('version', buffer(self.version))
             self.setConfig('last_config', config)
             self.sendto(self.prefix, 0)
+        # The following entry lists values that are base64-encoded.
         kw[''] = 'version',
-        # Example to avoid all nodes to restart at the same time:
-        # kw['delay_restart'] = 600 * random.random()
         kw['version'] = self.version.encode('base64')
         self.network_config = zlib.compress(json.dumps(kw), 9)
 

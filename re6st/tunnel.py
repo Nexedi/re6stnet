@@ -554,8 +554,6 @@ class BaseTunnelManager(object):
             or not all(crl.isdisjoint(serials.itervalues())
                        for serials in self._served.itervalues())):
             # Wait at least 1 second to broadcast new version to neighbours.
-            # If re6stnet is too old, don't abort now, because a new version
-            # may have been installed without restart.
             self.selectTimeout(time.time() + 1 + self.cache.delay_restart,
                                self._restart)
 
