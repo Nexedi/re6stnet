@@ -155,12 +155,18 @@ exit = exit()
 class Popen(subprocess.Popen):
 
     def __init__(self, *args, **kw):
+        self._args = tuple(args[0] if args else kw['args'])
         try:
             super(Popen, self).__init__(*args, **kw)
         except OSError, e:
             if e.errno != errno.ENOMEM:
                 raise
             self.returncode = -1
+
+    def send_signal(self, sig):
+        logging.info('Sending signal %s to pid %s %r',
+                     sig, self.pid, self._args)
+        super(Popen, self).send_signal(sig)
 
     def stop(self):
         if self.pid and self.returncode is None:

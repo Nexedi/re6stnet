@@ -36,7 +36,7 @@ def getConfig():
         help="Path to re6stnet state directory:\n"
              "- cache.db: cache of network parameters and peer addresses\n"
              "- babeld.state: see option -S of babeld\n")
-    _('-v', '--verbose', default=1, type=int, metavar='LEVEL',
+    _('-v', '--verbose', default=2, type=int, metavar='LEVEL',
         help="Log level of re6stnet itself. 0 disables logging. 1=WARNING,"
              " 2=INFO, 3=DEBUG, 4=TRACE. Use SIGUSR1 to reopen log."
              " See also --babel-verb and --verb for logs of spawned processes.")
