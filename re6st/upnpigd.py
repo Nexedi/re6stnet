@@ -52,7 +52,7 @@ class Forwarder(object):
             ip = self.refresh()
         try:
             socket.inet_aton(ip)
-        except socket.error:
+        except (socket.error, TypeError):
             ip = ()
         return socket.AF_INET, ip and [(ip, str(port or local), proto)
             for local, proto, port in self._rules]
