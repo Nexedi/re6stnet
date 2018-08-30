@@ -447,4 +447,10 @@ def main():
         os.execvp(sys.argv[0], sys.argv)
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except SystemExit, e:
+        if type(e.code) is str:
+            if hasattr(logging, 'trace'): # utils.setupLog called
+                logging.critical(e.code)
+        raise
