@@ -201,7 +201,7 @@ class Cache(object):
 
     @property
     def my_address(self):
-        for x, in self._db.execute("SELECT address FROM peer WHERE NOT prefix"):
+        for x, in self._db.execute("SELECT address FROM peer WHERE prefix=''"):
             return x
 
     @my_address.setter
