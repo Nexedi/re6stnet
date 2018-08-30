@@ -370,6 +370,15 @@ def main():
                 t = threading.Thread(target=check_no_default_route_thread)
                 t.daemon = True
                 t.start()
+            else:
+                x = ['ip', '-6', 'route', 'add',
+                     'unreachable', '::/128', 'from', '::/128']
+                if subprocess.call(x):
+                    sys.exit('error: Source address based routing is not'
+                             ' enabled in your kernel (CONFIG_IPV6_SUBTREES).'
+                             ' Try with the --default option.')
+                x[3] = 'del'
+                subprocess.check_call(x)
             ip('route', 'unreachable', my_network)
 
             config.babel_args += config.iface_list
