@@ -216,7 +216,7 @@ class Cache(object):
     @my_address.deleter
     def my_address(self):
         with self._db as db:
-            db.execute("DELETE FROM peer WHERE NOT prefix")
+            db.execute("DELETE FROM peer WHERE prefix=''")
 
     # Exclude our own address from results in case it is there, which may
     # happen if a node change its certificate without clearing the cache.
