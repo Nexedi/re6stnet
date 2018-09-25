@@ -644,8 +644,8 @@ class BaseTunnelManager(object):
                 if country:
                     if self._country.get(family) != country:
                         self._country[family] = country
-                        logging.info('%s country: %s',
-                            family_dict[family], country)
+                        logging.info('%s country: %s (%s)',
+                            family_dict[family], country, ip)
                     return
 
 
