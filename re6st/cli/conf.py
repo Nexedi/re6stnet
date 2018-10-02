@@ -175,7 +175,7 @@ key %s
 #verbose 3
 # enable OpenVPN logging:
 #ovpnlog
-# increase OpenVPN verbosity:
+# uncomment the following 2 lines to increase OpenVPN verbosity:
 #O--verb
 #O3
 """ % (config.registry, ca_path, cert_path, key_path))
