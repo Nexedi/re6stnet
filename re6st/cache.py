@@ -25,7 +25,7 @@ class Cache(object):
             try INTEGER NOT NULL DEFAULT 0)""")
         q("CREATE INDEX volatile.stat_try ON stat(try)")
         q("INSERT INTO volatile.stat (peer)"
-          " SELECT prefix FROM peer WHERE prefix")
+          " SELECT prefix FROM peer WHERE prefix != ''")
         self._db.commit()
         self._loadConfig(self._selectConfig(q))
         try:
