@@ -7,9 +7,20 @@ if 're6st' not in sys.modules:
     import os; sys.path[0] = os.path.dirname(sys.path[0])
 from re6st import ctl, tunnel, utils
 
+from re6st.registry import RegistryServer
+
+
+@apply
+class proxy(object):
+
+    def __init__(self):
+        self.sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+    recv = RegistryServer.recv.__func__
+    sendto = RegistryServer.sendto.__func__
+
 
 def cmd_update(db, config):
-    s = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+    s = proxy.sock,
     q = db.execute
     ip, n = config.network.split('/')
     network = utils.binFromIp(ip)[:int(n)]
@@ -29,43 +40,31 @@ def cmd_update(db, config):
             break
         p = peers.copy()
         while True:
-            r, w, _ = select.select([s], [s] if p else [], [], 1)
+            r, w, _ = select.select(s, s if p else (), (), 1)
             if r:
-                x, a = s.recvfrom(1<<16)
-                if x[0] == '\1':
+                prefix, address = proxy.recv(1)
+                peers.discard(prefix)
+                ip = None
+                for ip, _, _ in utils.parse_address(address):
                     try:
-                        prefix, address = x[1:x.index('\n')].split()
-                    except ValueError:
-                        pass
-                    else:
-                        if utils.binFromIp(a[0]).startswith(network + prefix):
-                            peers.discard(prefix)
+                        if utils.binFromIp(ip): #.startswith(network):
                             ip = None
-                            for ip, _, _ in utils.parse_address(address):
-                                try:
-                                    if utils.binFromIp(ip): #.startswith(network):
-                                        ip = None
-                                except socket.error:
-                                    try:
-                                        a = socket.inet_aton(ip)
-                                    except socket.error:
-                                        pass
-                                    else:
-                                        if bin(*struct.unpack('>I', a))[2:] \
-                                            .startswith((
-                                                '10100000', '11111110',
-                                                '101011000001',
-                                                '1100000010101000')):
-                                            ip = None
-                            if ip:
-                                q("UPDATE ip SET ip=? WHERE prefix=?",
-                                  (ip, prefix))
+                    except socket.error:
+                        try:
+                            a = socket.inet_aton(ip)
+                        except socket.error:
+                            pass
+                        else:
+                            if bin(*struct.unpack('>I', a))[2:].startswith((
+                                    '10100000', '11111110',
+                                    '101011000001',
+                                    '1100000010101000')):
+                                ip = None
+                if ip:
+                    q("UPDATE ip SET ip=? WHERE prefix=?",
+                      (ip, prefix))
             if w:
-                x = utils.ipFromBin(network + p.pop())
-                try:
-                    s.sendto('\2', (x, tunnel.PORT))
-                except socket.error:
-                    pass
+                proxy.sendto(p.pop(), 1)
             elif not r:
                 break
     db.commit()
@@ -82,6 +81,15 @@ def cmd_ip(db, config):
             q("UPDATE ip SET mode=0, ip=? WHERE prefix=?",
               (ip or None, prefix))
     db.commit()
+
+
+def geo_geolite2():
+    from geoip2 import database, errors
+    country = database.Reader(os.environ['GEOIP2_MMDB']).country
+    def geo(ip):
+        x = country(ip).country
+        return None, None, '%s, %s' % (x.iso_code, x.name)
+    return geo
 
 
 def geo_freegeoip():
@@ -133,7 +141,7 @@ def cmd_geoip(db, config):
                 loc = cache_dict[ip]
             except KeyError:
                 if mode in (None, 'auto'):
-                    mode = 'freegeoip'
+                    mode = 'geolite2'
                 try:
                     geo = mode_dict[mode]
                 except KeyError:
@@ -212,7 +220,8 @@ def main():
         help="Query all running nodes to fetch their tunnel IP."
              " CN marked for manual update with 'ip' subcommand are skipped."
              ).add_argument
-    _('--control-socket', metavar='CTL_SOCK', default=ctl.SOCK_PATH,
+    _('--control-socket', metavar='CTL_SOCK',
+        default='/var/run/re6stnet/babeld.sock',
         help="Socket path to use for communication between re6stnet and babeld"
              " (option -R of Babel).")
     _('network')
