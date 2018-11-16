@@ -56,6 +56,7 @@ Requirements
 - OpenSSL binary and development libraries
 - OpenVPN >= 2.3
 - Babel_ (with Nexedi patches)
+- geoip2: `python library`_ and `country lite database`_ (optional)
 - python-miniupnpc for UPnP support (optional)
 - for the demo: miniupnpd_, Graphviz, Screen_, Nemu_
 
@@ -65,17 +66,50 @@ See also `setup.py` for Python dependencies.
 .. _Nemu: https://github.com/thetincho/nemu
 .. _miniupnpd: http://miniupnp.free.fr/
 .. _Screen: http://savannah.gnu.org/projects/screen
+.. _python library: https://pypi.org/project/geoip2/
+.. _country lite database: https://dev.maxmind.com/geoip/geoip2/geolite2/
 
 Installation
 ============
 
-| Official packaging is implemented at
+Packages (preferred method)
+---------------------------
+
+We are providing a `re6st-node` package for many distributions.
+In order to install it, go to
+
+  https://build.opensuse.org/package/show/home:VIFIBnexedi/Re6stnet
+
+and find your distribution on the build result at the right of the page.
+Once you have your distribution name <DISTRIB_NAME>, the repository to add is
+
+  http://download.opensuse.org/repositories/home:/VIFIBnexedi/<DISTRIB_NAME>
+
+For example (as root):
+
+* Ubuntu 16.04::
+
+   echo "deb http://download.opensuse.org/repositories/home:/VIFIBnexedi/xUbuntu_16.04 ./" >/etc/apt/sources.list.d/re6stnet.list
+   wget -qO - https://download.opensuse.org/repositories/home:/VIFIBnexedi/xUbuntu_16.04/Release.key |apt-key add -
+
+* Debian 9::
+
+   echo "deb http://download.opensuse.org/repositories/home:/VIFIBnexedi/Debian_9.0 ./" >/etc/apt/sources.list.d/re6stnet.list
+   wget -qO - https://download.opensuse.org/repositories/home:/VIFIBnexedi/Debian_9.0/Release.key |apt-key add -
+
+Then::
+
+  apt update
+  apt install re6st-node
+
+| The packaging is maintained at
 |   https://lab.nexedi.com/nexedi/slapos.package/tree/master/obs/re6st
-| and packages are built for many Linux distributions at
-|   https://build.opensuse.org/package/show/home:VIFIBnexedi/Re6stnet
+
+Python egg
+----------
 
 | re6stnet is also distributed as a Python egg:
-|   https://pypi.python.org/pypi/re6stnet
+|   https://pypi.org/project/re6stnet/
 
 References
 ==========
