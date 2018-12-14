@@ -129,6 +129,9 @@ class Cert(object):
             cert = crypto.dump_certificate(crypto.FILETYPE_PEM, r)
         p = openssl('verify', '-CAfile', self.ca_path)
         out, err = p.communicate(cert)
+        if p.returncode == -1:
+          # utils.Popen sets returncode -1 on ENOMEM
+          raise VerifyError(None, None, "error running openssl, assuming cert is invalid")
         if p.returncode or strict:
           # BBB: With old versions of openssl, detailed
           #      error is printed to standard output.
