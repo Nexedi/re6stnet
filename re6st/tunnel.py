@@ -87,7 +87,8 @@ class Connection(object):
         self.time = time.time()
         self.process = plib.client(
             self.iface, (self.address_list[self._retry],), tm.encrypt,
-            '--tls-remote', '%u/%u' % (int(self._prefix, 2), len(self._prefix)),
+            '--verify-x509-name',
+                '%u/%u' % (int(self._prefix, 2), len(self._prefix)), 'name',
             '--resolv-retry', '0',
             '--connect-retry-max', '3', '--tls-exit',
             '--remap-usr1', 'SIGTERM',
