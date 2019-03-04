@@ -1,5 +1,6 @@
 #!/usr/bin/python2
-import math, nemu, os, re, signal, socket, subprocess, sys, time, weakref
+import argparse, math, nemu, os, re, signal
+import socket, subprocess, sys, time, weakref
 from collections import defaultdict
 IPTABLES = 'iptables'
 SCREEN = 'screen'
@@ -37,6 +38,22 @@ def _add_interface(node, iface):
     iface.__dict__['node'] = weakref.proxy(node)
     return Node__add_interface(node, iface)
 nemu.Node._add_interface = _add_interface
+
+parser = argparse.ArgumentParser()
+parser.add_argument('port', type = int,
+    help = 'port used to display tunnels')
+parser.add_argument('-d', '--duration', type = int,
+    help = 'time of the demo execution in seconds')
+parser.add_argument('-p', '--ping', action = 'store_true',
+    help = 'execute ping utility')
+args = parser.parse_args()
+
+def handler(signum, frame):
+    sys.exit()
+
+if args.duration:
+    signal.signal(signal.SIGALRM, handler)
+    signal.alarm(args.duration)
 
 execfile("fixnemu.py")
 
@@ -225,6 +242,18 @@ if 1:
     re6stnet(machine8, 'm8')
     db.close()
 
+if args.ping:
+    for j, machine in enumerate(nodes):
+        ips = [
+            '2001:db8:42::1' if i == 0 else
+            '2001:db8:42:2::' if i == 2 else
+            # Only 1 address for machine2 because prefix_len = 80,+48 = 128
+            '2001:db8:42:%s::1' % i
+            for i in xrange(9)
+            if i != j]
+        name = '%s' % 'm' + machine.short if machine.short != 'R' else 'registry'
+        machine.screen('python ping.py {} {}'.format(name, ' '.join(ips)))
+
 _ll = {}
 def node_by_ll(addr):
     try:
@@ -302,7 +331,7 @@ def route_svg(ipv4, z = 4, default = type('', (), {'short': None})):
         stdin=subprocess.PIPE, stdout=subprocess.PIPE,
         ).communicate('\n'.join(gv))[0]
 
-if len(sys.argv) > 1:
+if args.port:
     import SimpleHTTPServer, SocketServer
 
     class Handler(SimpleHTTPServer.SimpleHTTPRequestHandler):
@@ -392,6 +421,6 @@ if len(sys.argv) > 1:
     class TCPServer(SocketServer.TCPServer):
         allow_reuse_address = True
 
-    TCPServer(('', int(sys.argv[1])), Handler).serve_forever()
+    TCPServer(('', args.port), Handler).serve_forever()
 
 import pdb; pdb.set_trace()
