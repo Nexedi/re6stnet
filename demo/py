@@ -6,11 +6,12 @@ def __file__():
     from argparse import ArgumentParser
     _parse_args = ArgumentParser.parse_args
     ArgumentParser.parse_args = lambda self: _parse_args(self, sys.argv[2:])
+    # Always import to prevent re6st.node.cli from altering the first sys.path
+    from re6st import registry
 
     if 1:
         # Check renewal of certificate.
         from random import randrange
-        from re6st import registry
         registry.RENEW_PERIOD = 60
         _createCertificate = registry.RegistryServer.createCertificate
         def createCertificate(self, client_prefix, *args):
