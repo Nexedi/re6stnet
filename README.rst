@@ -58,13 +58,14 @@ Requirements
 - Babel_ (with Nexedi patches)
 - geoip2: `python library`_ and `country lite database`_ (optional)
 - python-miniupnpc for UPnP support (optional)
-- for the demo: miniupnpd_, Graphviz, Screen_, Nemu_
+- for the demo: miniupnpd_, Graphviz, Screen_, Nemu_, MultiPing_
 
 See also `setup.py` for Python dependencies.
 
 .. _Babel: https://lab.nexedi.com/nexedi/babeld
 .. _Nemu: https://github.com/thetincho/nemu
 .. _miniupnpd: http://miniupnp.free.fr/
+.. _MultiPing: https://github.com/romana/multi-ping
 .. _Screen: http://savannah.gnu.org/projects/screen
 .. _python library: https://pypi.org/project/geoip2/
 .. _country lite database: https://dev.maxmind.com/geoip/geoip2/geolite2/
