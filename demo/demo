@@ -2,31 +2,45 @@
 import argparse, math, nemu, os, re, signal
 import socket, subprocess, sys, time, weakref
 from collections import defaultdict
+from contextlib import contextmanager
 IPTABLES = 'iptables'
 SCREEN = 'screen'
 VERBOSE = 4
-REGISTRY='10.0.0.2'
+REGISTRY = '10.0.0.2'
+REGISTRY2 = '10.3.0.2'
+REGISTRY_SERIAL = '0x120010db80042'
+REGISTRY2_SERIAL = '0x120010db80043'
 CA_DAYS = 1000
 
 # Quick check to avoid wasting time if there is an error.
 with open(os.devnull, "wb") as f:
     for x in 're6stnet', 're6st-conf', 're6st-registry':
         subprocess.check_call(('./py', x, '--help'), stdout=f)
-
-#                       registry
-#                           |.2
-#                           |10.0.0
-#                           |.1
+#
+# Underlying network:
+#
+#       registry .2------      ------.2 registry2
+#                       |      |
+#                 10.0.0|      |10.3.0
+#                    .1 |      |.1
 #        ---------------Internet----------------
 #        |.1                |.1                |.1
 #        |10.1.0            |10.2.0            |
 #        |.2                |.2                |
 #    gateway1           gateway2           s3:10.0.1
 #        |.1                |.1            |.2 |.3 |.4
-#    s1:10.1.1          s2:10.2.1          m6  m7  m8
-#    |.2     |.3        |.2 |.3 |.4        |
-#    m1      m2         m3  m4  m5         m9
+#    s1:10.1.1        --s2:10.2.1--        m6  m7  m8
+#    |.2     |.3      |.2 |.3 |.4 |.5      |
+#    m1      m2       m3  m4  m5  m10      m9
 #
+# Overlay re6st network:
+#                         2001:db8::1
+#           registry--------internet-------registry2
+#              |::1                            ::1|
+#              |2001:db8:42            2001:db8:43|
+#  :1::   :3:: |:5::  :7::                   :1::1|
+#   m1-m2-m3-m4-m5-m6-m7-m8                       m10
+#     :2::  :4::  :6::  :8::
 
 def disable_signal_on_children(sig):
     pid = os.getpid()
@@ -62,6 +76,7 @@ for name in """internet=I registry=R
                           gateway1=g1 machine1=1 machine2=2
                           gateway2=g2 machine3=3 machine4=4 machine5=5
                           machine6=6 machine7=7 machine8=8 machine9=9
+                          registry2=R2 machine10=10
             """.split():
     name, short = name.split('=')
     globals()[name] = node = nemu.Node()
@@ -85,6 +100,7 @@ re_if_0, in_if_0 = nemu.P2PInterface.create_pair(registry, internet)
 in_if_1, g1_if_0 = nemu.P2PInterface.create_pair(internet, gateway1)
 in_if_2, g2_if_0 = nemu.P2PInterface.create_pair(internet, gateway2)
 m6_if_1, m9_if_0 = nemu.P2PInterface.create_pair(machine6, machine9)
+r2_if_0, in_if_4 = nemu.P2PInterface.create_pair(registry2, internet)
 
 g1_if_0_name = g1_if_0.name
 gateway1.Popen((IPTABLES, '-t', 'nat', '-A', 'POSTROUTING', '-o', g1_if_0_name, '-j', 'MASQUERADE')).wait()
@@ -92,6 +108,8 @@ gateway1.Popen((IPTABLES, '-t', 'nat', '-N', 'MINIUPNPD')).wait()
 gateway1.Popen((IPTABLES, '-t', 'nat', '-A', 'PREROUTING', '-i', g1_if_0_name, '-j', 'MINIUPNPD')).wait()
 gateway1.Popen((IPTABLES, '-N', 'MINIUPNPD')).wait()
 machine9.Popen(('sysctl', 'net.ipv6.conf.%s.accept_ra=2' % m9_if_0.name)).wait()
+# Enable forwarding for communication between registry and registry2
+internet.Popen(('sysctl', '-q', 'net.ipv6.conf.all.forwarding=1')).wait()
 
 in_if_3 = nemu.NodeInterface(internet)
 g1_if_1 = nemu.NodeInterface(gateway1)
@@ -104,6 +122,7 @@ m5_if_0 = nemu.NodeInterface(machine5)
 m6_if_0 = nemu.NodeInterface(machine6)
 m7_if_0 = nemu.NodeInterface(machine7)
 m8_if_0 = nemu.NodeInterface(machine8)
+m10_if_0 = nemu.NodeInterface(machine10)
 
 # connect to switch
 switch1.connect(g1_if_1)
@@ -114,6 +133,7 @@ switch2.connect(g2_if_1)
 switch2.connect(m3_if_0)
 switch2.connect(m4_if_0)
 switch2.connect(m5_if_0)
+switch2.connect(m10_if_0)
 
 switch3.connect(in_if_3)
 switch3.connect(m6_if_0)
@@ -123,10 +143,13 @@ switch3.connect(m8_if_0)
 # setting everything up
 switch1.up = switch2.up = switch3.up = True
 re_if_0.up = in_if_0.up = in_if_1.up = g1_if_0.up = in_if_2.up = g2_if_0.up = True
-in_if_3.up = g1_if_1.up = g2_if_1.up = m1_if_0.up = m2_if_0.up = m3_if_0.up = m4_if_0.up = m5_if_0.up = m6_if_0.up = m6_if_1.up = m7_if_0.up = m8_if_0.up = m9_if_0.up = True
+in_if_3.up = g1_if_1.up = g2_if_1.up = m1_if_0.up = m2_if_0.up = m3_if_0.up = True
+m4_if_0.up = m5_if_0.up = m6_if_0.up = m6_if_1.up = m7_if_0.up = m8_if_0.up = True
+m9_if_0.up = m10_if_0.up = in_if_4.up = r2_if_0.up = True
 
 # Add IPv4 addresses
 re_if_0.add_v4_address(address=REGISTRY, prefix_len=24)
+r2_if_0.add_v4_address(address=REGISTRY2, prefix_len=24)
 in_if_0.add_v4_address(address='10.0.0.1', prefix_len=24)
 in_if_1.add_v4_address(address='10.1.0.1', prefix_len=24)
 in_if_2.add_v4_address(address='10.2.0.1', prefix_len=24)
@@ -141,10 +164,12 @@ m2_if_0.add_v4_address(address='10.1.1.3', prefix_len=24)
 m3_if_0.add_v4_address(address='10.2.1.2', prefix_len=24)
 m4_if_0.add_v4_address(address='10.2.1.3', prefix_len=24)
 m5_if_0.add_v4_address(address='10.2.1.4', prefix_len=24)
+m10_if_0.add_v4_address(address='10.2.1.5', prefix_len=24)
 m6_if_0.add_v4_address(address='10.0.1.2', prefix_len=24)
 m7_if_0.add_v4_address(address='10.0.1.3', prefix_len=24)
 m8_if_0.add_v4_address(address='10.0.1.4', prefix_len=24)
 m6_if_1.add_v4_address(address='192.168.241.1', prefix_len=24)
+in_if_4.add_v4_address(address='10.3.0.1', prefix_len=24)
 
 def add_llrtr(iface, peer, dst='default'):
     for a in peer.get_addresses():
@@ -155,14 +180,17 @@ def add_llrtr(iface, peer, dst='default'):
 
 # setup routes
 add_llrtr(re_if_0, in_if_0)
+add_llrtr(r2_if_0, in_if_4)
 add_llrtr(in_if_0, re_if_0, '2001:db8:42::/48')
+add_llrtr(in_if_4, r2_if_0, '2001:db8:43::/48')
 registry.add_route(prefix='10.0.0.0', prefix_len=8, nexthop='10.0.0.1')
+registry2.add_route(prefix='10.0.0.0', prefix_len=8, nexthop='10.3.0.1')
 internet.add_route(prefix='10.2.0.0', prefix_len=16, nexthop='10.2.0.2')
 gateway1.add_route(prefix='10.0.0.0', prefix_len=8, nexthop='10.1.0.1')
 gateway2.add_route(prefix='10.0.0.0', prefix_len=8, nexthop='10.2.0.1')
 for m in machine1, machine2:
     m.add_route(nexthop='10.1.1.1')
-for m in machine3, machine4, machine5:
+for m in machine3, machine4, machine5, machine10:
     m.add_route(prefix='10.0.0.0', prefix_len=8, nexthop='10.2.1.1')
 for m in machine6, machine7, machine8:
     m.add_route(prefix='10.0.0.0', prefix_len=8, nexthop='10.0.1.1')
@@ -180,22 +208,24 @@ else:
 nodes = []
 gateway1.screen('miniupnpd -d -f miniupnpd.conf -P miniupnpd.pid'
                 ' -a %s -i %s' % (g1_if_1.name, g1_if_0_name))
-if 1:
+@contextmanager
+def new_network(registry, reg_addr, serial, ca):
     from OpenSSL import crypto
     import hashlib, sqlite3
-    os.path.exists('ca.crt') or subprocess.check_call(
-        "openssl req -nodes -new -x509 -key registry/ca.key -out ca.crt"
+    os.path.exists(ca) or subprocess.check_call(
+        "openssl req -nodes -new -x509 -key %s/ca.key -out %s"
         " -subj /CN=re6st.example.com/emailAddress=re6st@example.com"
-        " -set_serial 0x120010db80042 -days %u" % CA_DAYS, shell=True)
-    with open('ca.crt') as f:
-        ca = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
+        " -set_serial %s -days %u"
+        % (registry.name, ca, serial, CA_DAYS), shell=True)
+    with open(ca) as f:
+        cert = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
     fingerprint = "sha256:" + hashlib.sha256(
-        crypto.dump_certificate(crypto.FILETYPE_ASN1, ca)).hexdigest()
-    db_path = 'registry/registry.db'
-    registry.screen('./py re6st-registry @registry/re6st-registry.conf'
-        ' --db %s --mailhost %s -v%u'
-        % (db_path, os.path.abspath('mbox'), VERBOSE))
-    registry_url = 'http://%s/' % REGISTRY
+        crypto.dump_certificate(crypto.FILETYPE_ASN1, cert)).hexdigest()
+    db_path = "%s/registry.db" % registry.name
+    registry.screen("./py re6st-registry @%s/re6st-registry.conf"
+        " --db %s --mailhost %s -v%u"
+        % (registry.name, db_path, os.path.abspath('mbox'), VERBOSE))
+    registry_url = 'http://%s/' % reg_addr
     registry.Popen(('python', '-c', """if 1:
         import socket, time
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -207,7 +237,7 @@ if 1:
                 time.sleep(.1)
         """)).wait()
     db = sqlite3.connect(db_path, isolation_level=None)
-    def re6stnet(node, folder, args='', prefix_len=None, registry=registry_url):
+    def new_node(node, folder, args='', prefix_len=None, registry=registry_url):
         nodes.append(node)
         if not os.path.exists(folder + '/cert.crt'):
             dh_path = folder + '/dh2048.pem'
@@ -231,27 +261,35 @@ if 1:
         node.screen('./py re6stnet @%s/re6stnet.conf -v%u --registry %s'
                     ' --console %s/run/console.sock %s' % (
                       folder, VERBOSE, registry, folder, args))
-    re6stnet(registry, 'registry', '--ip ' + REGISTRY, registry='http://localhost/')
-    re6stnet(machine1, 'm1', '-I%s' % m1_if_0.name)
-    re6stnet(machine2, 'm2', '--remote-gateway 10.1.1.1', prefix_len=80)
-    re6stnet(machine3, 'm3', '-i%s' % m3_if_0.name)
-    re6stnet(machine4, 'm4', '-i%s' % m4_if_0.name)
-    re6stnet(machine5, 'm5', '-i%s' % m5_if_0.name)
-    re6stnet(machine6, 'm6', '-I%s' % m6_if_1.name)
-    re6stnet(machine7, 'm7')
-    re6stnet(machine8, 'm8')
+    new_node(registry, registry.name, '--ip ' + reg_addr, registry='http://localhost/')
+    yield new_node
     db.close()
+
+with new_network(registry, REGISTRY, REGISTRY_SERIAL, 'ca.crt') as new_node:
+    new_node(machine1, 'm1', '-I%s' % m1_if_0.name)
+    new_node(machine2, 'm2', '--remote-gateway 10.1.1.1', prefix_len=80)
+    new_node(machine3, 'm3', '-i%s' % m3_if_0.name)
+    new_node(machine4, 'm4', '-i%s' % m4_if_0.name)
+    new_node(machine5, 'm5', '-i%s' % m5_if_0.name)
+    new_node(machine6, 'm6', '-I%s' % m6_if_1.name)
+    new_node(machine7, 'm7')
+    new_node(machine8, 'm8')
+
+with new_network(registry2, REGISTRY2, REGISTRY2_SERIAL, 'ca2.crt') as new_node:
+    new_node(machine10, 'm10', '-i%s' % m10_if_0.name)
 
 if args.ping:
     for j, machine in enumerate(nodes):
         ips = [
             '2001:db8:42::1' if i == 0 else
             '2001:db8:42:2::' if i == 2 else
+            '2001:db8:43::1' if i == 9 else
+            '2001:db8:43:1::1' if i == 10 else
             # Only 1 address for machine2 because prefix_len = 80,+48 = 128
             '2001:db8:42:%s::1' % i
-            for i in xrange(9)
+            for i in xrange(11)
             if i != j]
-        name = 'm' + machine.short if machine.short != 'R' else 'registry'
+        name = machine.name if machine.short[0] == 'R' else 'm' + machine.short
         machine.screen('python ping.py {} {}'.format(name, ' '.join(ips)))
 
 _ll = {}
