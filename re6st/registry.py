@@ -19,7 +19,7 @@ Authenticated communication:
   - the one of the last handshake (hello)
 """
 import base64, hmac, hashlib, httplib, inspect, json, logging
-import mailbox, os, random, select, smtplib, socket, sqlite3
+import mailbox, os, platform, random, select, smtplib, socket, sqlite3
 import string, struct, sys, threading, time, weakref, zlib
 from collections import defaultdict, deque
 from datetime import datetime
@@ -240,6 +240,8 @@ class RegistryServer(object):
             self.timeout = not_after and not_after + GRACE_PERIOD
 
     def handle_request(self, request, method, kw):
+        with self.lock:
+            self.client_headers = request.headers
         m = getattr(self, method)
         if hasattr(method, '_private'):
             authorized_origin =  self.config.authorized_origin
@@ -510,6 +512,11 @@ class RegistryServer(object):
                 # (in case 'peers' is empty).
                 peer = self.prefix
         with self.lock:
+            forward = self.client_headers.get("X-Forwarded-For")
+            addr = forward if forward else self.client_headers.get("host")
+            logging.info("Got contact from %s (%s) with user-agent %s",
+                utils.ipFromBin(x509.networkFromCa(self.cert.ca) + cn),
+                addr, self.client_headers.get('user-agent'))
             msg = self._queryAddress(peer)
             if msg is None:
                 return
@@ -640,7 +647,7 @@ class RegistryServer(object):
 class RegistryClient(object):
 
     _hmac = None
-    user_agent = "re6stnet/" + version.version
+    user_agent = platform.platform() +"_re6stnet/" + version.version
 
     def __init__(self, url, cert=None, auto_close=True):
         self.cert = cert
