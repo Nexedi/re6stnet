@@ -1,4 +1,4 @@
-import errno, json, logging, os, random, socket
+import errno, json, logging, os, platform, random, socket
 import subprocess, struct, sys, time, weakref
 from collections import defaultdict, deque
 from bisect import bisect, insort
@@ -490,7 +490,7 @@ class BaseTunnelManager(object):
                 if ask:
                     return self._info(False)
             else:
-                return version.version
+                return "%s, %s" % (version.version, platform.platform())
         elif code == 5:
             # the registry wants to know the topology for debugging purpose
             if not peer or peer == self.cache.registry_prefix:
