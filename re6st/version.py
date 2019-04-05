@@ -1,4 +1,5 @@
 import subprocess as _S
+import platform
 from os.path import dirname as _d
 _d = _d(__file__)
 
@@ -34,6 +35,7 @@ if dirty:
 # a wish to force an update of nodes.
 protocol = 4
 min_protocol = 1
+os = platform.platform()
 
 if __name__ == "__main__":
     print version
