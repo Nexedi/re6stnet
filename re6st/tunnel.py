@@ -490,7 +490,7 @@ class BaseTunnelManager(object):
                 if ask:
                     return self._info(False)
             else:
-                return version.version
+                return version.version + version.os
         elif code == 5:
             # the registry wants to know the topology for debugging purpose
             if not peer or peer == self.cache.registry_prefix:

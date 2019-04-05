@@ -19,7 +19,7 @@ Authenticated communication:
   - the one of the last handshake (hello)
 """
 import base64, hmac, hashlib, httplib, inspect, json, logging
-import mailbox, os, random, select, smtplib, socket, sqlite3
+import mailbox, os, platform, random, select, smtplib, socket, sqlite3
 import string, struct, sys, threading, time, weakref, zlib
 from collections import defaultdict, deque
 from datetime import datetime
@@ -259,6 +259,18 @@ class RegistryServer(object):
                     raise Exception("Wrong HMAC")
                 key = hashlib.sha1(key).digest()
                 session[:] = hashlib.sha1(key).digest(),
+        else:
+            x_forwarded_for = request.headers.get("X-Forwarded-For")
+            ipv6 = None
+            if method == "hello":
+                ipv6=utils.ipFromBin(
+                    x509.networkFromCa(self.cert.ca)
+                    + kw["client_prefix"])
+            logging.info("%s%s: %s, %s",
+            method,
+            '(' + ipv6 + ')' if method == "hello" else '',
+            x_forwarded_for or request.headers.get("host"),
+            request.headers.get("user-agent"))
         try:
             result = m(**kw)
         except HTTPError, e:
@@ -640,7 +652,7 @@ class RegistryServer(object):
 class RegistryClient(object):
 
     _hmac = None
-    user_agent = "re6stnet/" + version.version
+    user_agent = "re6stnet/%s, %s" % (version.version, version.os)
 
     def __init__(self, url, cert=None, auto_close=True):
         self.cert = cert
