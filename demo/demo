@@ -60,6 +60,8 @@ parser.add_argument('-d', '--duration', type = int,
     help = 'time of the demo execution in seconds')
 parser.add_argument('-p', '--ping', action = 'store_true',
     help = 'execute ping utility')
+parser.add_argument('-t', '--traceroute', action = 'store_true',
+    help = 'execute traceroute utility')
 args = parser.parse_args()
 
 def handler(signum, frame):
@@ -296,6 +298,23 @@ if args.ping:
             if i != j]
         name = machine.name if machine.short[0] == 'R' else 'm' + machine.short
         machine.screen('python ping.py {} {}'.format(name, ' '.join(ips)))
+
+if args.traceroute:
+    for j, machine in enumerate(nodes):
+        ips = [
+            '2001:db8:42::1' if i == 0 else
+            '2001:db8:42:2::' if i == 2 else
+            # Only 1 address for machine2 because prefix_len = 80,+48 = 128
+            '2001:db8:42:%s::1' % i
+            for i in xrange(9)
+            if i != j] if j > 8 else ['2001:db8:43:1::1',' 2001:db8:43::1']
+        if machine.short == 'R':
+            name = 'registry'
+        elif machine.short == 'R2':
+            name = 'registry2'
+        else:
+            name = 'm' + machine.short
+        machine.screen('python check_routes.py %s %s' % (name, ' '.join(ips)))
 
 _ll = {}
 def node_by_ll(addr):
