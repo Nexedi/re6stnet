@@ -54,7 +54,7 @@ Requirements
 
 - Python 2.6 or 2.7
 - OpenSSL binary and development libraries
-- OpenVPN >= 2.3
+- OpenVPN >= 2.4
 - Babel_ (with Nexedi patches)
 - geoip2: `python library`_ and `country lite database`_ (optional)
 - python-miniupnpc for UPnP support (optional)
