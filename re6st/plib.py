@@ -23,13 +23,14 @@ def openvpn(iface, encrypt, *args, **kw):
     logging.debug('%r', args)
     return utils.Popen(args, **kw)
 
-ovpn_link_mtu_dict = {'udp': 1432, 'udp6': 1450}
+ovpn_link_mtu_dict = {'udp4': 1500, 'udp6': 1500}
 
 def server(iface, max_clients, dh_path, fd, port, proto, encrypt, *args, **kw):
+    if proto == 'udp':
+        proto = 'udp4'
     client_script = '%s %s' % (ovpn_server, fd)
     try:
         args = ('--link-mtu', str(ovpn_link_mtu_dict[proto]),
-                # mtu-disc ignored for udp6 due to a bug in OpenVPN
                 '--mtu-disc', 'yes') + args
     except KeyError:
         proto += '-server'
@@ -50,6 +51,8 @@ def client(iface, address_list, encrypt, *args, **kw):
     # XXX: We'd like to pass <connection> sections at command-line.
     link_mtu = set()
     for ip, port, proto in address_list:
+        if proto == 'udp':
+            proto = 'udp4'
         remote += '--remote', ip, port, proto
         link_mtu.add(ovpn_link_mtu_dict.get(proto))
     link_mtu, = link_mtu
