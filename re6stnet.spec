@@ -12,7 +12,7 @@ BuildArch:  noarch
 Requires:   babeld = 1.6.2-nxd1
 Requires:   iproute
 Requires:   openssl
-Requires:   openvpn >= 2.3
+Requires:   openvpn >= 2.4
 Requires:   python >= 2.7
 Requires:   pyOpenSSL >= 0.13
 Requires:   python-setuptools
