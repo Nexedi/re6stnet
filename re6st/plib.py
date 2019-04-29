@@ -28,7 +28,9 @@ ovpn_link_mtu_dict = {'udp4': 1432, 'udp6': 1450}
 def server(iface, max_clients, dh_path, fd, port, proto, encrypt, *args, **kw):
     client_script = '%s %s' % (ovpn_server, fd)
     try:
-        args = ('--link-mtu', str(ovpn_link_mtu_dict[proto]),
+        args = ('--link-mtu', str(ovpn_link_mtu_dict['udp6']),
+        #force udp6 because of a bug that does not give link
+        #local IPv6 to udp interface when --proto 'udp' is used
                 '--mtu-disc', 'yes') + args
     except KeyError:
         proto += '-server'
