@@ -146,6 +146,11 @@ m7_if_0.add_v4_address(address='10.0.1.3', prefix_len=24)
 m8_if_0.add_v4_address(address='10.0.1.4', prefix_len=24)
 m6_if_1.add_v4_address(address='192.168.241.1', prefix_len=24)
 
+# Add IPv6 addresses to test UDP6 between m8 and m6/m7
+m6_if_0.add_v6_address(address='fc42:6::1', prefix_len=16)
+m7_if_0.add_v6_address(address='fc42:7::1', prefix_len=16)
+m8_if_0.add_v6_address(address='fc42:8::1', prefix_len=16)
+
 def add_llrtr(iface, peer, dst='default'):
     for a in peer.get_addresses():
         a = a['address']
