@@ -22,14 +22,14 @@ def openvpn(iface, encrypt, *args, **kw):
     logging.debug('%r', args)
     return utils.Popen(args, **kw)
 
-ovpn_link_mtu_dict = {'udp4': 1500, 'udp6': 1500}
+ovpn_link_mtu_dict = {'udp4': 1432, 'udp6': 1450}
 
 def server(iface, max_clients, dh_path, fd, port, proto, encrypt, *args, **kw):
     if proto == 'udp':
         proto = 'udp4'
     client_script = '%s %s' % (ovpn_server, fd)
     try:
-        args = ('--link-mtu', str(ovpn_link_mtu_dict[proto]),
+        args = ('--link-mtu', str(ovpn_link_mtu_dict[proto] + 93),
                 '--mtu-disc', 'yes') + args
     except KeyError:
         proto += '-server'
