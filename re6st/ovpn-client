@@ -1,15 +1,4 @@
 #!/usr/bin/python2 -S
-import os, sys
-
-script_type = os.environ['script_type']
-if script_type == 'up':
-    # OpenVPN unsets PATH before calling hooks
-    # which is equivalent to set /bin:/usr/bin
-    os.environ['PATH'] = '/bin:/sbin:/usr/bin:/usr/sbin'
-    os.execlp('ip', 'ip', 'link', 'set', os.environ['dev'], 'up',
-              'mtu', os.environ['tun_mtu'])
-
-if script_type == 'route-up':
-    import time
-    os.write(int(sys.argv[1]), repr((os.environ['common_name'], time.time(),
-        int(os.environ['tls_serial_0']), os.environ['OPENVPN_external_ip'])))
+import os, sys, time
+os.write(int(sys.argv[1]), repr((os.environ['common_name'], time.time(),
+int(os.environ['tls_serial_0']), os.environ['OPENVPN_external_ip'])))
