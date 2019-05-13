@@ -106,9 +106,10 @@ def getConfig():
         help="Force each tunnel to be created through one the given gateways,"
              " in a round-robin fashion.")
     _('--disable-proto', action='append',
-        choices=('none', 'udp', 'tcp', 'udp6', 'tcp6'), default=['udp', 'udp6'],
+        choices=('none', 'udp', 'tcp', 'udp6', 'tcp6'),
         help="Do never try to create tunnels using given protocols."
-             " 'none' has precedence over other options.")
+             " 'none' has precedence over other options."
+             " default : ['udp', 'udp6']")
     _('--client', metavar='HOST,PORT,PROTO[;...]',
         help="Do not run any OpenVPN server, but only 1 OpenVPN client,"
              " with specified remotes. Any other option not required in this"
@@ -155,7 +156,9 @@ def main():
     if config.default and config.gateway:
         sys.exit("error: conflicting options --default and --gateway")
 
-    if 'none' in config.disable_proto:
+    if config.disable_proto is None:
+        config.disable_proto = ['udp', 'udp6']
+    elif 'none' in config.disable_proto:
         config.disable_proto = ()
     if config.default:
         # Make sure we won't tunnel over re6st.
