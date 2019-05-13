@@ -157,6 +157,8 @@ def main():
 
     if 'none' in config.disable_proto:
         config.disable_proto = ()
+    elif len(config.disable_proto) > 2:
+        config.disable_proto = config.disable_proto[2:]
     if config.default:
         # Make sure we won't tunnel over re6st.
         config.disable_proto = tuple(set(('tcp6', 'udp6')).union(
