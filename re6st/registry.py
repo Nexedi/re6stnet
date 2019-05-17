@@ -71,6 +71,8 @@ class RegistryServer(object):
                 "value")
         self.prefix = self.getConfig("prefix", None)
         self.version = str(self.getConfig("version", "\0")) # BBB: blob
+        # Initialize HMAC key
+        self.setConfig('babel_hmac0', buffer(os.urandom(16)))
         utils.sqliteCreateTable(self.db, "token",
                 "token TEXT PRIMARY KEY NOT NULL",
                 "email TEXT NOT NULL",
@@ -139,7 +141,7 @@ class RegistryServer(object):
         # The following entry lists values that are base64-encoded.
         kw[''] = 'version',
         kw['version'] = self.version.encode('base64')
-        self.network_config = zlib.compress(json.dumps(kw), 9)
+        self.network_config = kw
 
     # The 3 first bits code the number of bytes.
     def encodeVersion(self, version):
@@ -483,7 +485,15 @@ class RegistryServer(object):
 
     @rpc
     def getNetworkConfig(self, cn):
-        return self.network_config
+        with self.lock:
+            cert = self.getCert(cn)
+            config = self.network_config.copy()
+            for k in 'babel_hmac0', 'babel_hmac1', 'babel_hmac2':
+                v = self.getConfig(k, None)
+                if v is not None:
+                    config[k] = '' if v == '' else x509.encrypt(
+                                                   cert, v).encode('base64')
+        return zlib.compress(json.dumps(config), 9)
 
     def _queryAddress(self, peer):
         self.sendto(peer, 1)
@@ -549,6 +559,36 @@ class RegistryServer(object):
             if time.time() < not_after:
                 q("INSERT INTO crl VALUES (?,?)", (serial, not_after))
                 self.updateNetworkConfig()
+
+    @rpc_private
+    def updateHMAC(self):
+        with self.lock:
+          with self.db:
+            hmac0 = self.getConfig('babel_hmac0', None)
+            hmac1 = self.getConfig('babel_hmac1', None)
+            hmac2 = self.getConfig('babel_hmac2', None)
+            if hmac0:
+                if hmac1:
+                    self.setConfig('babel_hmac2', hmac0)
+                    self.db.execute("DELETE FROM config WHERE name=?",
+                                    ('babel_hmac0',))
+                else:
+                    self.setConfig('babel_hmac1', buffer(os.urandom(16)))
+            elif hmac1 and hmac2 is not None:
+                self.setConfig('babel_hmac0', hmac1)
+                self.db.execute("DELETE FROM config WHERE name=?",
+                                ('babel_hmac1',))
+                self.db.execute("DELETE FROM config WHERE name=?",
+                                ('babel_hmac2',))
+            elif not (hmac0 or hmac1 or hmac2):
+                # Initialization of HMAC on the network
+                self.setConfig('babel_hmac1', buffer(os.urandom(16)))
+                self.setConfig('babel_hmac2', '')
+          self.version = self.encodeVersion(
+                1 + self.decodeVersion(self.version))
+          self.setConfig('version', buffer(self.version))
+          self.network_config['version']  = self.version.encode('base64')
+          self.sendto(self.prefix, 0)
 
     @rpc_private
     def getNodePrefix(self, email):

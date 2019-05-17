@@ -95,6 +95,8 @@ class Cache(object):
             config = {}
             for k, v in x.iteritems():
                 k = str(k)
+                if 'babel_hmac' in k and v:
+                    v = self._decrypt(v.decode('base64'))
                 if k in base64:
                     v = v.decode('base64')
                 elif type(v) is unicode:
@@ -130,7 +132,8 @@ class Cache(object):
             # BBB: Use buffer because of http://bugs.python.org/issue13676
             #      on Python 2.6
             db.executemany("INSERT OR REPLACE INTO config VALUES(?,?)",
-                           ((k, buffer(v) if k in base64 else v)
+                           ((k, buffer(v) if k in base64 or 'babel_hmac' in k
+                                          else v)
                             for k, v in config.iteritems()))
         self._loadConfig(config.iteritems())
         return [k[:-5] if k.endswith(':json') else k
