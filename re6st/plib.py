@@ -61,9 +61,10 @@ def client(iface, address_list, encrypt, *args, **kw):
     return openvpn(iface, encrypt, *remote, **kw)
 
 
-def router(ip, ip4, src, hello_interval, log_path, state_path,
-           pidfile, control_socket, default, *args, **kw):
+def router(ip, ip4, src, hello_interval, log_path, state_path, pidfile,
+           control_socket, default, hmacs, *args, **kw):
     ip, n = ip
+    hmac_sign, hmac_accept = hmacs
     if ip4:
         ip4, n4 = ip4
     cmd = ['babeld',
@@ -79,9 +80,20 @@ def router(ip, ip4, src, hello_interval, log_path, state_path,
             #   is not equivalent, at least not the way we use babeld
             #   (and we don't need RTA_SRC for ipv4).
             '-C', 'ipv6-subtrees true',
-            '-C', 'default ' + default,
             '-C', 'redistribute local deny',
             '-C', 'redistribute ip %s/%s eq %s' % (ip, n, n)]
+    if hmac_sign:
+        cmd += '-C', ('key type blake2s id %s value %s' %
+                      ('sign', hmac_sign.encode('hex')))
+        cmd += '-C', 'default %s hmac sign' % (default)
+    else:
+        cmd += '-C', 'default ' + default
+    if hmac_accept is not None:
+        if hmac_accept == '':
+            cmd += '-C', 'ignore_no_hmac'
+        else:
+            cmd += '-C', ('key type blake2s id %s value %s' %
+                          ('accept', hmac_accept.encode('hex')))
     if ip4:
         cmd += '-C', 'redistribute ip %s/%s eq %s' % (ip4, n4, n4)
     if src:
