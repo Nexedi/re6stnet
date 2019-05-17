@@ -127,6 +127,13 @@ class RegistryServer(object):
         for x in ('client_count', 'encrypt', 'hello',
                   'max_clients', 'min_protocol', 'tunnel_refresh'):
             kw[x] = getattr(self.config, x)
+        current_hmac_rand = self.getConfig('babel_hmac_rand', None)
+        if current_hmac_rand:
+            kw['babel_hmac_rand'] = current_hmac_rand.encode('base64')
+        else:
+            rand = os.urandom(32)
+            self.setConfig('babel_hmac_rand', rand)
+            kw['babel_hmac_rand'] = rand.encode('base64')
         config = json.dumps(kw, sort_keys=True)
         if config != self.getConfig('last_config', None):
             self.version = self.encodeVersion(
@@ -137,7 +144,7 @@ class RegistryServer(object):
             self.setConfig('last_config', config)
             self.sendto(self.prefix, 0)
         # The following entry lists values that are base64-encoded.
-        kw[''] = 'version',
+        kw[''] = 'version', 'babel_hmac_rand',
         kw['version'] = self.version.encode('base64')
         self.network_config = zlib.compress(json.dumps(kw), 9)
 
