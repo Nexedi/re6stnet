@@ -84,7 +84,7 @@ class RegistryServer(object):
         utils.sqliteCreateTable(self.db, "crl",
                 "serial INTEGER PRIMARY KEY NOT NULL",
                 # Expiration date of revoked certificate.
-                # TODO: purge rows with dates in the past.
+                # TODO: purge rows with dates in the past, add hmac random.
                 "date INTEGER NOT NULL")
 
         self.cert = x509.Cert(self.config.ca, self.config.key)
@@ -120,6 +120,14 @@ class RegistryServer(object):
             'protocol': version.protocol,
             'registry_prefix': self.prefix,
         }
+        # The following entry lists values that are base64-encoded.
+        kw[''] = 'version',
+        for k in 'babel_hmac0', 'babel_hmac1', 'babel_hmac2':
+            v = self.getConfig(k, None)
+            if v is not None:
+                logging.info('found %s' % v)
+                kw[k] = str(v).encode('base64')
+                kw[''] += k,
         if self.config.ipv4:
             kw['ipv4'], kw['ipv4_sublen'] = self.config.ipv4
         if self.config.same_country:
@@ -136,9 +144,8 @@ class RegistryServer(object):
             self.setConfig('version', buffer(self.version))
             self.setConfig('last_config', config)
             self.sendto(self.prefix, 0)
-        # The following entry lists values that are base64-encoded.
-        kw[''] = 'version',
         kw['version'] = self.version.encode('base64')
+        #encryption : self.network_config = kw
         self.network_config = zlib.compress(json.dumps(kw), 9)
 
     # The 3 first bits code the number of bytes.
@@ -483,6 +490,11 @@ class RegistryServer(object):
 
     @rpc
     def getNetworkConfig(self, cn):
+        # encryption : for k in 'babel_hmac_rand', 'babel_hmac_rand_accept':
+        #    if k in self.network_config.keys():
+        #        v = self.network_config[k]
+        #        self.network_config[k] = x509.encrypt(cert, v).encode('base64')
+        #return zlib.compress(json.dumps(self.network_config), 9)
         return self.network_config
 
     def _queryAddress(self, peer):
@@ -549,6 +561,32 @@ class RegistryServer(object):
             if time.time() < not_after:
                 q("INSERT INTO crl VALUES (?,?)", (serial, not_after))
                 self.updateNetworkConfig()
+
+    @rpc_private
+    def updateHMAC(self):
+        with self.lock:
+          with self.db:
+            hmac0 = self.getConfig('babel_hmac0', None)
+            hmac1 = self.getConfig('babel_hmac1', None)
+            hmac2 = self.getConfig('babel_hmac2', None)
+            if hmac0:
+                if hmac1:
+                    self.setConfig('babel_hmac2', hmac0)
+                    self.db.execute("DELETE FROM config WHERE name=?",
+                                    ('babel_hmac0',))
+                else:
+                    self.setConfig('babel_hmac1', buffer(os.urandom(32)))
+            elif hmac1 and hmac2 is not None:
+                self.setConfig('babel_hmac0', hmac1)
+                self.db.execute("DELETE FROM config WHERE name=?",
+                                ('babel_hmac1',))
+                self.db.execute("DELETE FROM config WHERE name=?",
+                                ('babel_hmac2',))
+            else:
+                # Initialization of HMAC on the network
+                self.setConfig('babel_hmac1', buffer(os.urandom(32)))
+                self.setConfig('babel_hmac2', '')
+          self.updateNetworkConfig()
 
     @rpc_private
     def getNodePrefix(self, email):
