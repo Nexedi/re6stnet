@@ -137,8 +137,15 @@ class RegistryServer(object):
             self.setConfig('last_config', config)
             self.sendto(self.prefix, 0)
         # The following entry lists values that are base64-encoded.
-        kw[''] = 'version',
+        kw[''] = 'version', 'babel_hmac_rand',
         kw['version'] = self.version.encode('base64')
+        if self.getConfig('babel_hmac_rand', None):
+            kw['babel_hmac_rand'] = self.getConfig('babel_hmac_rand',
+                                                   None).encode('base64')
+        else:
+            rand = os.urandom(32)
+            self.setConfig('babel_hmac_rand', rand)
+            kw['babel_hmac_rand'] = rand.encode('base64')
         self.network_config = zlib.compress(json.dumps(kw), 9)
 
     # The 3 first bits code the number of bytes.

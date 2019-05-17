@@ -62,10 +62,11 @@ def client(iface, address_list, encrypt, *args, **kw):
 
 
 def router(ip, ip4, src, hello_interval, log_path, state_path,
-           pidfile, control_socket, default, *args, **kw):
+           pidfile, control_socket, default, babel_hmac_key, *args, **kw):
     ip, n = ip
     if ip4:
         ip4, n4 = ip4
+    key_id = 'babel_hmac_key'
     cmd = ['babeld',
             '-h', str(hello_interval),
             '-H', str(hello_interval),
@@ -79,7 +80,8 @@ def router(ip, ip4, src, hello_interval, log_path, state_path,
             #   is not equivalent, at least not the way we use babeld
             #   (and we don't need RTA_SRC for ipv4).
             '-C', 'ipv6-subtrees true',
-            '-C', 'default ' + default,
+            '-C', 'key type sha256 id %s value %s' % (key_id, babel_hmac_key),
+            '-C', 'default %s hmac %s' % (default, key_id),
             '-C', 'redistribute local deny',
             '-C', 'redistribute ip %s/%s eq %s' % (ip, n, n)]
     if ip4:
