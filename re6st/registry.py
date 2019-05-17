@@ -113,12 +113,17 @@ class RegistryServer(object):
                         name_value)
 
     def updateNetworkConfig(self, _it0=itemgetter(0)):
+        conf_hmac_rand = self.getConfig('babel_hmac_rand', None)
+        babel_hmac_rand = conf_hmac_rand if conf_hmac_rand else os.urandom(32)
+        if not conf_hmac_rand:
+            self.setConfig('babel_hmac_rand', babel_hmac_rand)
         kw = {
             'babel_default': 'max-rtt-penalty 5000 rtt-max 500 rtt-decay 125',
             'crl': map(_it0, self.db.execute(
                 "SELECT serial FROM crl ORDER BY serial")),
             'protocol': version.protocol,
             'registry_prefix': self.prefix,
+            'babel_hmac_rand': babel_hmac_rand.encode('base64'),
         }
         if self.config.ipv4:
             kw['ipv4'], kw['ipv4_sublen'] = self.config.ipv4
@@ -137,7 +142,7 @@ class RegistryServer(object):
             self.setConfig('last_config', config)
             self.sendto(self.prefix, 0)
         # The following entry lists values that are base64-encoded.
-        kw[''] = 'version',
+        kw[''] = 'version', 'babel_hmac_rand',
         kw['version'] = self.version.encode('base64')
         self.network_config = zlib.compress(json.dumps(kw), 9)
 
