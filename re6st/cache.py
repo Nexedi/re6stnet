@@ -97,6 +97,9 @@ class Cache(object):
                 k = str(k)
                 if k in base64:
                     v = v.decode('base64')
+                    if k in ['babel_hmac0', 'babel_hmac1', 'babel_hmac2']:
+                        v = self._decrypt(v)
+                    print k
                 elif type(v) is unicode:
                     v = str(v)
                 elif isinstance(v, (list, dict)):
