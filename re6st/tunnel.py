@@ -191,8 +191,9 @@ class BaseTunnelManager(object):
     # TODO: To minimize downtime when network parameters change, we should do
     #       our best to not restart any process. Ideally, this list should be
     #       empty and the affected subprocesses reloaded.
-    NEED_RESTART = frozenset(('babel_default', 'encrypt', 'hello',
-                              'ipv4', 'ipv4_sublen'))
+    NEED_RESTART = frozenset(('babel_default', 'babel_hmac_accept',
+                              'babel_hmac_sign', 'encrypt',
+                              'hello', 'ipv4', 'ipv4_sublen'))
 
     _geoiplookup = None
     _forward = None
@@ -537,7 +538,7 @@ class BaseTunnelManager(object):
             logging.info("will retry to update network parameters in 5 minutes")
             self.selectTimeout(time.time() + 300, self.newVersion)
             return
-        logging.info("changed: %r", changed)
+        logging.info("changed: %r", sorted(changed))
         self.selectTimeout(None, self.newVersion)
         self._version = self.cache.version
         self.broadcastNewVersion()

@@ -395,6 +395,8 @@ def main():
                 os.path.join(config.state, 'babeld.state'),
                 os.path.join(config.run, 'babeld.pid'),
                 control_socket, cache.babel_default,
+                tuple(getattr(cache, k, None) for k in
+                      ('babel_hmac_sign', 'babel_hmac_accept')),
                 *config.babel_args).stop)
             if config.up:
                 exit.release()
