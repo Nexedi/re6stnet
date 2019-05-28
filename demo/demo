@@ -46,6 +46,8 @@ parser.add_argument('-d', '--duration', type = int,
     help = 'time of the demo execution in seconds')
 parser.add_argument('-p', '--ping', action = 'store_true',
     help = 'execute ping utility')
+parser.add_argument('-m', '--hmac', action = 'store_true',
+    help = 'test hmac key change with registry reboot')
 args = parser.parse_args()
 
 def handler(signum, frame):
@@ -258,6 +260,9 @@ if args.ping:
             if i != j]
         name = 'm' + machine.short if machine.short != 'R' else 'registry'
         machine.screen('python ping.py {} {}'.format(name, ' '.join(ips)))
+
+if args.hmac:
+    registry.screen('python renew_hmac.py')
 
 _ll = {}
 def node_by_ll(addr):
