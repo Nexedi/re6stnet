@@ -8,6 +8,7 @@ class Cache(object):
     def __init__(self, db_path, registry, cert, db_size=200):
         self._prefix = cert.prefix
         self._db_size = db_size
+        self._crypt_size = len(cert)
         self._decrypt = cert.decrypt
         self._registry = RegistryClient(registry, cert)
 
@@ -138,7 +139,6 @@ class Cache(object):
         self._loadConfig(config.iteritems())
         return [k.rstrip(':json') for k, v in config.iteritems()
                                   if k not in old or old[k] != v]
-
     def warnProtocol(self):
         if version.protocol < self.protocol:
             logging.warning("There's a new version of re6stnet:"
@@ -236,14 +236,18 @@ class Cache(object):
         logging.info('Getting Boot peer...')
         try:
             bootpeer = self._registry.getBootstrapPeer(self._prefix)
-            prefix, address = self._decrypt(bootpeer).split()
+            n = self._crypt_size
+            prefix, address = self._decrypt(bootpeer[:n]).split()
         except (socket.error, subprocess.CalledProcessError, ValueError), e:
             logging.warning('Failed to bootstrap (%s)',
                             e if bootpeer else 'no peer returned')
         else:
+            version = bootpeer[n:]
+            if self.version == version:
+                version = None
             if prefix != self._prefix:
                 self.addPeer(prefix, address)
-                return prefix, address
+                return prefix, address, version
             logging.warning('Buggy registry sent us our own address')
 
     def addPeer(self, prefix, address, set_preferred=False):
