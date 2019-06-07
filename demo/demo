@@ -2,6 +2,7 @@
 import argparse, math, nemu, os, re, signal
 import socket, subprocess, sys, time, weakref
 from collections import defaultdict
+from threading import Thread
 IPTABLES = 'iptables'
 SCREEN = 'screen'
 VERBOSE = 4
@@ -46,6 +47,8 @@ parser.add_argument('-d', '--duration', type = int,
     help = 'time of the demo execution in seconds')
 parser.add_argument('-p', '--ping', action = 'store_true',
     help = 'execute ping utility')
+parser.add_argument('-m', '--hmac', action = 'store_true',
+    help = 'execute HMAC test')
 args = parser.parse_args()
 
 def handler(signum, frame):
@@ -258,6 +261,17 @@ if args.ping:
             if i != j]
         name = 'm' + machine.short if machine.short != 'R' else 'registry'
         machine.screen('python ping.py {} {}'.format(name, ' '.join(ips)))
+
+class testHMAC(Thread):
+
+    def run(self):
+        time.sleep(10)
+        test_hmac.checkDB()
+        test_hmac.checkBabel()
+
+if args.hmac:
+    import test_hmac
+    testHMAC().start()
 
 _ll = {}
 def node_by_ll(addr):
