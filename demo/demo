@@ -1,8 +1,9 @@
 #!/usr/bin/python2
 import argparse, math, nemu, os, re, signal
-import socket, subprocess, sys, time, weakref
+import socket, sqlite3, subprocess, sys, time, weakref
 from collections import defaultdict
 from contextlib import contextmanager
+from threading import Thread
 IPTABLES = 'iptables'
 SCREEN = 'screen'
 VERBOSE = 4
@@ -60,6 +61,8 @@ parser.add_argument('-d', '--duration', type = int,
     help = 'time of the demo execution in seconds')
 parser.add_argument('-p', '--ping', action = 'store_true',
     help = 'execute ping utility')
+parser.add_argument('-m', '--hmac', action = 'store_true',
+    help = 'execute HMAC test')
 args = parser.parse_args()
 
 def handler(signum, frame):
@@ -243,7 +246,8 @@ def new_network(registry, reg_addr, serial, ca):
         """)).wait()
     db = sqlite3.connect(db_path, isolation_level=None)
     def new_node(node, folder, args='', prefix_len=None, registry=registry_url):
-        nodes.append(node)
+        if node not in nodes:
+            nodes.append(node)
         if not os.path.exists(folder + '/cert.crt'):
             dh_path = folder + '/dh2048.pem'
             if not os.path.exists(dh_path):
@@ -263,6 +267,7 @@ def new_network(registry, reg_addr, serial, ca):
             p.communicate(str(token[0]))
             os.remove(dh_path)
             os.remove(folder + '/ca.crt')
+            print 'went into function to create files....'
         node.screen('./py re6stnet @%s/re6stnet.conf -v%u --registry %s'
                     ' --console %s/run/console.sock %s' % (
                       folder, VERBOSE, registry, folder, args))
@@ -296,6 +301,45 @@ if args.ping:
             if i != j]
         name = machine.name if machine.short[0] == 'R' else 'm' + machine.short
         machine.screen('python ping.py {} {}'.format(name, ' '.join(ips)))
+
+class testHMAC(Thread):
+
+    def run(self):
+        reg1_db = sqlite3.connect('registry/registry.db', isolation_level=None,
+                                                 check_same_thread=False)
+        reg2_db = sqlite3.connect('registry2/registry.db', isolation_level=None,
+                                                 check_same_thread=False)
+        reg1_db.text_factory = reg2_db.text_factory = str
+        m_net1 = ['registry', 'm1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8']
+        m_net2 = ['registry2', 'm10']
+        # Test that machines can join the network (hence get the new config)
+        # when they reboot and that their hmac config is different than the
+        # up-to-date machines (but still compatible).
+        print 'Testing HMAC...'
+        test_hmac.checkHMAC(reg1_db, m_net1)
+        print 'Letting the time to machines to create tunnels...'
+        time.sleep(45)
+        registry.screen('wget 10.0.0.2/updateHMAC')
+        print 'Updated HMAC (config = hmac0 & hmac1), waiting...'
+        time.sleep(60)
+        print 'Checking HMAC on machines connected to registry 1...'
+        test_hmac.checkHMAC(reg1_db, m_net1)
+        test_hmac.killRe6st('m1')
+        print 'Re6st on machine 1 is stopped'
+        time.sleep(5)
+        registry.screen('wget 10.0.0.2/updateHMAC')
+        print 'Updated HMAC on registry (config = hmac1 & hmac2), waiting...'
+        time.sleep(45)
+        new_node(machine1, 'm1', '-I%s' % m1_if_0.name,
+                 None, 'http://%s/' % REGISTRY)
+        print 'Started re6st on machine 1, waiting for it to get new conf'
+        time.sleep(60)
+        print 'Checking HMAC on machines connected to registry 1...'
+        test_hmac.checkHMAC(reg1_db, m_net1)
+
+if args.hmac:
+    import test_hmac
+    testHMAC().start()
 
 _ll = {}
 def node_by_ll(addr):
