@@ -302,8 +302,9 @@ class BaseTunnelManager(object):
                     logging.debug("timeout: updating %r (%s)", callback.__name__, next)
                     t[i] = next, callback
                 return
-        logging.debug("timeout: adding %r (%s)", callback.__name__, next)
-        t.append((next, callback))
+        if next:
+            logging.debug("timeout: adding %r (%s)", callback.__name__, next)
+            t.append((next, callback))
 
     def invalidatePeers(self):
         next = float('inf')
@@ -538,6 +539,7 @@ class BaseTunnelManager(object):
             logging.info("will retry to update network parameters in 5 minutes")
             self.selectTimeout(time.time() + 300, self.newVersion)
             return
+        assert changed
         logging.info("changed: %r", changed)
         self.selectTimeout(None, self.newVersion)
         self._version = self.cache.version
@@ -889,11 +891,11 @@ class TunnelManager(BaseTunnelManager):
         if route_dumped:
             logging.debug('Analyze routes ...')
             neighbours = self.ctl.neighbours
-            # Collect all nodes known by Babel
+            # Collect all reachable nodes known by Babel
             peers = set(prefix
                 for neigh_routes in neighbours.itervalues()
-                for prefix in neigh_routes[1]
-                if prefix)
+                for prefix, route in neigh_routes[1].iteritems()
+                if prefix and route.metric < 0xffff)
             # Keep only distant peers.
             distant_peers[:] = peers.difference(neighbours)
             distant_peers.sort(key=self._newTunnelScore)
@@ -904,9 +906,7 @@ class TunnelManager(BaseTunnelManager):
                     # Faster recovery of registry node: use cache instead
                     # of waiting that another node tries to connect to it.
                     distant_peers = None
-            elif (registry in peers or
-                  registry in self._connection_dict or
-                  registry in self._served):
+            elif registry in peers:
                 self._disconnected = 0
                 # Be ready to receive any message from the registry.
                 self.sendto(registry, None)
@@ -921,7 +921,7 @@ class TunnelManager(BaseTunnelManager):
                 if peers:
                     # We aren't the only disconnected node
                     # so force rebootstrapping.
-                    peer = self.cache.getBootstrapPeer()
+                    peer = self.getBootstrapPeer()
                     if not peer:
                         # Registry dead ? Assume we're connected after all.
                         distant_peers = self._distant_peers
@@ -966,7 +966,7 @@ class TunnelManager(BaseTunnelManager):
             if not (new or peers):
                 if bootstrap and registry != self._prefix:
                     # Startup without any good address in the cache.
-                    peer = self.cache.getBootstrapPeer()
+                    peer = self.getBootstrapPeer()
                     if peer and self._makeTunnel(*peer):
                         return
                 # Failed to bootstrap ! Last chance to connect is to
@@ -974,6 +974,13 @@ class TunnelManager(BaseTunnelManager):
                 for peer in self.cache.getPeerList(1):
                     if self._makeTunnel(*peer):
                         break
+
+    def getBootstrapPeer(self):
+        peer, prefix, version = self.cache.getBootstrapPeer()
+        if version:
+            self._version = version
+            self.newVersion()
+        return peer, prefix
 
     def killAll(self):
         for prefix in self._connection_dict.keys():

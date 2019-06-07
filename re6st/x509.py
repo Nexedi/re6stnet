@@ -94,6 +94,9 @@ class Cert(object):
             with open(cert) as f:
                 self.cert = self.loadVerify(f.read())
 
+    def __len__(self):
+        return self.key.bits() // 8
+
     @property
     def prefix(self):
         return utils.binFromSubnet(subnetFromCert(self.cert))
