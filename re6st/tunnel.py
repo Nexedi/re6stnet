@@ -889,11 +889,11 @@ class TunnelManager(BaseTunnelManager):
         if route_dumped:
             logging.debug('Analyze routes ...')
             neighbours = self.ctl.neighbours
-            # Collect all nodes known by Babel
+            # Collect all reachable nodes known by Babel
             peers = set(prefix
                 for neigh_routes in neighbours.itervalues()
-                for prefix in neigh_routes[1]
-                if prefix)
+                for prefix, route in neigh_routes[1].iteritems()
+                if prefix and route.metric < 0xffff)
             # Keep only distant peers.
             distant_peers[:] = peers.difference(neighbours)
             distant_peers.sort(key=self._newTunnelScore)
@@ -904,9 +904,7 @@ class TunnelManager(BaseTunnelManager):
                     # Faster recovery of registry node: use cache instead
                     # of waiting that another node tries to connect to it.
                     distant_peers = None
-            elif (registry in peers or
-                  registry in self._connection_dict or
-                  registry in self._served):
+            elif registry in peers:
                 self._disconnected = 0
                 # Be ready to receive any message from the registry.
                 self.sendto(registry, None)
