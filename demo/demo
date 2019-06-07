@@ -3,6 +3,8 @@ import argparse, math, nemu, os, re, signal
 import socket, subprocess, sys, time, weakref
 from collections import defaultdict
 from contextlib import contextmanager
+from threading import Thread
+
 IPTABLES = 'iptables'
 SCREEN = 'screen'
 VERBOSE = 4
@@ -60,6 +62,8 @@ parser.add_argument('-d', '--duration', type = int,
     help = 'time of the demo execution in seconds')
 parser.add_argument('-p', '--ping', action = 'store_true',
     help = 'execute ping utility')
+parser.add_argument('-m', '--hmac', action = 'store_true',
+    help = 'execute HMAC test')
 args = parser.parse_args()
 
 def handler(signum, frame):
@@ -296,6 +300,68 @@ if args.ping:
             if i != j]
         name = machine.name if machine.short[0] == 'R' else 'm' + machine.short
         machine.screen('python ping.py {} {}'.format(name, ' '.join(ips)))
+
+class testHMAC(Thread):
+
+    def run(self):
+        '''
+        # Starting from an empty HMAC conf, introduce new key on the network
+        # along with ignore_no_hmac option to see if machine 4 can join the
+        # network if it was down when the networks parameters were propagated
+        time.sleep(30)
+        test_hmac.killRe6st('m4')
+        registry.screen('wget 10.0.0.2/updateHMAC')
+        print 'Updated HMAC on registry, waiting for machines to get new conf'
+        time.sleep(30)
+        print 'Checking HMAC on machines, m4 is ignored..'
+        test_hmac.checkDB()
+        test_hmac.checkBabel()
+        re6stnet(machine4, 'm4', '-i%s' % m4_if_0.name)
+        print 'Started re6st on machine 4, waiting for it to get new conf'
+        time.sleep(30)
+        print 'Checking HMAC on machines...'
+        test_hmac.checkDB()
+        test_hmac.checkBabel()
+
+        # Remove ignore_no_hmac option
+        time.sleep(30)
+        registry.screen('wget 10.0.0.2/updateHMAC')
+        print 'Updated HMAC on registry, waiting for machines to get new conf..'
+        time.sleep(30)
+        print 'Checking HMAC on machines...'
+        test_hmac.checkDB()
+        test_hmac.checkBabel()
+        '''
+
+        # Test that machines can join the network (hence get the new config)
+        # when they reboot and that their hmac config is incompatible with
+        # the other machines. The conf at this point should only contain 1 hmac.
+        time.sleep(30)
+        test_hmac.killRe6st('m5')
+        registry.screen('wget 10.0.0.2/updateHMAC')
+        print 'Updated HMAC on registry, waiting for machines to get new conf..'
+        time.sleep(30)
+        print 'Checking HMAC on machine, m5 is ignored..'
+        test_hmac.checkDB()
+        test_hmac.checkBabel()
+        print 'Wait to make sure all nodes are ok before changing hmac again'
+        time.sleep(30)
+        registry.screen('wget 10.0.0.2/updateHMAC')
+        print 'Updated HMAC on registry, waiting for machines to get new conf..'
+        time.sleep(30)
+        print 'Checking HMAC on machines, m5 is ignored...'
+        test_hmac.checkDB()
+        test_hmac.checkBabel()
+        re6stnet(machine5, 'm5', '-i%s' % m5_if_0.name)
+        print 'Started re6st on machine 5, waiting for it to get new conf'
+        time.sleep(30)
+        print 'Checking HMAC on machines...'
+        test_hmac.checkDB()
+        test_hmac.checkBabel()
+
+if args.hmac:
+    import test_hmac
+    testHMAC().start()
 
 _ll = {}
 def node_by_ll(addr):
