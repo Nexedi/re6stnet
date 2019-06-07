@@ -534,7 +534,7 @@ class RegistryServer(object):
             cert = self.getCert(cn)
         msg = "%s %s" % (peer, msg)
         logging.info("Sending bootstrap peer: %s", msg)
-        return x509.encrypt(cert, msg)
+        return x509.encrypt(cert, msg) + self.version
 
     @rpc_private
     def revoke(self, cn_or_serial):
