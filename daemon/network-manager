@@ -21,6 +21,9 @@ if action in ("up", "vpn-up"):
                 raise
             sys.stderr.write("daemon already started\n")
             sys.exit()
+        mmdb = "GeoLite2-Country.mmdb"
+        if os.path.isfile(mmdb):
+            os.environ["GEOIP2_MMDB"] = os.path.join(CONFDIR, mmdb)
         if not os.fork():
             os.setsid()
             os.execlp(DAEMON, DAEMON, "@re6stnet.conf")

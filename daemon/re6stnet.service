@@ -5,7 +5,7 @@ ConditionPathExists=/etc/re6stnet/re6stnet.conf
 [Service]
 WorkingDirectory=/etc/re6stnet
 # systemd plans to "introduce ExecCondition= in services" (cf its TODO file)
-ExecStart=/bin/sh -c 'set re6stnet @re6stnet.conf; "$@" --test main_interface==\"lo\" || exec "$@"'
+ExecStart=/bin/sh -c 'set re6stnet @re6stnet.conf; GEOIP2_MMDB=/etc/re6stnet/GeoLite2-Country.mmdb; [ -r $GEOIP2_MMDB ] && export GEOIP2_MMDB; "$@" --test main_interface==\"lo\" || exec "$@"'
 Restart=on-failure
 StandardOutput=null
 
