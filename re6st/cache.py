@@ -121,7 +121,7 @@ class Cache(object):
                     old[k] = v
                     continue
                 try:
-                    delattr(self, k)
+                    delattr(self, k[:-5] if k.endswith(':json') else k)
                 except AttributeError:
                     pass
                 remove.append(k)
