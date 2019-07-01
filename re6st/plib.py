@@ -88,14 +88,13 @@ def router(ip, ip4, src, hello_interval, log_path, state_path, pidfile,
             cmd += '-C', ('key type blake2s id %s value %s' %
                           (id, value.encode('hex')))
         key(cmd, 'sign', hmac_sign)
-        cmd += '-C', 'default %s hmac sign' % default
+        default += ' hmac sign'
         if hmac_accept is not None:
             if hmac_accept:
                 key(cmd, 'accept', hmac_accept)
             else:
-                cmd += '-C', 'ignore_no_hmac'
-    else:
-        cmd += '-C', 'default ' + default
+                default += ' no_hmac_verify true'
+    cmd += '-C', 'default ' + default
     if ip4:
         cmd += '-C', 'redistribute ip %s/%s eq %s' % (ip4, n4, n4)
     if src:
