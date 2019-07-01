@@ -35,12 +35,20 @@ def checkHMAC(db, machines):
                 else: # state = hmac1 and hmac2
                     sign = 'babel_hmac1'
                     accept = 'babel_hmac2'
-                if ('accept' not in p or
-                    'sign' not in p or
-                    p.split('sign value ',1)[1].split()[0] != hmac[sign] or
-                    p.split('accept value ',1)[1].split()[0] != hmac[accept]):
-                    rc = False
-                    print 'HMAC config wrong in %s' % p
+                if hmac['babel_hmac1'] and hmac['babel_hmac2'] == '': # init
+                    if('sign' not in p or
+                       ('no_hmac_verify true' not in p
+                        and 'ignore_no_hmac' not in p) or
+                       p.split('sign value ',1)[1].split()[0] != hmac[sign]):
+                        rc = False
+                        print 'HMAC config wrong in %s' % p
+                else:
+                    if ('accept' not in p or
+                        'sign' not in p or
+                        p.split('sign value ',1)[1].split()[0] != hmac[sign] or
+                        p.split('accept value ',1)[1].split()[0] != hmac[accept]):
+                        rc = False
+                        print 'HMAC config wrong in %s' % p
     if rc:
         print('All nodes use Babel with the correct HMAC configuration')
     else:

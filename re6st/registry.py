@@ -103,8 +103,6 @@ class RegistryServer(object):
         if self.prefix:
             with self.db:
                 self.updateNetworkConfig()
-        else:
-            self.newHMAC(0)
 
     def getConfig(self, name, *default):
         r, = next(self.db.execute(
