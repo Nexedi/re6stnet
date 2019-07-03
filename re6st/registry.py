@@ -244,7 +244,7 @@ class RegistryServer(object):
 
     def handle_request(self, request, method, kw):
         m = getattr(self, method)
-        if hasattr(method, '_private'):
+        if hasattr(m, '_private'):
             authorized_origin =  self.config.authorized_origin
             x_forwarded_for = request.headers.get('X-Forwarded-For')
             if request.client_address[0] not in authorized_origin or \
