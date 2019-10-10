@@ -125,6 +125,14 @@ def getConfig():
 def main():
     # Get arguments
     config = getConfig()
+    # first load cert without verification to let a chance to renew it
+    try:
+        cert = crypto.load_certificate(type, config.cert)
+    except crypto.Error:
+        raise VerifyError(None, None, 'unable to load certificate')
+    cache = Cache(db_path, config.registry, cert)
+
+    # now load the certificate and verify it
     cert = x509.Cert(config.ca, config.key, config.cert)
     config.openvpn_args += cert.openvpn_args
 
@@ -144,7 +152,6 @@ def main():
     exit.signal(0, signal.SIGINT, signal.SIGTERM)
     exit.signal(-1, signal.SIGHUP, signal.SIGUSR2)
 
-    cache = Cache(db_path, config.registry, cert)
     network = cert.network
 
     if config.client_count is None:
