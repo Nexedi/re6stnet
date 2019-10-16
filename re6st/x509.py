@@ -12,6 +12,9 @@ def networkFromCa(ca):
 def subnetFromCert(cert):
     return cert.get_subject().CN
 
+def notBefore(cert):
+    return calendar.timegm(time.strptime(cert.get_notBefore(),'%Y%m%d%H%M%SZ'))
+
 def notAfter(cert):
     return calendar.timegm(time.strptime(cert.get_notAfter(),'%Y%m%d%H%M%SZ'))
 
@@ -127,9 +130,12 @@ class Cert(object):
             raise VerifyError(None, None, 'unable to load certificate')
         if type != crypto.FILETYPE_PEM:
             cert = crypto.dump_certificate(crypto.FILETYPE_PEM, r)
-        p = openssl('verify', '-CAfile', self.ca_path)
+        args = ['verify', '-CAfile', self.ca_path]
+        if not strict:
+            args += '-attime', str(notBefore(r))
+        p = openssl(*args)
         out, err = p.communicate(cert)
-        if p.returncode or strict:
+        if 1: # BBB: Old OpenSSL could return 0 in case of errors.
           if err is None: # utils.Popen failed with ENOMEM
             raise VerifyError(None, None,
                 "error running openssl, assuming cert is invalid")
@@ -140,7 +146,7 @@ class Cert(object):
                 if x.startswith('error '):
                     x, msg = x.split(':', 1)
                     _, code, _, depth, _ = x.split(None, 4)
-                    raise VerifyError(int(code), int(depth), msg)
+                    raise VerifyError(int(code), int(depth), msg.strip())
         return r
 
     def verify(self, sign, data):
