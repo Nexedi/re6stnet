@@ -246,8 +246,7 @@ def new_network(registry, reg_addr, serial, ca):
         """)).wait()
     db = sqlite3.connect(db_path, isolation_level=None)
     def new_node(node, folder, args='', prefix_len=None, registry=registry_url):
-        if node not in nodes:
-            nodes.append(node)
+        nodes.append(node)
         if not os.path.exists(folder + '/cert.crt'):
             dh_path = folder + '/dh2048.pem'
             if not os.path.exists(dh_path):
@@ -267,9 +266,11 @@ def new_network(registry, reg_addr, serial, ca):
             p.communicate(str(token[0]))
             os.remove(dh_path)
             os.remove(folder + '/ca.crt')
-        node.screen('./py re6stnet @%s/re6stnet.conf -v%u --registry %s'
-                    ' --console %s/run/console.sock %s' % (
-                      folder, VERBOSE, registry, folder, args))
+        node.re6st_cmdline = (
+            './py re6stnet @%s/re6stnet.conf -v%u --registry %s'
+            ' --console %s/run/console.sock %s'
+            ) % (folder, VERBOSE, registry, folder, args)
+        node.screen(node.re6st_cmdline)
     new_node(registry, registry.name, '--ip ' + reg_addr, registry='http://localhost/')
     yield new_node
     db.close()
@@ -304,42 +305,49 @@ if args.ping:
 class testHMAC(Thread):
 
     def run(self):
+        updateHMAC = ('python', '-c', "import urllib, sys; sys.exit("
+            "204 != urllib.urlopen('http://127.0.0.1/updateHMAC').code)")
         reg1_db = sqlite3.connect('registry/registry.db', isolation_level=None,
                                                  check_same_thread=False)
         reg2_db = sqlite3.connect('registry2/registry.db', isolation_level=None,
                                                  check_same_thread=False)
         reg1_db.text_factory = reg2_db.text_factory = str
-        m_net1 = ['registry', 'm1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8']
-        m_net2 = ['registry2', 'm10']
+        m_net1 = 'registry', 'm1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8'
+        m_net2 = 'registry2', 'm10'
         print 'Testing HMAC, letting the time to machines to create tunnels...'
         time.sleep(45)
         print 'Check that the initial HMAC config is deployed on network 1'
         test_hmac.checkHMAC(reg1_db, m_net1)
         print 'Test that a HMAC update works with nodes that are up'
-        registry.screen('wget http://10.0.0.2/updateHMAC')
+        registry.backticks_raise(updateHMAC)
         print 'Updated HMAC (config = hmac0 & hmac1), waiting...'
         time.sleep(60)
         print 'Checking HMAC on machines connected to registry 1...'
         test_hmac.checkHMAC(reg1_db, m_net1)
         print ('Test that machines can update upon reboot ' +
                'when they were off during a HMAC update.')
-        test_hmac.killRe6st('m1')
+        test_hmac.killRe6st(machine1)
         print 'Re6st on machine 1 is stopped'
         time.sleep(5)
-        registry.screen('wget http://10.0.0.2/updateHMAC')
+        registry.backticks_raise(updateHMAC)
         print 'Updated HMAC on registry (config = hmac1 & hmac2), waiting...'
         time.sleep(60)
-        new_node(machine1, 'm1', '-I%s' % m1_if_0.name,
-                 None, 'http://%s/' % REGISTRY)
+        machine1.screen(machine1.re6st_cmdline)
         print 'Started re6st on machine 1, waiting for it to get new conf'
         time.sleep(60)
         print 'Checking HMAC on machines connected to registry 1...'
         test_hmac.checkHMAC(reg1_db, m_net1)
         print 'Testing of HMAC done!'
+        # TODO: missing last step
+        reg1_db.close()
+        reg2_db.close()
 
 if args.hmac:
     import test_hmac
-    testHMAC().start()
+    t = testHMAC()
+    t.deamon = 1
+    t.start()
+    del t
 
 _ll = {}
 def node_by_ll(addr):

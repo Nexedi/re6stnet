@@ -1,48 +1,43 @@
-import sqlite3, subprocess
+from binascii import b2a_hex
+import psutil
+
+BABEL_HMAC = 'babel_hmac0', 'babel_hmac1', 'babel_hmac2'
 
 def getConfig(db, name):
-    r, = next(db.execute(
-              "SELECT value FROM config WHERE name=?", (name,)), (None,))
-    if r is not None:
-        r = str(r).encode('hex')
-    return r
+    r = db.execute("SELECT value FROM config WHERE name=?", (name,)).fetchone()
+    if r:
+        return b2a_hex(*r)
 
-def killRe6st(machine):
-    p = subprocess.Popen(['pgrep', '-f', 'set ./py re6stnet @%s' %machine],
-                         stdout=subprocess.PIPE)
-    ps_id = p.communicate()[0].split('\n', 1)[0]
-    if ps_id:
-        subprocess.Popen(['kill', ps_id])
+def killRe6st(node):
+    for p in psutil.Process(node._screen.pid).children():
+        if p.cmdline()[-1].startswith('set ./py re6stnet '):
+            p.kill()
+            break
 
 def checkHMAC(db, machines):
-    hmac = dict([(k, getConfig(db, k))
-                for k in 'babel_hmac0', 'babel_hmac1', 'babel_hmac2'])
+    hmac = [getConfig(db, k) for k in BABEL_HMAC]
     rc = True
-    ps = subprocess.Popen(['pgrep', '-a', 'babel'], stdout=subprocess.PIPE)
-    for p in (p for p in ps.communicate()[0].split('\n') if p):
-        if p.split('/',1)[0].split()[-1] in machines:
-            if hmac['babel_hmac0'] and not hmac['babel_hmac1']: # state = hmac0
-                if ('sign' not in p or
-                    'accept' in p or
-                    p.split('sign value ',1)[1].split()[0]\
-                      != hmac['babel_hmac0']):
-                    rc = False
-                    print 'HMAC config wrong for in %s' % p
+    for x in psutil.Process().children(True):
+        if x.name() == 'babeld':
+            sign = accept = None
+            args = x.cmdline()
+            for x in args:
+                if x.endswith('/babeld.log'):
+                    if x[:-11] not in machines:
+                        break
+                elif x.startswith('key '):
+                    x = x.split()
+                    if 'sign' in x:
+                        sign = x[-1]
+                    elif 'accept' in x:
+                        accept = x[-1]
             else:
-                if hmac['babel_hmac0']: # state = hmac0 and hmac1
-                    sign = 'babel_hmac0'
-                    accept = 'babel_hmac1'
-                else: # state = hmac1 and hmac2
-                    sign = 'babel_hmac1'
-                    accept = 'babel_hmac2'
-                if ('accept' not in p or
-                    'sign' not in p or
-                    p.split('sign value ',1)[1].split()[0] != hmac[sign] or
-                    p.split('accept value ',1)[1].split()[0] != hmac[accept]):
+                i = 0 if hmac[0] else 1
+                if hmac[i] != sign or hmac[i+1] != accept:
+                    print 'HMAC config wrong for in %s' % args
                     rc = False
-                    print 'HMAC config wrong in %s' % p
     if rc:
         print('All nodes use Babel with the correct HMAC configuration')
     else:
-        print('Correct config: %s' % hmac)
+        print('Expected config: %s' % dict(zip(BABEL_HMAC, hmac)))
     return rc
