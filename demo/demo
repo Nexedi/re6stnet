@@ -106,6 +106,8 @@ m6_if_1, m9_if_0 = nemu.P2PInterface.create_pair(machine6, machine9)
 r2_if_0, in_if_4 = nemu.P2PInterface.create_pair(registry2, internet)
 
 g1_if_0_name = g1_if_0.name
+gateway1.Popen((IPTABLES, '-t', 'nat', '-N', 'MINIUPNPD-POSTROUTING')).wait()
+gateway1.Popen((IPTABLES, '-t', 'nat', '-A', 'POSTROUTING', '-o', g1_if_0_name, '-j', 'MINIUPNPD-POSTROUTING')).wait()
 gateway1.Popen((IPTABLES, '-t', 'nat', '-A', 'POSTROUTING', '-o', g1_if_0_name, '-j', 'MASQUERADE')).wait()
 gateway1.Popen((IPTABLES, '-t', 'nat', '-N', 'MINIUPNPD')).wait()
 gateway1.Popen((IPTABLES, '-t', 'nat', '-A', 'PREROUTING', '-i', g1_if_0_name, '-j', 'MINIUPNPD')).wait()
