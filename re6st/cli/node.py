@@ -23,6 +23,9 @@ def getConfig():
              "- any: ask peers our IP\n"
              " (default: like 'upnp' if miniupnpc is installed,\n"
              "  otherwise like 'any')")
+    _('--ipv6', action='append', default=[],
+        help="IPv6 address advertised to other nodes."
+             " If not given, ask peers our IP.")
     _('--registry', metavar='URL', required=True,
         help="Public HTTP URL of the registry, for bootstrapping.")
     _('-l', '--log', default='/var/log/re6stnet',
@@ -166,7 +169,7 @@ def main():
         # Make sure we won't tunnel over re6st.
         config.disable_proto = tuple(set(('tcp6', 'udp6')).union(
             config.disable_proto))
-    address = ()
+    address = []
     server_tunnels = {}
     forwarder = None
     if config.client:
@@ -181,18 +184,23 @@ def main():
         else:
             pp = [x for x in ((1194, 'udp'), (1194, 'tcp'))
                     if x[1] not in config.disable_proto]
+        ipv4_any = []
+        ipv6_any = []
+        for x in pp:
+            server_tunnels.setdefault('re6stnet-' + x[1], x)
+            (ipv4_any if x[1] in ('tcp', 'udp') else ipv6_any).append(x)
         def ip_changed(ip):
-            for family, proto_list in ((socket.AF_INET, ('tcp', 'udp')),
-                                       (socket.AF_INET6, ('tcp6', 'udp6'))):
-                try:
-                    socket.inet_pton(family, ip)
-                    break
-                except socket.error:
-                    pass
+            try:
+                socket.inet_aton(ip)
+            except socket.error:
+                family = socket.AF_INET6
+                pp = ipv6_any
             else:
-                family = None
-            return family, [(ip, str(port), proto) for port, proto in pp
-                            if not family or proto in proto_list]
+                if forwarder:
+                    return forwarder.checkExternalIp(ip)
+                family = socket.AF_INET
+                pp = ipv4_any
+            return family, [(ip, str(port), proto) for port, proto in pp]
         if config.gw_list:
           gw_list = deque(config.gw_list)
           def remote_gateway(dest):
@@ -220,15 +228,15 @@ def main():
                 logging.info("%s: assume we are not NATed", e)
             else:
                 atexit.register(forwarder.clear)
-                for port, proto in pp:
+                for port, proto in ipv4_any:
                     forwarder.addRule(port, proto)
-                ip_changed = forwarder.checkExternalIp
-                address = ip_changed(),
+                address.append(forwarder.checkExternalIp())
         elif 'any' not in config.ip:
-            address = map(ip_changed, config.ip)
-            ip_changed = None
-        for x in pp:
-            server_tunnels.setdefault('re6stnet-' + x[1], x)
+            address += map(ip_changed, config.ip)
+            ipv4_any = ()
+        if config.ipv6:
+            address += map(ip_changed, config.ipv6)
+            ipv6_any = ()
     else:
         ip_changed = remote_gateway = None
 
