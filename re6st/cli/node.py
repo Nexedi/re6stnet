@@ -18,14 +18,13 @@ def getConfig():
     _('-V', '--version', action='version', version=version.version)
 
     _('--ip', action='append', default=[],
-        help="IP address advertised to other nodes. Special values:\n"
+        help="IP address advertised to other nodes.\n"
+             "Special values for IPv4:\n"
              "- upnp: redirect ports when UPnP device is found\n"
              "- any: ask peers our IP\n"
              " (default: like 'upnp' if miniupnpc is installed,\n"
-             "  otherwise like 'any')")
-    _('--ipv6', action='append', default=[],
-        help="IPv6 address advertised to other nodes."
-             " If not given, ask peers our IP.")
+             "  otherwise like 'any')\n"
+             "For IPv6, ask peers our IP if none given.")
     _('--registry', metavar='URL', required=True,
         help="Public HTTP URL of the registry, for bootstrapping.")
     _('-l', '--log', default='/var/log/re6stnet',
@@ -189,6 +188,17 @@ def main():
         for x in pp:
             server_tunnels.setdefault('re6stnet-' + x[1], x)
             (ipv4_any if x[1] in ('tcp', 'udp') else ipv6_any).append(x)
+        ipv4 = []
+        ipv6 = []
+        for ip in config.ip:
+            if ip not in ('any', 'upnp'):
+                try:
+                    socket.inet_pton(socket.AF_INET, ip)
+                except socket.error:
+                    socket.inet_pton(socket.AF_INET6, ip)
+                    ipv6.append(ip)
+                    continue
+            ipv4.append(ip)
         def ip_changed(ip):
             try:
                 socket.inet_aton(ip)
@@ -208,8 +218,8 @@ def main():
             return gw_list[0]
         else:
           remote_gateway = None
-        if len(config.ip) > 1:
-            if 'upnp' in config.ip or 'any' in config.ip:
+        if len(ipv4) > 1:
+            if 'upnp' in ipv4 or 'any' in ipv4:
                 sys.exit("error: argument --ip can be given only once with"
                          " 'any' or 'upnp' value")
             logging.info("Multiple --ip passed: note that re6st does nothing to"
@@ -217,13 +227,13 @@ def main():
                 " gateway. So without manual network configuration, this can"
                 " not be used to accept server connections from multiple"
                 " gateways.")
-        if 'upnp' in config.ip or not config.ip:
+        if 'upnp' in ipv4 or not ipv4:
             logging.info('Attempting automatic configuration via UPnP...')
             try:
                 from re6st.upnpigd import Forwarder
                 forwarder = Forwarder('re6stnet openvpn server')
             except Exception, e:
-                if config.ip:
+                if ipv4:
                     raise
                 logging.info("%s: assume we are not NATed", e)
             else:
@@ -231,11 +241,11 @@ def main():
                 for port, proto in ipv4_any:
                     forwarder.addRule(port, proto)
                 address.append(forwarder.checkExternalIp())
-        elif 'any' not in config.ip:
-            address += map(ip_changed, config.ip)
+        elif 'any' not in ipv4:
+            address += map(ip_changed, ipv4)
             ipv4_any = ()
-        if config.ipv6:
-            address += map(ip_changed, config.ipv6)
+        if ipv6:
+            address += map(ip_changed, ipv6)
             ipv6_any = ()
     else:
         ip_changed = remote_gateway = None
