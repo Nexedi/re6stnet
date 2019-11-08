@@ -1,6 +1,12 @@
-import argparse, errno, hashlib, logging, os, select as _select
+import argparse, errno, fcntl, hashlib, logging, os, select as _select
 import shlex, signal, socket, sqlite3, struct, subprocess
 import sys, textwrap, threading, time, traceback
+
+# PY3: It will be even better to use Popen(pass_fds=...),
+#      and then socket.SOCK_CLOEXEC will be useless.
+#      (We already follow the good practice that consists in not
+#      relying on the GC for the closing of file descriptors.)
+socket.SOCK_CLOEXEC = 0x80000
 
 HMAC_LEN = len(hashlib.sha1('').digest())
 
@@ -178,6 +184,10 @@ class Popen(subprocess.Popen):
             t.cancel()
             return r
 
+
+def setCloexec(fd):
+    flags = fcntl.fcntl(fd, fcntl.F_GETFD)
+    fcntl.fcntl(fd, fcntl.F_SETFD, flags | fcntl.FD_CLOEXEC)
 
 def select(R, W, T):
     try:

@@ -243,7 +243,8 @@ class BaseTunnelManager(object):
                              for family, address in address_dict.iteritems()
                              if address)
 
-        self.sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+        self.sock = socket.socket(socket.AF_INET6,
+            socket.SOCK_DGRAM | socket.SOCK_CLOEXEC)
         # See also http://stackoverflow.com/questions/597225/
         # about binding and anycast.
         self.sock.bind(('::', PORT))
@@ -258,6 +259,10 @@ class BaseTunnelManager(object):
         # Only to check routing cache. Should go back to
         # TunnelManager when we don't need to check it anymore.
         self._next_refresh = time.time()
+
+    def close(self):
+        self.sock.close()
+        self.ctl.close()
 
     def select(self, r, w, t):
         r[self.sock] = self.handlePeerEvent
@@ -665,6 +670,7 @@ class TunnelManager(BaseTunnelManager):
         self.timeout = timeout
         self._read_sock, self.write_sock = socket.socketpair(
             socket.AF_UNIX, socket.SOCK_DGRAM)
+        utils.setCloexec(self._read_sock)
         self._disconnected = 0
         self._distant_peers = []
         self._iface_to_prefix = {}
@@ -682,6 +688,13 @@ class TunnelManager(BaseTunnelManager):
         self.new_iface_list = deque('re6stnet' + str(i)
             for i in xrange(1, self._client_count + 1))
         self._free_iface_list = []
+
+    def close(self):
+        self.killAll()
+        self.delInterfaces()
+        self._read_sock.close()
+        self.write_sock.close()
+        super(TunnelManager, self).close()
 
     @property
     def encrypt(self):

@@ -350,10 +350,10 @@ def main():
                     cache.getDh(dh)
                 for iface, (port, proto) in server_tunnels.iteritems():
                     r, x = socket.socketpair(socket.AF_UNIX, socket.SOCK_DGRAM)
+                    utils.setCloexec(r)
                     cleanup.append(plib.server(iface, config.max_clients,
                         dh, x.fileno(), port, proto, cache.encrypt,
-                        '--ping-exit', str(timeout), *config.openvpn_args,
-                        preexec_fn=r.close).stop)
+                        '--ping-exit', str(timeout), *config.openvpn_args).stop)
                     R[r] = partial(tunnel_manager.handleServerEvent, r)
                     x.close()
 
@@ -422,13 +422,11 @@ def main():
                 if r:
                     sys.exit(r)
                 exit.acquire()
+            # Keep babeld cleanup at the end, so that babeld is stopped first,
+            # which gives a chance to send wildcard retractions.
             for cmd in config.daemon or ():
                 cleanup.insert(-1, utils.Popen(cmd, shell=True).stop)
-            try:
-                cleanup[-1:-1] = (tunnel_manager.delInterfaces,
-                                  tunnel_manager.killAll)
-            except AttributeError:
-                pass
+            cleanup.insert(-1, tunnel_manager.close)
             if config.console:
                 from re6st.debug import Console
                 def console(socket, frame=sys._getframe()):
@@ -467,7 +465,7 @@ def main():
         utils.log_exception()
         sys.exit(1)
     try:
-        sys.exitfunc()
+        atexit._run_exitfuncs()
     finally:
         os.execvp(sys.argv[0], sys.argv)
 

@@ -201,7 +201,8 @@ class Babel(object):
         self.write_buffer = Buffer()
         self.read_buffer = Buffer()
         self.read_buffer.want(header.size)
-        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s = socket.socket(socket.AF_UNIX,
+            socket.SOCK_STREAM | socket.SOCK_CLOEXEC)
         def select(*args):
             try:
                 s.connect(self.socket_path)
@@ -214,6 +215,7 @@ class Babel(object):
             self.socket = s
             return self.select(*args)
         self.select = select
+        self.close = s.close
 
     def request_dump(self):
         if self.select({}, {}, ()):

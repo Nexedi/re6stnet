@@ -48,9 +48,10 @@ class Console(object):
 
     def __init__(self, path, pdb):
         self.path = path
-        s = socket.socket(socket.AF_UNIX)
+        s = self._sock = socket.socket(socket.AF_UNIX,
+            socket.SOCK_STREAM | socket.SOCK_CLOEXEC)
         try:
-            self.close()
+            self._removeSocket()
         except OSError, e:
             if e.errno != errno.ENOENT:
                 raise
@@ -65,5 +66,9 @@ class Console(object):
         self.select = select
 
     def close(self):
+        self._removeSocket()
+        self._sock.close()
+
+    def _removeSocket(self):
         if stat.S_ISSOCK(os.lstat(self.path).st_mode):
             os.remove(self.path)
