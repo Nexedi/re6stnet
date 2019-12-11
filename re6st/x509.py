@@ -132,7 +132,8 @@ class Cert(object):
             cert = crypto.dump_certificate(crypto.FILETYPE_PEM, r)
         args = ['verify', '-CAfile', self.ca_path]
         if not strict:
-            args += '-attime', str(notBefore(r))
+            args += '-attime', str(min(int(time.time()),
+                max(notBefore(self.ca), notBefore(r))))
         p = openssl(*args)
         out, err = p.communicate(cert)
         if 1: # BBB: Old OpenSSL could return 0 in case of errors.
