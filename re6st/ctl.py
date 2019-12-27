@@ -262,7 +262,7 @@ class Babel(object):
 
     def handle_dump(self, interfaces, neighbours, xroutes, routes):
         # neighbours = {neigh_prefix: (neighbour, {dst_prefix: route})}
-        n = dict(((n.address, n.ifindex), (n, {})) for n in neighbours)
+        n = {(n.address, n.ifindex): (n, {}) for n in neighbours}
         unidentified = set(n)
         self.neighbours = neighbours = {}
         a = len(self.network)
@@ -307,7 +307,7 @@ class Babel(object):
                 neighbours[None] = None, routes
                 logging.trace("Routes via unidentified neighbours. %r",
                               neighbours)
-        self.interfaces = dict((i.index, name) for i, name in interfaces)
+        self.interfaces = {i.index: name for i, name in interfaces}
         self.handler.babel_dump()
 
     def handle_set_cost_multiplier(self, flags):

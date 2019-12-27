@@ -166,7 +166,7 @@ def main():
         config.disable_proto = ()
     if config.default:
         # Make sure we won't tunnel over re6st.
-        config.disable_proto = tuple(set(('tcp6', 'udp6')).union(
+        config.disable_proto = tuple({'tcp6', 'udp6'}.union(
             config.disable_proto))
     address = []
     server_tunnels = {}

@@ -52,7 +52,7 @@ easily scalable to tens of thousand of nodes.
 Requirements
 ============
 
-- Python 2.6 or 2.7
+- Python 2.7
 - OpenSSL binary and development libraries
 - OpenVPN >= 2.4
 - Babel_ (with Nexedi patches)

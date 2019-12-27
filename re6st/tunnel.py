@@ -239,9 +239,9 @@ class BaseTunnelManager(object):
         elif cache.same_country:
             sys.exit("Can not respect 'same_country' network configuration"
                      " (GEOIP2_MMDB not set)")
-        self._address = dict((family, utils.dump_address(address))
-                             for family, address in address_dict.iteritems()
-                             if address)
+        self._address = {family: utils.dump_address(address)
+                         for family, address in address_dict.iteritems()
+                         if address}
 
         self.sock = socket.socket(socket.AF_INET6,
             socket.SOCK_DGRAM | socket.SOCK_CLOEXEC)
@@ -903,10 +903,10 @@ class TunnelManager(BaseTunnelManager):
             logging.debug('Analyze routes ...')
             neighbours = self.ctl.neighbours
             # Collect all nodes known by Babel
-            peers = set(prefix
+            peers = {prefix
                 for neigh_routes in neighbours.itervalues()
                 for prefix in neigh_routes[1]
-                if prefix)
+                if prefix}
             # Keep only distant peers.
             distant_peers[:] = peers.difference(neighbours)
             distant_peers.sort(key=self._newTunnelScore)

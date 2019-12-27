@@ -213,8 +213,7 @@ class RegistryServer(object):
         not_after = None
         old = time.time() - GRACE_PERIOD
         q =  self.db.execute
-        with self.lock:
-          with self.db:
+        with self.lock, self.db:
             q("BEGIN")
             for token, x in q("SELECT token, date FROM token"):
                 if x <= old:
@@ -539,8 +538,7 @@ class RegistryServer(object):
 
     @rpc_private
     def revoke(self, cn_or_serial):
-        with self.lock:
-          with self.db:
+        with self.lock, self.db:
             q = self.db.execute
             try:
                 serial = int(cn_or_serial)
@@ -570,8 +568,7 @@ class RegistryServer(object):
 
     @rpc_private
     def updateHMAC(self):
-        with self.lock:
-          with self.db:
+        with self.lock, self.db:
             hmac = [self.getConfig(BABEL_HMAC[i], None) for i in (0,1,2)]
             if hmac[0]:
                 if hmac[1]:
@@ -595,8 +592,7 @@ class RegistryServer(object):
 
     @rpc_private
     def getNodePrefix(self, email):
-        with self.lock:
-          with self.db:
+        with self.lock, self.db:
             try:
                 cert, = self.db.execute("SELECT cert FROM cert WHERE email = ?",
                                         (email,)).next()
@@ -636,10 +632,10 @@ class RegistryServer(object):
     def versions(self):
         with self.peers_lock:
             self.request_dump()
-            peers = set(prefix
+            peers = {prefix
                 for neigh_routes in self.ctl.neighbours.itervalues()
                 for prefix in neigh_routes[1]
-                if prefix)
+                if prefix}
         peers.add(self.prefix)
         peer_dict = {}
         s = self.sock,
@@ -686,7 +682,7 @@ class RegistryServer(object):
                     self.sendto(utils.binFromSubnet(peers.popleft()), 5)
                 elif not r:
                     break
-        return json.dumps(dict((k, list(v)) for k, v in graph.iteritems()))
+        return json.dumps({k: list(v) for k, v in graph.iteritems()})
 
 
 class RegistryClient(object):
