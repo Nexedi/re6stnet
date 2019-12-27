@@ -18,8 +18,7 @@ debian/changelog:
 endif
 
 override_dh_install:
-	make DESTDIR=$(TMP) PREFIX=/usr PYTHON=/usr/bin/python \
-		install-noinit
+	make DESTDIR=$(TMP) PREFIX=/usr PYTHON=/usr/bin/python install
 
 override_dh_installinit:
 	install -d $(INIT)
