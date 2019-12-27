@@ -36,7 +36,6 @@ rm -rf "$RPM_BUILD_ROOT" INSTALLED
 
 %files -f INSTALLED
 %_mandir/*/*
-/etc/NetworkManager
 
 %post
 if [ $1 -eq 1 ]; then
