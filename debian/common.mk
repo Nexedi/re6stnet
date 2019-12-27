@@ -26,6 +26,7 @@ override_dh_installinit:
 		<debian/init.d >$(INIT)/re6st-registry
 	sed 's/#NAME#/re6stnet/; s,#DAEMON_DIR#,/usr/sbin,' \
 		<debian/init.d >$(INIT)/re6stnet
+	# -R is the default with debian/compat 10
 	for x in $(INIT)/*; \
-	do chmod +x $$x && dh_installinit --onlyscripts --name=$${x##*/}; \
+	do chmod +x $$x && dh_installinit -R --onlyscripts --name=$${x##*/}; \
 	done
