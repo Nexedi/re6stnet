@@ -168,11 +168,15 @@ def main():
         # Make sure we won't tunnel over re6st.
         config.disable_proto = tuple({'tcp6', 'udp6'}.union(
             config.disable_proto))
+    def add_tunnels(iface_list):
+        for iface in iface_list:
+            config.babel_args += '-C', 'interface %s type tunnel' % iface
+        config.iface_list += iface_list
     address = []
     server_tunnels = {}
     forwarder = None
     if config.client:
-        config.babel_args.append('re6stnet')
+        add_tunnels(('re6stnet',))
     elif config.max_clients:
         if config.pp:
             pp = [(int(port), proto) for port, proto in config.pp]
@@ -281,7 +285,7 @@ def main():
         os.environ['re6stnet_network'] = my_network
 
         # Init db and tunnels
-        config.babel_args += server_tunnels
+        add_tunnels(server_tunnels)
         timeout = 4 * cache.hello
         cleanup = [lambda: cache.cacheMinimize(config.client_count),
                    lambda: shutil.rmtree(config.run, True)]
@@ -292,7 +296,7 @@ def main():
                 cache, cert, config.openvpn_args, timeout,
                 config.client_count, config.iface_list, address, ip_changed,
                 remote_gateway, config.disable_proto, config.neighbour)
-            config.babel_args += tunnel_manager.new_iface_list
+            add_tunnels(tunnel_manager.new_iface_list)
         else:
             tunnel_manager = tunnel.BaseTunnelManager(control_socket,
                 cache, cert, address)
