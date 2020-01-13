@@ -24,4 +24,4 @@ override_dh_auto_clean:
 override_dh_auto_build:
 
 %:
-	dh $@ --with python2 --buildsystem=python_distutils
+	dh $@ --with python2,systemd --buildsystem=python_distutils
