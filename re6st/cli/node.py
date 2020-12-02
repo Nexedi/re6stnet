@@ -79,6 +79,8 @@ def getConfig():
     _('--gateway', action='store_true',
         help="Act as a gateway for this network (the default route will be"
              " exported). Do never use it if you don't know what it means.")
+    _('--binary', default='babeld',
+        help="Optional, babeld binary path")
 
     _ = parser.add_argument_group('tunnelling').add_argument
     _('-O', dest='openvpn_args', metavar='ARG', action='append', default=[],
@@ -419,6 +421,7 @@ def main():
                 control_socket, cache.babel_default,
                 tuple(getattr(cache, k, None) for k in
                       ('babel_hmac_sign', 'babel_hmac_accept')),
+                config.binary,
                 *config.babel_args).stop)
             if config.up:
                 exit.release()

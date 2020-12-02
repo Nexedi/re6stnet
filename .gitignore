@@ -5,3 +5,4 @@
 /build/
 /dist/
 /re6stnet.egg-info/
+demo/**/re6stnet/

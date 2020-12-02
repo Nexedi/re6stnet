@@ -63,12 +63,12 @@ def client(iface, address_list, encrypt, *args, **kw):
 
 
 def router(ip, ip4, src, hello_interval, log_path, state_path, pidfile,
-           control_socket, default, hmac, *args, **kw):
+           control_socket, default, hmac, babeld_binary, *args, **kw):
     ip, n = ip
     hmac_sign, hmac_accept = hmac
     if ip4:
         ip4, n4 = ip4
-    cmd = ['babeld',
+    cmd = [babeld_binary,
             '-h', str(hello_interval),
             '-H', str(hello_interval),
             '-L', log_path,
