@@ -1,0 +1,162 @@
+                             Re6st Protocol        
+                             --------------    
+
+Table of Contents
+-----------------
+
+1. Introduction  . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+2. Header Format . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+3. Tunnel Creation   . . . . . . . . . . . . . . . . . . . . . . . . . .
+  3.1. Address list format . . . . . . . . . . . . . . . . . . . . . . .
+  3.2. Address format  . . . . . . . . . . . . . . . . . . . . . . . . .
+4. Network Version Message . . . . . . . . . . . . . . . . . . . . . . .
+5. Tunnel Destruction  . . . . . . . . . . . . . . . . . . . . . . . . .
+6. Rina Information  . . . . . . . . . . . . . . . . . . . . . . . . . .
+7. Topology Message  . . . . . . . . . . . . . . . . . . . . . . . . . .
+8. Logging Message . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+1. Introduction
+---------------
+
+The re6st protocol is defined for communication between nodes of a re6st 
+network relative to the network itself. Nodes communicate to cooperate 
+together on the creation and destruction of tunnels.
+
+2. Header Format
+----------------
+
+
+         0                   1                   2                   3
+         0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        |                        Sequence number                        |
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        | Header size   |     Code      |F|  Reserved                   |
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        |                           Protocol                            |
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        |                      Additionnal Fields                       |
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        |                                                               |
+        |                                                               |
+        |                             HMAC                              |
+        |                                                               |
+        |                                                               |
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+
+Header Size is the size in octets of the header to read before message, 
+to allow additionnal fields to be easily added.
+
+Code defines the message type:
+
+  00000000 : Network Version
+  00000001 : Tunnel Creation
+  00000010 : Tunnel Destruction Request
+  00000011 : Tunnel Destruction Response
+  00000100 : Rina Information
+  00000101 : Topology
+    ...    : Reserved
+  lllll111 : Logging
+
+A single bit (called "F-bit") is set if the message needs to be forwarded.
+
+Protocol is the re6st protocol used by the source node.
+
+Additionnal Fields are the additionnal fields that may be present 
+depending on the Header Size field. They should be ignored.
+
+3. Tunnel Creation 
+------------------
+
+The creation of a tunnel from a node (client) to a peer (server) has 
+several steps:
+
+- Request: A node sends an empty message with the Tunnel Creation code to 
+a peer
+- Response: The peer answers with a list of its addresses
+- Tunnel creation: The node adds the peer to its peer list, and creates a 
+tunnel to that peer
+
+3.1. Address list format
+------------------------
+
+         0                   1                   2                   3
+         0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        |       Address Number          |        Address Size           |
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        |                           Address 1                           |
+        |                              ...                              |
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        |                           Address 2                           |
+        |                              ...                              |
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        |                              ...                              |
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+3.2. Address format
+-------------------
+
+         0                   1                   2                   3
+         0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        |                            Family                             |
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        |                                                               |
+        |                          IP Address                           |
+        |                                                               |
+        |                                                               |
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        |                           Protocol                            |
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        |            Port               |             Country           |
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+Family is an integer representing the address family, as encoded
+by the python socket module.
+
+IP Address is either IPv6 or IPv4 depending on the Family field.
+
+Protocol is the Transport Layer protocol (UDP, TCP, UDP6, etc...)
+
+Country is an alpha-2 country code
+
+4. Network Version Message
+--------------------------
+
+The Network Version Message contains the signed network version, which is 
+encoded as follows:
+
+- 3 bits representing the size in octets of the network version
+- The network version (less than 8 octets)
+- The signature (256 octets)
+
+5. Tunnel Destruction
+---------------------
+
+The destruction of a tunnel requires multiple stages:
+
+- soft locking: the node orders babel to raise the cost of its route to 
+the peer
+- hard locking: the route is marked as unusable
+- locking request: a request to close the tunnel is sent to the peer, 
+corresponding to an empty code 2 message
+- locking response: the peer answers with an empty code 3 message
+
+6. Rina Information
+-------------------
+
+Messages with code 4 are json dumps of the re6st version, protocol, and a 
+boolean representing if a RINA Shim is being used or not.
+
+7. Topology Message
+-------------------
+
+The registry can use code 7 messages to request topology information to 
+nodes for debugging purposes.
+
+8. Logging Message
+------------------
+
+The registry can use code 7 messages to log messages through its node.
