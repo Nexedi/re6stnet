@@ -82,17 +82,8 @@ Starting re6st automatically
 ----------------------------
 
 If the `/etc/re6stnet/re6stnet.conf` configuration file exists, `re6stnet` is
-automatically started as a daemon. This is done is 2 different ways, depending
-on whether it is bound or not to a specific interface, by using the
-`main-interface` option:
-
-- If the option is not given (or if it is set to 'lo'), then it is automatically
-  started/stopped by ``systemd``\ (1). Debian package also provides SysV init
-  scripts.
-
-- Otherwise, it is automatically started/stopped when the related network
-  interface is enabled/disabled by ``NetworkManager``\ (8). Debian package also
-  provides `ifupdown` scripts.
+automatically started as a system daemon, by ``systemd``\ (1). Debian package
+also provides SysV init scripts.
 
 Important note about NetworkManager
 -----------------------------------
