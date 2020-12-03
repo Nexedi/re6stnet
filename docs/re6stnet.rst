@@ -85,25 +85,30 @@ If the `/etc/re6stnet/re6stnet.conf` configuration file exists, `re6stnet` is
 automatically started as a system daemon, by ``systemd``\ (1). Debian package
 also provides SysV init scripts.
 
-Important note about NetworkManager
------------------------------------
+Important note about ``--default`` option
+-----------------------------------------
+
+When re6st is configured to route all your IPv6 traffic (``--default``),
+any other interface providing IPv6 must have no default route. Otherwise,
+re6st either refuses to start or aborts if it detect a default route.
+
+Correct usage of NetworkManager
+-------------------------------
 
 It is required to configure properly every connection defined in NetworkManager
-because default settings are wrong and conflict with re6st:
-
-- If re6st routes all your IPv6 traffic, using ``--default`` option, then make
-  sure to disable IPv6 in NetworkManager.
-
-- Otherwise, the following options must be set in [ipv6] section::
+because default settings are wrong and conflict with re6st. If ``--default`` is
+used, then disable IPv6, else enable the following options in the [ipv6]
+section::
 
    ignore-auto-routes=true
    never-default=true
 
-  In applets, these options are usually named:
+In applets, these options are usually named:
 
-  - Ignore automatically obtained routes (KDE & Gnome)
-  - Use only for resources on this connection (KDE)
-  - Use this connection only for resources on its network (Gnome)
+- Ignore automatically obtained routes (KDE & Gnome)
+- Use only for resources on this connection (KDE)
+- Use this connection only for resources on its network (Gnome)
+
 
 HOW TO
 ======
