@@ -94,21 +94,22 @@ on whether it is bound or not to a specific interface, by using the
   interface is enabled/disabled by ``NetworkManager``\ (8). Debian package also
   provides `ifupdown` scripts.
 
-Important note about NetworkManager
+Important note about Network Managers
 -----------------------------------
 
-It is required to configure properly every connection defined in NetworkManager
-because default settings are wrong and conflict with re6st:
+It is required to properly configure your network manager if you use one, as it
+may conflict with re6st.
+If re6st routes all your IPv6 traffic, using ``--default`` option, then make
+sure your network manager will not be creating any default IPv6 gateway.
+For instance with NetworkManager, you should either:
 
-- If re6st routes all your IPv6 traffic, using ``--default`` option, then make
-  sure to disable IPv6 in NetworkManager.
-
-- Otherwise, the following options must be set in [ipv6] section::
+- completely disable IPv6 on your network
+- or set the following options in the [ipv6] section::
 
    ignore-auto-routes=true
    never-default=true
 
-  In applets, these options are usually named:
+In applets, these options are usually named:
 
   - Ignore automatically obtained routes (KDE & Gnome)
   - Use only for resources on this connection (KDE)
