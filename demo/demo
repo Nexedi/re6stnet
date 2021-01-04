@@ -12,6 +12,8 @@ REGISTRY2 = '10.3.0.2'
 REGISTRY_SERIAL = '0x120010db80042'
 REGISTRY2_SERIAL = '0x120010db80043'
 CA_DAYS = 1000
+REPOSITORY_URL = {'re6stnet': 'https://lab.nexedi.com/jhuge/re6stnet.git',
+                  'babeld': 'https://github.com/jech/babeld'}
 
 # Quick check to avoid wasting time if there is an error.
 with open(os.devnull, "wb") as f:
@@ -63,6 +65,8 @@ parser.add_argument('-p', '--ping', action = 'store_true',
     help = 'execute ping utility')
 parser.add_argument('-m', '--hmac', action = 'store_true',
     help = 'execute HMAC test')
+parser.add_argument('-c', '--clone', action = 'store_true',
+    help = 'clone re6st on each node and use versions specified in clone.conf')
 args = parser.parse_args()
 
 def handler(signum, frame):
@@ -73,6 +77,17 @@ if args.duration:
     signal.alarm(args.duration)
 
 execfile("fixnemu.py")
+
+clone_conf = {'re6stnet': {}, 'babeld': {}}
+if args.clone:
+    # Parse clone configuration file
+    with open('clone.conf', 'r') as clone_conf_file:
+        for line in clone_conf_file:
+            if line[0] == '#' or line[0] == '\n':
+                continue
+            soft, machine, object_type, git_object = line.split()
+            if soft in clone_conf:
+                clone_conf[soft][machine] = (object_type,git_object)
 
 # create nodes
 for name in """internet=I registry=R
@@ -85,6 +100,46 @@ for name in """internet=I registry=R
     globals()[name] = node = nemu.Node()
     node.name = name
     node.short = short
+
+    if args.clone:
+        if "machine" in name or "registry" in name:
+            # Clone the repository if needed
+            short_name = name.replace("machine", "m")
+
+            def init_repo(repo):
+
+                if short_name not in clone_conf[repo]:
+                    return
+                repo_folder = "%s/%s" % (short_name, repo)
+
+                def init_repo_cmd():
+                    subprocess.Popen(('rm', '-r', '-f', repo_folder)).wait()
+                    subprocess.Popen(('git', 'clone', REPOSITORY_URL[repo],
+                                      repo_folder)).wait()
+                try:
+                    remote_out = subprocess.Popen(('git', 'remote', '-v'),
+                                              stdout=subprocess.PIPE,
+                                              cwd=repo_folder).communicate()[0]
+                except OSError:
+                    init_repo_cmd()
+                else:
+                    remote_out = list(filter(lambda x: REPOSITORY_URL[repo] in x,
+                                         remote_out.split('\n')))
+                    if len(remote_out) == 0:
+                        init_repo_cmd()
+                        remote_name = "origin"
+                    else:
+                        remote_name = remote_out[0].split()[0]
+
+
+                    subprocess.Popen(('git', 'fetch', remote_name), cwd=repo_folder).wait()
+                    object_type, git_object = clone_conf[repo][short_name]
+                    object_path = ('%s/' % remote_name if object_type == "branch"
+                                   else '') + git_object
+                    subprocess.Popen(('git', 'checkout', object_path), cwd=repo_folder).wait()
+            init_repo('re6stnet')
+            init_repo('babeld')
+
     node.Popen(('sysctl', '-q',
         'net.ipv4.icmp_echo_ignore_broadcasts=0')).wait()
     node._screen = node.Popen((SCREEN, '-DmS', name))
@@ -230,9 +285,17 @@ def new_network(registry, reg_addr, serial, ca):
     fingerprint = "sha256:" + hashlib.sha256(
         crypto.dump_certificate(crypto.FILETYPE_ASN1, cert)).hexdigest()
     db_path = "%s/registry.db" % registry.name
-    registry.screen("./py re6st-registry @%s/re6st-registry.conf"
-        " --db %s --mailhost %s -v%u"
-        % (registry.name, db_path, os.path.abspath('mbox'), VERBOSE))
+
+    py_wrapper_path = ("%s/re6stnet/demo/py" % registry.name
+                      if registry.name in clone_conf['re6stnet']
+                      else "./py")
+    babeld_binary_opt = ("--binary %s/babeld/babeld" % registry.name
+                      if registry.name in clone_conf['babeld']
+                      else "")
+    registry.screen("%s re6st-registry @%s/re6st-registry.conf"
+        " --db %s --mailhost %s -v%u %s"
+        % (py_wrapper_path, registry.name, db_path,
+           os.path.abspath('mbox'), VERBOSE, babeld_binary_opt))
     registry_url = 'http://%s/' % reg_addr
     registry.Popen(('python', '-c', """if 1:
         import socket, time
@@ -245,7 +308,7 @@ def new_network(registry, reg_addr, serial, ca):
                 time.sleep(.1)
         """)).wait()
     db = sqlite3.connect(db_path, isolation_level=None)
-    def new_node(node, folder, args='', prefix_len=None, registry=registry_url):
+    def new_node(node, folder, node_args='', prefix_len=None, registry=registry_url):
         nodes.append(node)
         if not os.path.exists(folder + '/cert.crt'):
             dh_path = folder + '/dh2048.pem'
@@ -266,10 +329,18 @@ def new_network(registry, reg_addr, serial, ca):
             p.communicate(str(token[0]))
             os.remove(dh_path)
             os.remove(folder + '/ca.crt')
+        py_wrapper_path = ("%s/re6stnet/demo/py" % folder
+                          if folder in clone_conf['re6stnet']
+                          else "./py")
+        babeld_binary_opt = ("--binary %s/babeld/babeld" % folder
+                          if folder in clone_conf['babeld']
+                          else "")
         node.re6st_cmdline = (
-            './py re6stnet @%s/re6stnet.conf -v%u --registry %s'
+            '%s re6stnet @%s/re6stnet.conf -v%u --registry %s'
             ' --console %s/run/console.sock %s'
-            ) % (folder, VERBOSE, registry, folder, args)
+            ' %s'
+            ) % (py_wrapper_path, folder, VERBOSE, registry,
+                 folder, node_args, babeld_binary_opt)
         node.screen(node.re6st_cmdline)
     new_node(registry, registry.name, '--ip ' + reg_addr, registry='http://localhost/')
     yield new_node
