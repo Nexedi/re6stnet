@@ -4,6 +4,7 @@ import socket, sqlite3, subprocess, sys, time, weakref
 from collections import defaultdict
 from contextlib import contextmanager
 from threading import Thread
+import thread
 IPTABLES = 'iptables'
 SCREEN = 'screen'
 VERBOSE = 4
@@ -67,7 +68,12 @@ parser.add_argument('-m', '--hmac', action = 'store_true',
     help = 'execute HMAC test')
 parser.add_argument('-c', '--clone', action = 'store_true',
     help = 'clone re6st on each node and use versions specified in clone.conf')
+parser.add_argument('-t', '--test-ping', metavar='SEC', type = int,
+    help = 'run demo for specified duration in seconds, and displays connectivity stats')
 args = parser.parse_args()
+
+if args.test_ping:
+    args.ping = True
 
 def handler(signum, frame):
     sys.exit()
@@ -372,6 +378,63 @@ if args.ping:
             if i != j]
         name = machine.name if machine.short[0] == 'R' else 'm' + machine.short
         machine.screen('python ping.py {} {}'.format(name, ' '.join(ips)))
+        ping_test_start = time.time()
+        
+class testPing(Thread):
+
+    MAX_STABILISATION_DURATION = 40
+    MAX_DOWN_PERCENTAGE = {'m1':        15,
+                           'm2':        15,
+                           'm3':        15,
+                           'm4':        15,
+                           'm5':        15,
+                           'm6':        15,
+                           'm7':        15,
+                           'm8':        15,
+                           'm10':       15,
+                           'registry':  15,
+                           'registry2': 15}
+
+    def run(self):
+
+        out_name = "test-results/test%s_%s" % (int(args.test_ping), str(time.time())[-6:])
+        with open(out_name, 'w+') as f:
+
+            # Wait until network is table and multiping test starts
+            while True:
+                time.sleep(1)
+                if (time.time() - ping_test_start) > testPing.MAX_STABILISATION_DURATION:
+                    print('Machines took longer than %s seconds to stabilize' % 
+                                                               testPing.MAX_STABILISATION_DURATION)
+                    thread.interrupt_main()
+                if os.path.isfile('m1/ping_logs.csv'):
+                    ping_start = float(subprocess.Popen(('head', '-n1', 'm1/ping_logs.csv'),
+                                        stdout=subprocess.PIPE).communicate()[0].split(',')[0])
+                    line = 'Machines took %s seconds to stabilize' % (time.time() - ping_test_start)
+                    f.write(line + '\n\n')
+                    break
+                else:
+                    continue
+
+            time.sleep((ping_start + int(args.test_ping)) - time.time())
+            test_duration = time.time() - ping_start
+
+            test_ping_out = subprocess.Popen(('python', 'test_ping', '-r', '-', '-c'),
+                                      stdout=subprocess.PIPE).communicate()[0]
+
+            for line in test_ping_out.split():
+                tmp = line.split(',')
+                machine, h1, m1, s1, h2, m2, s2 = [tmp[0]] + list(map(int,tmp[1:]))
+                h, m, s = h1 + h2, m1 + m2, s1 + s2
+                downtime = h*3600 + m*60 + s
+                percentage = 100 * downtime / test_duration
+                if percentage > testPing.MAX_DOWN_PERCENTAGE[machine]:
+                    print 'downtime percentage for machine %s was higher than %s (%s)' % (
+                                                     testPing.MAX_DOWN_PERCENTAGE[machine] + '%',
+                                                     percentage + '%')
+                line = '%s %s' % (machine.ljust(20), (('%5.2f' % percentage) + '%').ljust(10))
+                f.write(line + "\n")
+            thread.interrupt_main()
 
 class testHMAC(Thread):
 
@@ -416,6 +479,12 @@ class testHMAC(Thread):
 if args.hmac:
     import test_hmac
     t = testHMAC()
+    t.deamon = 1
+    t.start()
+    del t
+
+if args.test_ping:
+    t = testPing()
     t.deamon = 1
     t.start()
     del t
