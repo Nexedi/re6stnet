@@ -26,8 +26,7 @@ a connection, which requires a handshake. The purpose of the handshake
 is to authenticate the nodes between each other by exchanging their public
 certificate, and initialize a secret.
 
-The handshake protocol consists of three exchanges, each caracterized by
-a sequence number (seqno) and some data:
+Three types of exchanges are defined for the handshake protocol: 
 
 | Seqno |                             Content                               |
 | ----- | ----------------------------------------------------------------- |
@@ -35,22 +34,31 @@ a sequence number (seqno) and some data:
 |   1   | fingerprint(receiver), pub(sender), sender protocol               |
 |   2   | X = encrypt(receiver, secret), sign(sender, X), sender protocol   |
 
+During a handshake, two or more exchanges may happen, depending on lost
+packets, the cache's content, etc...
+
 The handshake proceeds as follows:
 
 Beginning of handshake:
   If the node already has a certificate corresponding to the peer node's
-  IP, he sends seqno 1, else he sends seqno 0
+  IP, he sends seqno 1, else he sends seqno 0.
 
 Reception of seqno 0:
-  The node sends seqno 1
+  The node adds the certificate to its list of known certificates, and sends
+  seqno 1.
 
-Reeption of seqno 1:
-  If the fingerprint is correct, seqno 2 is sent. Else, the node goes back
-  to the beginning
+Reception of seqno 1:
+  If the fingerprint is correct: 
+    - the received certificate is added
+    - a new secret strictly greater than the previous one is generated
+    - seqno 2 is sent.
+  Else, the node goes back to the beginning
 
-The handshake might be interrupted if for instance certificate verification
-fails or if packets are lost.
-
+Reception of seqno 2:
+  If the signature verification or if the secret is less or equal to the secret
+  node previously had, the handshake fails.
+  Else, the node sends its network version.
+  
 3. Re6st packet format
 ----------------
 
@@ -58,7 +66,7 @@ fails or if packets are lost.
  | --------------- | ---------     |
  | Sequence number | 4  octets     |
  | Code            | 1  octet      |
- | Message         | < 1200 octets |
+ | Message         | Variable      |
  | HMAC            | 20 octets     |
  | Total           | 25 octets     |
 
@@ -73,7 +81,9 @@ The code defines the type of message:
   011 : Tunnel Destruction Response
   ... : Reserved
 
-The message contents depends on the code, and can vary in size.
+The message contents depends on the code, and can vary in size. It must
+be small enough for the packet to not exceed the default minimum MTU
+of IPv6 (1280) bytes.
 
 The HMAC field contains HMAC(secret, data), where HMAC is a HMAC function
 using sha1 and the secret created during the handshake, and data is the
@@ -82,12 +92,9 @@ packet contents from the sequence number to the message.
 4. Network Version Message
 --------------------------
 
-The Network Version Message contains the signed network version, which is 
-encoded as follows:
-
-- 3 bits representing the size in octets of the network version
-- The network version (less than 8 octets)
-- The signature (256 octets)
+The Network Version Message contains the signed network version. It is
+encoded such that each new version message is strictly greater than the
+previous.
 
 5. Tunnel Creation 
 ------------------
