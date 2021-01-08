@@ -8,7 +8,7 @@ Table of Contents
 2. Handshake  . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .  
 3. Re6st packet format  . . . . . . . . . . . . . . . . . . . . . . . . . . .  
 4. Network Version Message  . . . . . . . . . . . . . . . . . . . . . . . . .  
-5. Tunnel Creation  . . . . . . . . . . . . . . . . . . . . . . . . . . . . .  
+5. Address Message  . . . . . . . . . . . . . . . . . . . . . . . . . . . . .  
 6. Tunnel Destruction . . . . . . . . . . . . . . . . . . . . . . . . . . . .  
 
 1. Introduction
@@ -31,8 +31,8 @@ Three types of exchanges are defined for the handshake protocol:
 | Seqno |                             Content                               |
 | ----- | ----------------------------------------------------------------- |
 |   0   | pub(sender)                                                       |
-|   1   | fingerprint(receiver), pub(sender), sender protocol               |
-|   2   | X = encrypt(receiver, secret), sign(sender, X), sender protocol   |
+|   1   | sender protocol, fingerprint(receiver), pub(sender)               |
+|   2   | sender protocol, X = encrypt(receiver, secret), sign(sender, X)   |
 
 During a handshake, two or more exchanges may happen, depending on lost
 packets, the cache's content, etc...
@@ -48,8 +48,8 @@ Reception of seqno 0:
   seqno 1.
 
 Reception of seqno 1:
+  The received certificate is added
   If the fingerprint is correct: 
-    - the received certificate is added
     - a new secret strictly greater than the previous one is generated
     - seqno 2 is sent.
   Else, the node goes back to the beginning
@@ -68,7 +68,6 @@ Reception of seqno 2:
  | Code            | 1  octet      |
  | Message         | Variable      |
  | HMAC            | 20 octets     |
- | Total           | 25 octets     |
 
 The sequence number is increased at each message, starting from 2 after
 the handshake.
@@ -76,7 +75,7 @@ the handshake.
 The code defines the type of message:
 
   000 : Network Version
-  001 : Tunnel Creation
+  001 : Address
   010 : Tunnel Destruction Request
   011 : Tunnel Destruction Response
   ... : Reserved
@@ -96,24 +95,26 @@ The Network Version Message contains the signed network version. It is
 encoded such that each new version message is strictly greater than the
 previous.
 
-5. Tunnel Creation 
+5. Address Message
 ------------------
 
-The creation of a tunnel from a node (client) to a peer (server) has 
-several steps:
+Each node has a list (potentially empty) of addresses to advertise to other
+nodes. An address is a tuple of three values: IP, port and protocol.
+For instance: (10.0.0.2, 1194, TCP), (2001:db8:42:4::1, 1195, UDPv6)
 
-- Request: A node sends an empty message with the Tunnel Creation code to 
-a peer
-- Response: The peer answers with a list of its addresses
-- Tunnel creation: The node adds the peer to its peer list, and creates a 
-tunnel to that peer
+In order for nodes to make tunnels between each other, they need to know
+each other's advertised list of address. There are two ways for nodes
+to learn about this:
+
+- Asking the registry with the Remote Procedure Call getBootstrapPeer: 
+    this is done only if a node doesn't know any node's addresses yet
+- Sending a re6st packet with code 001 to a node
 
 The address list is sent as a string, each address is separated by a
 semicolon, and each address contains an ip, port and protocol separated
 by a comma.
 
 "ip1,port1,proto1;ip2,port2,proto2;ip3,port3,proto3"
-
 
 6. Tunnel Destruction
 ---------------------
