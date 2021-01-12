@@ -382,54 +382,66 @@ class BaseTunnelManager(object):
         peer = self._getPeer(prefix)
         msg = peer.decode(msg)
         if type(msg) is tuple:
-            seqno, msg = msg
-            if seqno == 2:
-                i = len(msg) // 2
-                h = msg[:i]
+            seqno, protocol_str, msg = msg
+
+            def handle_hello(msg):
+                if seqno == 2:
+                    i = len(msg) // 2
+                    h = msg[:i]
+                    try:
+                        peer.verify(msg[i:], h)
+                        peer.newSession(self.cert.decrypt(h))
+                    except (AttributeError, crypto.Error, x509.NewSessionError,
+                            subprocess.CalledProcessError):
+                        return (False, ('ignored new session key from %r',
+                                      address, exc_info=1))
+                    peer.version = self._version \
+                        if self._sendto(to, '\0' + self._version, peer) else ''
+                    return (False, ())
+                if seqno:
+                    h = x509.fingerprint(self.cert.cert).digest()
+                    seqno = msg.startswith(h)
+                    msg = msg[len(h):]
                 try:
-                    peer.verify(msg[i:], h)
-                    peer.newSession(self.cert.decrypt(h))
-                except (AttributeError, crypto.Error, x509.NewSessionError,
-                        subprocess.CalledProcessError):
-                    logging.debug('ignored new session key from %r',
-                                  address, exc_info=1)
-                    return
-                peer.version = self._version \
-                    if self._sendto(to, '\0' + self._version, peer) else ''
-                return
-            if seqno:
-                h = x509.fingerprint(self.cert.cert).digest()
-                seqno = msg.startswith(h)
-                msg = msg[len(h):]
-            try:
-                cert = self.cert.loadVerify(msg,
-                    True, crypto.FILETYPE_ASN1)
-                stop_date = x509.notAfter(cert)
-                serial = cert.get_serial_number()
-                if serial in self.cache.crl:
-                    raise ValueError("revoked")
-            except (x509.VerifyError, ValueError), e:
-                logging.debug('ignored invalid certificate from %r (%s)',
-                              address, e.args[-1])
-                return
-            p = utils.binFromSubnet(x509.subnetFromCert(cert))
-            if p != peer.prefix:
-                if not prefix.startswith(p):
-                    logging.debug('received %s/%s cert from wrong source %r',
-                                  int(p, 2), len(p), address)
-                    return
-                peer = x509.Peer(p)
-                insort(self._peers, peer)
-            peer.cert = cert
-            peer.serial = serial
-            peer.stop_date = stop_date
-            self.selectTimeout(stop_date, self.invalidatePeers, False)
-            if seqno:
-                self._sendto(to, peer.hello(self.cert))
-            else:
-                msg = peer.hello0(self.cert.cert)
-                if msg and self._sendto(to, msg):
-                    peer.hello0Sent()
+                    cert = self.cert.loadVerify(msg,
+                        True, crypto.FILETYPE_ASN1)
+                    stop_date = x509.notAfter(cert)
+                    serial = cert.get_serial_number()
+                    if serial in self.cache.crl:
+                        raise ValueError("revoked")
+                except (x509.VerifyError, ValueError), e:
+                    return (True, ()) if e != "revoked" else (False,
+                           ('ignored invalid certificate from %r (%s)',
+                                  address, e.args[-1]))
+                p = utils.binFromSubnet(x509.subnetFromCert(cert))
+                if p != peer.prefix:
+                    if not prefix.startswith(p):
+                        return (False, ('received %s/%s cert from wrong source %r',
+                                        int(p, 2), len(p), address))
+                    peer = x509.Peer(p)
+                    insort(self._peers, peer)
+                peer.cert = cert
+                peer.serial = serial
+                peer.stop_date = stop_date
+                self.selectTimeout(stop_date, self.invalidatePeers, False)
+                if seqno:
+                    self._sendto(to, peer.hello(self.cert))
+                else:
+                    msg = peer.hello0(self.cert.cert)
+                    if msg and self._sendto(to, msg):
+                        peer.hello0Sent()
+                return (False, ())
+
+            retry, debug_args = handle_hello(msg)
+            # Retry if we might be dealing with an old node
+            if retry:
+                peer.protocol = 1
+                _, debug_args = handle_hello(protocol_str + msg)
+                # If it still failed, we can't assume anything about the protocol
+                if debug_args:
+                    peer.protocol = 0
+            if debug_args:
+                logging.debug(*debug_args)
         elif msg:
             # We got a valid and non-empty message. Always reply
             # something so that the sender knows we're still connected.
