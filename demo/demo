@@ -46,10 +46,17 @@ with open(os.devnull, "wb") as f:
 #   m1-m2-m3-m4-m5-m6-m7-m8                       m10
 #     :2::  :4::  :6::  :8::
 
-def disable_signal_on_children(sig):
-    pid = os.getpid()
-    sigint = signal.signal(sig, lambda *x: os.getpid() == pid and sigint(*x))
-disable_signal_on_children(signal.SIGINT)
+request_stop = False
+pid = os.getpid()
+sigint = signal.getsignal(signal.SIGINT)
+
+def sigint_handler(*x):
+    global request_stop
+    if os.getpid() == pid:
+        request_stop = True
+        sigint(*x)
+
+signal.signal(signal.SIGINT, sigint_handler)
 
 Node__add_interface = nemu.Node._add_interface
 def _add_interface(node, iface):
@@ -402,6 +409,10 @@ class testPing(Thread):
 
             # Wait until network is table and multiping test starts
             while True:
+                if request_stop:
+                    thread.interrupt_main()
+                    return
+
                 time.sleep(1)
                 if (time.time() - ping_test_start) > testPing.MAX_STABILISATION_DURATION:
                     print('Machines took longer than %s seconds to stabilize' % 
@@ -417,7 +428,11 @@ class testPing(Thread):
                 else:
                     continue
 
-            time.sleep((ping_start + int(args.test_ping)) - time.time())
+            while time.time() < ping_start + int(args.test_ping):
+                if request_stop:
+                    break
+                time.sleep(1)
+
             test_duration = time.time() - ping_start
 
             test_ping_out = subprocess.Popen(('python', 'test_ping', '-r', '-', '-c'),
