@@ -384,7 +384,7 @@ class BaseTunnelManager(object):
         if type(msg) is tuple:
             seqno, protocol_str, msg = msg
 
-            def handle_hello(msg):
+            def handle_hello(seqno, msg):
                 if seqno == 2:
                     i = len(msg) // 2
                     h = msg[:i]
@@ -432,11 +432,11 @@ class BaseTunnelManager(object):
                         peer.hello0Sent()
                 return (False, (), {})
 
-            retry, debug_args, debug_kargs = handle_hello(msg)
+            retry, debug_args, debug_kargs = handle_hello(seqno, msg)
             # Retry if we might be dealing with an old node
             if retry:
                 peer.protocol = 1
-                _, debug_args, debug_kargs = handle_hello(protocol_str + msg)
+                _, debug_args, debug_kargs = handle_hello(seqno, protocol_str + msg)
                 # If it still failed, we can't assume anything about the protocol
                 if debug_args or debug_kargs:
                     peer.protocol = 0
