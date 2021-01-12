@@ -407,6 +407,7 @@ class testPing(Thread):
                     print('Machines took longer than %s seconds to stabilize' % 
                                                                testPing.MAX_STABILISATION_DURATION)
                     thread.interrupt_main()
+                    return
                 if os.path.isfile('m1/ping_logs.csv'):
                     ping_start = float(subprocess.Popen(('head', '-n1', 'm1/ping_logs.csv'),
                                         stdout=subprocess.PIPE).communicate()[0].split(',')[0])
