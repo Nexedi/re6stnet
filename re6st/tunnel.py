@@ -394,10 +394,10 @@ class BaseTunnelManager(object):
                     except (AttributeError, crypto.Error, x509.NewSessionError,
                             subprocess.CalledProcessError):
                         return (False, ('ignored new session key from %r',
-                                      address, exc_info=1))
+                                      address), {'exc_info': 1})
                     peer.version = self._version \
                         if self._sendto(to, '\0' + self._version, peer) else ''
-                    return (False, ())
+                    return (False, (), {})
                 if seqno:
                     h = x509.fingerprint(self.cert.cert).digest()
                     seqno = msg.startswith(h)
@@ -412,12 +412,12 @@ class BaseTunnelManager(object):
                 except (x509.VerifyError, ValueError), e:
                     return (True, ()) if e != "revoked" else (False,
                            ('ignored invalid certificate from %r (%s)',
-                                  address, e.args[-1]))
+                                  address, e.args[-1]), {})
                 p = utils.binFromSubnet(x509.subnetFromCert(cert))
                 if p != peer.prefix:
                     if not prefix.startswith(p):
                         return (False, ('received %s/%s cert from wrong source %r',
-                                        int(p, 2), len(p), address))
+                                        int(p, 2), len(p), address), {})
                     peer = x509.Peer(p)
                     insort(self._peers, peer)
                 peer.cert = cert
@@ -430,18 +430,18 @@ class BaseTunnelManager(object):
                     msg = peer.hello0(self.cert.cert)
                     if msg and self._sendto(to, msg):
                         peer.hello0Sent()
-                return (False, ())
+                return (False, (), {})
 
-            retry, debug_args = handle_hello(msg)
+            retry, debug_args, debug_kargs = handle_hello(msg)
             # Retry if we might be dealing with an old node
             if retry:
                 peer.protocol = 1
-                _, debug_args = handle_hello(protocol_str + msg)
+                _, debug_args, debug_kargs = handle_hello(protocol_str + msg)
                 # If it still failed, we can't assume anything about the protocol
-                if debug_args:
+                if debug_args or debug_kargs:
                     peer.protocol = 0
-            if debug_args:
-                logging.debug(*debug_args)
+            if debug_args or debug_kargs:
+                logging.debug(*debug_args, **debug_kargs)
         elif msg:
             # We got a valid and non-empty message. Always reply
             # something so that the sender knows we're still connected.

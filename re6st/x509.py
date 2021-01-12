@@ -288,7 +288,7 @@ class Peer(object):
     def decode(self, msg, _unpack=seqno_struct.unpack):
         seqno, = _unpack(msg[:4])
         if seqno <= 2:
-            return seqno, *decode_protocol(seqno, msg[4:])
+            return (seqno,) + decode_protocol(seqno, msg[4:])
         i = -utils.HMAC_LEN
         if self._hmac(msg[:i]) == msg[i:] and self._i < seqno:
             self._last = None
