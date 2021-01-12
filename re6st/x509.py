@@ -223,9 +223,9 @@ class Peer(object):
     def __lt__(self, other):
         return self.prefix < (other if type(other) is str else other.prefix)
 
-    def encode_protocol():
+    def encode_protocol(self):
         # Don't send protocol to old nodes
-        if peer.protocol and peer.protocol <= 6:
+        if self.protocol and self.protocol <= 6:
             return ""
         if version.protocol < 2**7:
             return struct.Struct("!B").pack(version.protocol)
