@@ -239,15 +239,15 @@ class Peer(object):
     # Decodes protocol and sets peer.protocol, and returns
     # the prefix which was used to decode the protocol, and
     # the rest of the message
-    def decode_protocol(seqno, msg):
+    def decode_protocol(self, seqno, msg):
         if seqno == 2:
             # If message length is 128, we are dealing with an old node
             if len(msg) == 128:
                 peer.protocol = 1
                 return "", msg
-        peer.protocol = struct.Struct("!B").unpack(msg[:1])[0]
-        if peer.protocol >= 2**7:
-            peer.protocol = struct.Struct("!H").unpack(msg[:2])[0] - 2**15
+        self.protocol = struct.Struct("!B").unpack(msg[:1])[0]
+        if self.protocol >= 2**7:
+            self.protocol = struct.Struct("!H").unpack(msg[:2])[0] - 2**15
             return msg[:2], msg[2:]
         return msg[:1], msg[1:]
 
@@ -288,7 +288,7 @@ class Peer(object):
     def decode(self, msg, _unpack=seqno_struct.unpack):
         seqno, = _unpack(msg[:4])
         if seqno <= 2:
-            return (seqno,) + decode_protocol(seqno, msg[4:])
+            return (seqno,) + self.decode_protocol(seqno, msg[4:])
         i = -utils.HMAC_LEN
         if self._hmac(msg[:i]) == msg[i:] and self._i < seqno:
             self._last = None
