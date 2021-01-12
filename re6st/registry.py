@@ -522,6 +522,7 @@ class RegistryServer(object):
                 random.shuffle(peers)
                 self.peers = time.time() + 60, peers
             peer = peers.pop()
+            logging.info("Got bootstrap peer: %s", peer)
             if peer == cn:
                 # Very unlikely (e.g. peer restarted with empty cache),
                 # so don't bother looping over above code

@@ -14,12 +14,15 @@ REGISTRY_SERIAL = '0x120010db80042'
 REGISTRY2_SERIAL = '0x120010db80043'
 CA_DAYS = 1000
 REPOSITORY_URL = {'re6stnet': 'https://lab.nexedi.com/jhuge/re6stnet.git',
-                  'babeld': 'https://github.com/jech/babeld'}
+                  'babeld': 'https://lab.nexedi.com/nexedi/babeld.git',
+                  'openvpn': 'https://github.com/OpenVPN/openvpn.git'}
+BINARY_PATH = {'babeld': 'babeld',
+               'openvpn': 'openvpn/src'}
 
 # Quick check to avoid wasting time if there is an error.
 with open(os.devnull, "wb") as f:
     for x in 're6stnet', 're6st-conf', 're6st-registry':
-        subprocess.check_call(('./py', x, '--help'), stdout=f)
+        subprocess.check_call(('./py', '.', '-', '-', x, '--help'), stdout=f)
 #
 # Underlying network:
 #
@@ -91,7 +94,7 @@ if args.duration:
 
 execfile("fixnemu.py")
 
-clone_conf = {'re6stnet': {}, 'babeld': {}}
+clone_conf = {'re6stnet': {}, 'babeld': {}, 'openvpn': {}}
 if args.clone:
     # Parse clone configuration file
     with open('clone.conf', 'r') as clone_conf_file:
@@ -101,6 +104,50 @@ if args.clone:
             soft, machine, object_type, git_object = line.split()
             if soft in clone_conf:
                 clone_conf[soft][machine] = (object_type,git_object)
+
+# Parse nodes and registries conf file
+def parse_re6st_conf(conf_name):
+    with open('%s_global.conf' % conf_name, 'r') as nodes_conf_file:
+        lines = [l[:-1] for l in nodes_conf_file]
+        lines = list(filter(lambda x: x[0] not in ['#', '\n'], lines))
+        folder_list, confs, confs_remove = [], {}, {}
+
+        def parse_identifier(l):
+            return l[1:] if l[0] == '@' else ""
+
+        folder_list = list(map(parse_identifier, lines))
+        folder_list = list(filter(lambda x: x and x != "ALL", folder_list))
+
+        i = 0
+        while i < len(lines):
+            x = parse_identifier(lines[i])
+            if x:
+                folder_confs = folder_list if x == "ALL" else [x]
+                while True:
+                    i += 1
+                    if i >= len(lines):
+                        break
+                    if parse_identifier(lines[i]):
+                        i -= 1
+                        break
+                    for f in folder_confs:
+                        confs.setdefault(f, [])
+                        confs_remove.setdefault(f, [])
+                        l = lines[i].replace("%", f).lstrip()
+                        if l[0] == '-':
+                            confs_remove[f].append(l[1:])
+                        else:
+                            confs[f].append(l + "\n")
+            i += 1
+
+        for f in confs:
+            with open('%s/%s.conf' % (f, conf_name), 'w+') as conf_file:
+                for l in confs[f]:
+                    if l[:-1] not in confs_remove[f]:
+                        conf_file.write(l)
+
+parse_re6st_conf("re6stnet")
+parse_re6st_conf("re6st-registry")
 
 # create nodes
 for name in """internet=I registry=R
@@ -150,8 +197,17 @@ for name in """internet=I registry=R
                     object_path = ('%s/' % remote_name if object_type == "branch"
                                    else '') + git_object
                     subprocess.Popen(('git', 'checkout', object_path), cwd=repo_folder).wait()
+
+                if repo == 'babaeld':
+                    subprocess.Popen(('make'), cwd=repo_folder).wait()
+                elif repo == 'openvpn':
+                    subprocess.Popen(('autoreconf', '-i' ,'-v' ,'-f'), cwd=repo_folder).wait()
+                    subprocess.Popen(('./configure'), cwd=repo_folder).wait()
+                    subprocess.Popen(('make'), cwd=repo_folder).wait()
+                    
             init_repo('re6stnet')
             init_repo('babeld')
+            init_repo('openvpn')
 
     node.Popen(('sysctl', '-q',
         'net.ipv4.icmp_echo_ignore_broadcasts=0')).wait()
@@ -299,16 +355,19 @@ def new_network(registry, reg_addr, serial, ca):
         crypto.dump_certificate(crypto.FILETYPE_ASN1, cert)).hexdigest()
     db_path = "%s/registry.db" % registry.name
 
-    py_wrapper_path = ("%s/re6stnet/demo/py" % registry.name
+    re6stnet_path = ("demo/%s/re6stnet" % registry.name
                       if registry.name in clone_conf['re6stnet']
-                      else "./py")
-    babeld_binary_opt = ("--binary %s/babeld/babeld" % registry.name
+                      else ".")
+    babeld_path = ("demo/%s/%s" % (registry.name, BINARY_PATH['babeld'])
                       if registry.name in clone_conf['babeld']
-                      else "")
-    registry.screen("%s re6st-registry @%s/re6st-registry.conf"
-        " --db %s --mailhost %s -v%u %s"
-        % (py_wrapper_path, registry.name, db_path,
-           os.path.abspath('mbox'), VERBOSE, babeld_binary_opt))
+                      else "-")
+    openvpn_path = ("demo/%s/%s" % (registry.name, BINARY_PATH['openvpn'])
+                      if registry.name in clone_conf['openvpn']
+                      else "-")
+    registry.screen("./py %s %s %s re6st-registry @%s/re6st-registry.conf"
+        " --db %s --mailhost %s -v%u"
+        % (re6stnet_path, babeld_path, openvpn_path, registry.name, db_path,
+           os.path.abspath('mbox'), VERBOSE))
     registry_url = 'http://%s/' % reg_addr
     registry.Popen(('python', '-c', """if 1:
         import socket, time
@@ -323,12 +382,21 @@ def new_network(registry, reg_addr, serial, ca):
     db = sqlite3.connect(db_path, isolation_level=None)
     def new_node(node, folder, node_args='', prefix_len=None, registry=registry_url):
         nodes.append(node)
+        re6stnet_path = ("demo/%s/re6stnet" % folder
+                          if folder in clone_conf['re6stnet']
+                          else ".")
+        babeld_path = ("demo/%s/%s" % (registry.name, BINARY_PATH['babeld'])
+                          if folder in clone_conf['babeld']
+                          else "-")
+        openvpn_path = ("demo/%s/%s" % (registry.name, BINARY_PATH['openvpn'])
+                          if folder in clone_conf['openvpn']
+                          else "-")
         if not os.path.exists(folder + '/cert.crt'):
             dh_path = folder + '/dh2048.pem'
             if not os.path.exists(dh_path):
                 os.symlink('../dh2048.pem', dh_path)
             email = node.name + '@example.com'
-            p = node.Popen(('../py', 're6st-conf', '--registry', registry,
+            p = node.Popen(('../py', re6stnet_path, babeld_path, openvpn_path, 're6st-conf', '--registry', registry,
                             '--email', email, '--fingerprint', fingerprint),
                 stdin=subprocess.PIPE, cwd=folder)
             token = None
@@ -342,18 +410,11 @@ def new_network(registry, reg_addr, serial, ca):
             p.communicate(str(token[0]))
             os.remove(dh_path)
             os.remove(folder + '/ca.crt')
-        py_wrapper_path = ("%s/re6stnet/demo/py" % folder
-                          if folder in clone_conf['re6stnet']
-                          else "./py")
-        babeld_binary_opt = ("--binary %s/babeld/babeld" % folder
-                          if folder in clone_conf['babeld']
-                          else "")
         node.re6st_cmdline = (
-            '%s re6stnet @%s/re6stnet.conf -v%u --registry %s'
+            './py %s %s %s re6stnet @%s/re6stnet.conf -v%u --registry %s'
             ' --console %s/run/console.sock %s'
-            ' %s'
-            ) % (py_wrapper_path, folder, VERBOSE, registry,
-                 folder, node_args, babeld_binary_opt)
+            ) % (re6stnet_path, babeld_path, openvpn_path, folder, VERBOSE, registry,
+                 folder, node_args)
         node.screen(node.re6st_cmdline)
     new_node(registry, registry.name, '--ip ' + reg_addr, registry='http://localhost/')
     yield new_node
@@ -389,7 +450,7 @@ if args.ping:
         
 class testPing(Thread):
 
-    MAX_STABILISATION_DURATION = 40
+    MAX_STABILISATION_DURATION = 20000
     MAX_DOWN_PERCENTAGE = {'m1':        15,
                            'm2':        15,
                            'm3':        15,
