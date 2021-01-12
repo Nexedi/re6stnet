@@ -254,7 +254,7 @@ class Peer(object):
     def hello0(self, cert):
         if self._hello < time.time():
             try:
-                msg = '\0\0\0\1' + encode_protocol() + fingerprint(self.cert).digest()
+                msg = '\0\0\0\1' + self.encode_protocol() + fingerprint(self.cert).digest()
             except AttributeError:
                 msg = '\0\0\0\0'
             return msg + crypto.dump_certificate(crypto.FILETYPE_ASN1, cert)
@@ -268,7 +268,7 @@ class Peer(object):
                     key)
         self._i = self._j = 2
         self._last = 0
-        return '\0\0\0\2' + encode_protocol() + h + cert.sign(h)
+        return '\0\0\0\2' + self.encode_protocol() + h + cert.sign(h)
 
     def _hmac(self, msg):
         return hmac.HMAC(self._key, msg, hashlib.sha1).digest()
