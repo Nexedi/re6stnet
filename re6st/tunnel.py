@@ -384,7 +384,7 @@ class BaseTunnelManager(object):
         if type(msg) is tuple:
             seqno, protocol_str, msg = msg
 
-            def handle_hello(seqno, msg):
+            def handle_hello(peer, seqno, msg):
                 if seqno == 2:
                     i = len(msg) // 2
                     h = msg[:i]
@@ -410,7 +410,7 @@ class BaseTunnelManager(object):
                     if serial in self.cache.crl:
                         raise ValueError("revoked")
                 except (x509.VerifyError, ValueError), e:
-                    return (True, ()) if e != "revoked" else (False,
+                    return (True, (), {}) if e != "revoked" else (False,
                            ('ignored invalid certificate from %r (%s)',
                                   address, e.args[-1]), {})
                 p = utils.binFromSubnet(x509.subnetFromCert(cert))
@@ -432,11 +432,11 @@ class BaseTunnelManager(object):
                         peer.hello0Sent()
                 return (False, (), {})
 
-            retry, debug_args, debug_kargs = handle_hello(seqno, msg)
+            retry, debug_args, debug_kargs = handle_hello(peer, seqno, msg)
             # Retry if we might be dealing with an old node
             if retry:
                 peer.protocol = 1
-                _, debug_args, debug_kargs = handle_hello(seqno, protocol_str + msg)
+                _, debug_args, debug_kargs = handle_hello(peer, seqno, protocol_str + msg)
                 # If it still failed, we can't assume anything about the protocol
                 if debug_args or debug_kargs:
                     peer.protocol = 0
