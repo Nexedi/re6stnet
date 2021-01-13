@@ -236,7 +236,7 @@ class BaseTunnelManager(object):
             self._geoiplookup = geoiplookup
             self._country = {}
 
-            address_dict = {family: address + (self._updateCountry(address),)
+            address_dict = {family: [(a + (self._updateCountry(address),)) for a in address]
                             for family, address in address_dict.iteritems()}
         elif cache.same_country:
             sys.exit("Can not respect 'same_country' network configuration"

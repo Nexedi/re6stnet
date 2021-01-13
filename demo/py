@@ -29,5 +29,7 @@ def __file__():
             registry.RENEW_PERIOD = -30
 
     return os.path.join(sys.path[0], sys.argv[1])
+import os
+os.environ["GEOIP2_MMDB"] = "/home/nexedi/re6stnet/demo/GeoLite2-Country.mmdb"
 __file__ = __file__()
 execfile(__file__)
