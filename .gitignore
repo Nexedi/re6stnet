@@ -5,3 +5,16 @@
 /build/
 /dist/
 /re6stnet.egg-info/
+demo/*/cert.crt
+demo/*/*.log
+demo/*/*.db*
+demo/*/run/
+demo/*/dh.pem
+demo/*/babeld.state
+demo/*/*.conf
+demo/mbox
+demo/miniupnpd.pid
+demo/ca.crt
+demo/ca2.crt
+demo/
+
