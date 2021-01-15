@@ -236,11 +236,7 @@ class BaseTunnelManager(object):
             self._geoiplookup = geoiplookup
             self._country = {}
 
-            def add_country(address):
-                country = self._updateCountry(address)
-                return a + ((country,) if country else ())
-
-            address_dict = {family: [add_country(a) for a in address]
+            address_dict = {family: self._updateCountry(address)
                             for family, address in address_dict.iteritems()}
         elif cache.same_country:
             sys.exit("Can not respect 'same_country' network configuration"
@@ -442,12 +438,10 @@ class BaseTunnelManager(object):
             # Retry if we might be dealing with an old node
             if retry:
                 peer.protocol = 1
-                logging.debug("JHD 1 %s", peer.prefix)
                 _, debug_args, debug_kargs = handle_hello(peer, seqno, protocol_str + msg)
                 # If it still failed, we can't assume anything about the protocol
                 if debug_args or debug_kargs:
                     peer.protocol = 0
-                    logging.debug("JHD 0 %s", peer.prefix)
             if debug_args or debug_kargs:
                 logging.debug(*debug_args, **debug_kargs)
         elif msg:
@@ -664,18 +658,25 @@ class BaseTunnelManager(object):
                 break
 
     def _updateCountry(self, address):
+
         if self._conf_country:
-            return self._conf_country
-        for address in address:
-            family, ip = resolve(*address)
-            for ip in ip:
-                country = self._geoiplookup(ip)
-                if country:
-                    if self._country.get(family) != country:
-                        self._country[family] = country
-                        logging.info('%s country: %s (%s)',
-                            family_dict[family], country, ip)
-                    return
+            country = self._conf_country
+        else:
+            for _address in address:
+                try:
+                    family, ip = resolve(*_address)
+                except TypeError as e:
+                    logging.debug("exception: %s, address: %s", e, _address)
+                    raise TypeError
+                for ip in ip:
+                    country = self._geoiplookup(ip)
+                    if country:
+                        if self._country.get(family) != country:
+                            self._country[family] = country
+                            logging.info('%s country: %s (%s)',
+                                family_dict[family], country, ip)
+                        break
+        return [(a + ((country,) if country else ())) for a in address]
 
 
 class TunnelManager(BaseTunnelManager):
@@ -882,8 +883,9 @@ class TunnelManager(BaseTunnelManager):
             if x[2] in self._disable_proto:
                 continue
             if same_country:
-                family, ip = resolve(*x)
-                my_country = self._country.get(family)
+                family, ip = resolve(*x[:3])
+                my_country = self._conf_country if self._conf_country \
+                             else self.country.get(family)
                 if my_country:
                     for ip in ip:
                         if len(x) > 3:
@@ -898,7 +900,7 @@ class TunnelManager(BaseTunnelManager):
                         else:
                             address_list.append((ip, x[1], x[2]))
                     continue
-            address_list.append(x)
+            address_list.append(x[:3])
         self.cache.connecting(prefix, 1)
         if not address_list:
             return False
@@ -1035,7 +1037,7 @@ class TunnelManager(BaseTunnelManager):
             family, address = self._ip_changed(ip)
             if address:
                 if self._geoiplookup or self._conf_country:
-                    address += (self._updateCountry(address),)
+                    address = self._updateCountry(address)
                 self._address[family] = utils.dump_address(address)
                 self.cache.my_address = ';'.join(self._address.itervalues())
 

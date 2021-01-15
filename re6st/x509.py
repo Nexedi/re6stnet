@@ -246,17 +246,11 @@ class Peer(object):
             # If message length is 128, we are dealing with an old node
             if len(msg) == 128:
                 self.protocol = 1
-                logging.debug("JHD SEQ%d LEN128 %s %d",
-                              seqno, self.prefix, self.protocol)
                 return "", msg
         self.protocol = struct.Struct("!B").unpack(msg[:1])[0]
         if self.protocol >= 2**7:
             self.protocol = struct.Struct("!H").unpack(msg[:2])[0] - 2**15
-            logging.debug("JHD SEQ%d >128 %s %d",
-                          seqno, self.prefix, self.protocol)
             return msg[:2], msg[2:]
-        logging.debug("JHD SEQ%d <128 %s %d",
-                      seqno, self.prefix, self.protocol)
         return msg[:1], msg[1:]
 
     def hello0(self, cert):
