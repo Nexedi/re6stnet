@@ -102,6 +102,43 @@ if args.clone:
             if soft in clone_conf:
                 clone_conf[soft][machine] = (object_type,git_object)
 
+# Parse nodes and registries conf file
+    with open('nodes.conf', 'r') as nodes_conf_file:
+        lines = [l[:-1] for l in nodes_conf_file]
+        lines = list(filter(lambda x: x[0] not in ['#', '\n'], lines))
+        folder_list, confs = [], {}
+
+        def parse_identifier(l):
+            return l[1:] if l[0] == '@' else ""
+
+        folder_list = list(map(parse_identifier, lines))
+        folder_list = list(filter(lambda x: x and x != "ALL", folder_list))
+
+        i = 0
+        while i < len(lines):
+            x = parse_identifier(lines[i])
+            if x:
+                folder_confs = folder_list if x == "ALL" else [x]
+                while i < len(lines):
+                    i += 1
+                    if parse_identifier(lines[i]):
+                        i -= 1
+                        break
+                    for f in folder_confs:
+                        confs.setdefault(f, [])
+                        l = lines[i].replace("%", f).lstrip()
+                        if l[0] == '-':
+                            confs.remove(l[1:])
+                        else:
+                            confs.append(lines[i] + "\n")
+            i += 1
+        
+        for f in confs:
+            with open('%s/re6stnet.conf' % f, 'w+'):
+                f.write(confs[f])
+
+exit()
+
 # create nodes
 for name in """internet=I registry=R
                           gateway1=g1 machine1=1 machine2=2
