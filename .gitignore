@@ -11,10 +11,10 @@ demo/*/*.db*
 demo/*/run/
 demo/*/dh.pem
 demo/*/babeld.state
+demo/*/ping_logs.csv
 demo/*/*.conf
+demo/test-results/
 demo/mbox
 demo/miniupnpd.pid
 demo/ca.crt
 demo/ca2.crt
-demo/
-
