@@ -433,7 +433,7 @@ if args.ping:
         
 class testPing(Thread):
 
-    MAX_STABILISATION_DURATION = 40
+    MAX_STABILISATION_DURATION = 20000
     MAX_DOWN_PERCENTAGE = {'m1':        15,
                            'm2':        15,
                            'm3':        15,
