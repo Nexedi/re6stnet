@@ -1,11 +1,12 @@
 #!/usr/bin/env python
+import os, sys
 def __file__():
-    import argparse, os, sys
+    import argparse
     sys.dont_write_bytecode = True
     sys.path[0] = os.path.join(os.path.dirname(sys.path[0]), sys.argv[1])
     from argparse import ArgumentParser
     _parse_args = ArgumentParser.parse_args
-    ArgumentParser.parse_args = lambda self: _parse_args(self, sys.argv[3:])
+    ArgumentParser.parse_args = lambda self: _parse_args(self, sys.argv[4:])
     # Always import to prevent re6st.node.cli from altering the first sys.path
     from re6st import registry
 
@@ -25,11 +26,13 @@ def __file__():
 
         # Simulate the case of a node that does
         # not renew its certificate in time.
-        if sys.argv[3] == "@m7/re6stnet.conf":
+        if sys.argv[4] == "@m7/re6stnet.conf":
             registry.RENEW_PERIOD = -30
 
-    return os.path.join(sys.path[0], sys.argv[2])
-import os
-os.environ["GEOIP2_MMDB"] = "/home/nexedi/re6stnet/demo/GeoLite2-Country.mmdb"
+    return os.path.join(sys.path[0], sys.argv[3])
+
+os.environ["GEOIP2_MMDB"] = os.path.join(sys.path[0], 'GeoLite2-Country.mmdb')
 __file__ = __file__()
+if sys.argv[2] != '-':
+    os.environ["PATH"] = "%s:%s" % (os.path.join(sys.path[0], sys.argv[2]), os.environ["PATH"])
 execfile(__file__)

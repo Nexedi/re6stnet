@@ -885,7 +885,7 @@ class TunnelManager(BaseTunnelManager):
             if same_country:
                 family, ip = resolve(*x[:3])
                 my_country = self._conf_country if self._conf_country \
-                             else self.country.get(family)
+                             else self._country.get(family)
                 if my_country:
                     for ip in ip:
                         if len(x) > 3:
