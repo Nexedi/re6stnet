@@ -225,28 +225,22 @@ class Peer(object):
 
     def encode_protocol(self):
         # Don't send protocol to old nodes
-        if self.protocol and self.protocol <= 6:
+        if self.protocol and self.protocol < 7:
             return ""
         if version.protocol < 2**7:
             return struct.Struct("!B").pack(version.protocol)
         if version.protocol < 2**15:
             return struct.Struct("!H").pack(2**15 + version.protocol)
         else:
-            logging.critical("Your version of re6stnet is too high to be encoded."
-                             " Please update the code.")
+            logging.critical("re6stnet version is too high to be encoded.")
             sys.exit(1)
 
     # Decodes protocol and sets peer.protocol, and returns
     # the prefix which was used to decode the protocol, and
     # the rest of the message
     def decode_protocol(self, seqno, msg):
-        if seqno == 0:
+        if seqno == 0 or (self.protocol and self.protocol < 7):
             return "", msg
-        if seqno == 2:
-            # If message length is 128, we are dealing with an old node
-            if len(msg) == 128:
-                self.protocol = 1
-                return "", msg
         self.protocol = struct.Struct("!B").unpack(msg[:1])[0]
         if self.protocol >= 2**7:
             self.protocol = struct.Struct("!H").unpack(msg[:2])[0] - 2**15

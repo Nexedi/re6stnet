@@ -437,11 +437,16 @@ class BaseTunnelManager(object):
             retry, debug_args, debug_kargs = handle_hello(peer, seqno, msg)
             # Retry if we might be dealing with an old node
             if retry:
+                logging.debug("JHD: Retrying protocol verification for %s/%s",
+                              int(peer.prefix,3), len(peer.prefix))
                 peer.protocol = 1
                 _, debug_args, debug_kargs = handle_hello(peer, seqno, protocol_str + msg)
                 # If it still failed, we can't assume anything about the protocol
                 if debug_args or debug_kargs:
                     peer.protocol = 0
+                else:
+                    logging.debug("JHD: Detected %s/%s has protocol 1",
+                                  int(peer.prefix,2), len(peer.prefix))
             if debug_args or debug_kargs:
                 logging.debug(*debug_args, **debug_kargs)
         elif msg:
