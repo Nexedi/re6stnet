@@ -43,14 +43,12 @@ def decode_interval(x):
 failed_pings = {}
 intervals = {}
 
-"""
-Parse ping_log file for each machine
-
-intervals[ip][peer] = list of intervals (start_time, end_time) during which
-the ping from ip to peer failed
-
-failed_pings[time_interval] = list of failed pings (ip, peer_ip)
-"""
+# Parse ping_log file for each machine
+# 
+# intervals[ip][peer] = list of intervals (start_time, end_time) during which
+# the ping from ip to peer failed
+# 
+# failed_pings[time_interval] = list of failed pings (ip, peer_ip)
 for ip in ips:
     machine = machines[ip]
     intervals[ip] = {}
@@ -119,11 +117,8 @@ def time_to_str(t, list_format=False):
     r += str(s)
     return r
 
-"""
-failed_pings_table[time][ip] = number of pings that failed from or to that ip
-"""
-
 # Computes failed_pings_table between time interval [d,f]
+# failed_pings_table[time][ip] = number of pings that failed from or to that ip
 def compute_failed_pings_table(d,f):
     failed_pings_table = {}
     for i in sorted_intervals:

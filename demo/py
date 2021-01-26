@@ -1,8 +1,15 @@
 #!/usr/bin/env python
+# argv[1] : re6stnet repository path
+# argv[2] : babeld repository path
+# argv[3] : openVPN repository path
+# argv[4] : re6st script
+# argv[5:] : re6st script arguments
+
 import os, sys
 def __file__():
     import argparse
     sys.dont_write_bytecode = True
+    # Set path to re6stnet repository root folder
     sys.path[0] = os.path.join(os.path.dirname(sys.path[0]), sys.argv[1])
     from argparse import ArgumentParser
     _parse_args = ArgumentParser.parse_args
@@ -31,10 +38,13 @@ def __file__():
 
     return os.path.join(sys.path[0], sys.argv[4])
 
+# Export MaxMindDB database
 os.environ["GEOIP2_MMDB"] = os.path.join(sys.path[0], 'GeoLite2-Country.mmdb')
 __file__ = __file__()
+# Export babeld binary folder in $PATH
 if sys.argv[2] != '-':
     os.environ["PATH"] = "%s:%s" % (os.path.join(sys.path[0], sys.argv[2]), os.environ["PATH"])
+# Export openvpn binary folder in $PATH
 if sys.argv[3] != '-':
     os.environ["PATH"] = "%s:%s" % (os.path.join(sys.path[0], sys.argv[3]), os.environ["PATH"])
 execfile(__file__)

@@ -386,53 +386,61 @@ class BaseTunnelManager(object):
         if type(msg) is tuple:
             seqno, protocol_str, msg = msg
 
-            def handle_hello(peer, seqno, msg):
-                if seqno == 2:
-                    i = len(msg) // 2
-                    h = msg[:i]
-                    try:
-                        peer.verify(msg[i:], h)
-                        peer.newSession(self.cert.decrypt(h))
-                    except (AttributeError, crypto.Error, x509.NewSessionError,
-                            subprocess.CalledProcessError):
-                        return (False, ('ignored new session key from %r',
-                                      address), {'exc_info': 1})
-                    peer.version = self._version \
-                        if self._sendto(to, '\0' + self._version, peer) else ''
-                    return (False, (), {})
-                if seqno:
-                    h = x509.fingerprint(self.cert.cert).digest()
-                    seqno = msg.startswith(h)
-                    msg = msg[len(h):]
+            if seqno == 2:
+                i = len(msg) // 2
+                h = msg[:i]
                 try:
-                    cert = self.cert.loadVerify(msg,
-                        True, crypto.FILETYPE_ASN1)
+                    peer.verify(msg[i:], h)
+                    peer.newSession(self.cert.decrypt(h))
+                except (AttributeError, crypto.Error, x509.NewSessionError,
+                        subprocess.CalledProcessError):
+                    logging.debug('ignored new session key from %r',
+                                  address, exc_info=1)
+                    return
+                peer.version = self._version \
+                    if self._sendto(to, '\0' + self._version, peer) else ''
+                return
+            if seqno:
+                h = x509.fingerprint(self.cert.cert).digest()
+                retry_msg = (protocol_str + msg)[len(h):]
+                msg = msg[len(h):]
+            for _try in range(2):
+                if seqno:
+                    _seqno = msg.startswith(h)
+                try:
+                    cert = self.cert.loadVerify(msg, True, crypto.FILETYPE_ASN1)
                     stop_date = x509.notAfter(cert)
                     serial = cert.get_serial_number()
                     if serial in self.cache.crl:
                         raise ValueError("revoked")
                 except (x509.VerifyError, ValueError), e:
-                    return (True, (), {}) if e != "revoked" else (False,
-                           ('ignored invalid certificate from %r (%s)',
-                                  address, e.args[-1]), {})
-                p = utils.binFromSubnet(x509.subnetFromCert(cert))
-                if p != peer.prefix:
-                    if not prefix.startswith(p):
-                        return (False, ('received %s/%s cert from wrong source %r',
-                                        int(p, 2), len(p), address), {})
-                    peer = x509.Peer(p)
-                    insort(self._peers, peer)
-                peer.cert = cert
-                peer.serial = serial
-                peer.stop_date = stop_date
-                self.selectTimeout(stop_date, self.invalidatePeers, False)
-                if seqno:
-                    self._sendto(to, peer.hello(self.cert))
-                else:
-                    msg = peer.hello0(self.cert.cert)
-                    if msg and self._sendto(to, msg):
-                        peer.hello0Sent()
-                return (False, (), {})
+                    if seqno:
+                        msg = retry_msg
+                        continue 
+                    logging.debug('ignored invalid certificate from %r (%s)',
+                                  address, e.args[-1])
+                if _try:
+                    peer.protocol = 1
+                seqno = _seqno
+                break
+            p = utils.binFromSubnet(x509.subnetFromCert(cert))
+            if p != peer.prefix:
+                if not prefix.startswith(p):
+                    logging.debug('received %s/%s cert from wrong source %r',
+                                  int(p, 2), len(p), address)
+                    return
+                peer = x509.Peer(p)
+                insort(self._peers, peer)
+            peer.cert = cert
+            peer.serial = serial
+            peer.stop_date = stop_date
+            self.selectTimeout(stop_date, self.invalidatePeers, False)
+            if seqno:
+                self._sendto(to, peer.hello(self.cert))
+            else:
+                msg = peer.hello0(self.cert.cert)
+                if msg and self._sendto(to, msg):
+                    peer.hello0Sent()
 
             retry, debug_args, debug_kargs = handle_hello(peer, seqno, msg)
             # Retry if we might be dealing with an old node
@@ -469,9 +477,9 @@ class BaseTunnelManager(object):
             else:
                 if peer:
                     p = self._getPeer(peer)
-                    # If we know we are dealing with an old node
+                    # If we know we are dealing with an old node, don't send country
                     if p.prefix == peer and p.protocol and p.protocol < 7:
-                        return ';'.join([','.join(a.split(",")[:3])
+                        return ';'.join([','.join(a.split(',')[:3])
                                for a in self._address.itervalues()])
                 return ';'.join(self._address.itervalues())
         elif not code: # network version
@@ -894,10 +902,8 @@ class TunnelManager(BaseTunnelManager):
                              else self._country.get(family)
                 if my_country:
                     for ip in ip:
-                        if len(x) > 3:
-                            country = x[3]
-                        else:
-                            country = self._geoiplookup(ip)
+                        # Use geoip if there is no country in the address
+                        country = x[3] if len(x) > 3 else self._geoiplookup(ip)
                         if country and (country != my_country
                                         if my_country in same_country else
                                         country in same_country):

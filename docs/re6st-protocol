@@ -1,21 +1,21 @@
-                             Re6st Protocol        
-                             --------------    
+                             Re6st Protocol
+                             --------------
 
 Table of Contents
 -----------------
 
-1. Introduction . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .  
-2. Handshake  . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .  
-3. Re6st packet format  . . . . . . . . . . . . . . . . . . . . . . . . . . .  
-4. Network Version Message  . . . . . . . . . . . . . . . . . . . . . . . . .  
-5. Address Message  . . . . . . . . . . . . . . . . . . . . . . . . . . . . .  
-6. Tunnel Destruction . . . . . . . . . . . . . . . . . . . . . . . . . . . .  
+1. Introduction . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+2. Handshake  . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+3. Re6st packet format  . . . . . . . . . . . . . . . . . . . . . . . . . . .
+4. Network Version Message  . . . . . . . . . . . . . . . . . . . . . . . . .
+5. Address Message  . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+6. Tunnel Destruction . . . . . . . . . . . . . . . . . . . . . . . . . . . .
 
 1. Introduction
 ---------------
 
-The re6st protocol is defined for communication between nodes of a re6st 
-network relative to the network itself. Nodes communicate to cooperate 
+The re6st protocol is defined for communication between nodes of a re6st
+network relative to the network itself. Nodes communicate to cooperate
 together on the creation and destruction of tunnels.
 
 2. Handshake
@@ -26,7 +26,7 @@ a connection, which requires a handshake. The purpose of the handshake
 is to authenticate the nodes between each other by exchanging their public
 certificate, and initialize a secret.
 
-Three types of exchanges are defined for the handshake protocol: 
+Three types of exchanges are defined for the handshake protocol:
 
 | Seqno |                             Content                               |
 | ----- | ----------------------------------------------------------------- |
@@ -49,7 +49,7 @@ Reception of seqno 0:
 
 Reception of seqno 1:
   The received certificate is added
-  If the fingerprint is correct: 
+  If the fingerprint is correct:
     - a new secret strictly greater than the previous one is generated
     - seqno 2 is sent.
   Else, the node goes back to the beginning
@@ -58,7 +58,7 @@ Reception of seqno 2:
   If the signature verification or if the secret is less or equal to the secret
   node previously had, the handshake fails.
   Else, the node sends its network version.
-  
+
 3. Re6st packet format
 ----------------
 
@@ -106,7 +106,7 @@ In order for nodes to make tunnels between each other, they need to know
 each other's advertised list of address. There are two ways for nodes
 to learn about this:
 
-- Asking the registry with the Remote Procedure Call getBootstrapPeer: 
+- Asking the registry with the Remote Procedure Call getBootstrapPeer:
     this is done only if a node doesn't know any node's addresses yet
 - Sending a re6st packet with code 001 to a node
 
@@ -121,9 +121,9 @@ by a comma.
 
 The destruction of a tunnel requires multiple stages:
 
-- soft locking: the node orders babel to raise the cost of its route to 
+- soft locking: the node orders babel to raise the cost of its route to
 the peer
 - hard locking: the route is marked as unusable
-- locking request: a request to close the tunnel is sent to the peer, 
+- locking request: a request to close the tunnel is sent to the peer,
 corresponding to an empty code 2 message
 - locking response: the peer answers with an empty code 3 message

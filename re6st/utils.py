@@ -233,13 +233,13 @@ def ipFromBin(ip, suffix=''):
 def dump_address(address):
     return ';'.join(map(','.join, address))
 
+# Yield ip, port, protocol, and country if it is in the address
 def parse_address(address_list):
     for address in address_list.split(';'):
         try:
             _ = address.split(',')
-            ip, port, proto, country = _[0], _[1], _[2], _[3:4]
-            int(port)
-            yield (ip, port, proto) + ((country[0],) if country else ())
+            int(_[1]) # Check if port is an int
+            yield tuple(_[:4]) 
         except ValueError, e:
             logging.warning("Failed to parse node address %r (%s)",
                             address, e)
