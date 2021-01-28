@@ -413,7 +413,7 @@ class BaseTunnelManager(object):
                     if serial in self.cache.crl:
                         raise ValueError("revoked")
                 except (x509.VerifyError, ValueError), e:
-                    if seqno:
+                    if seqno and not _try:
                         msg = retry_msg
                         continue 
                     logging.debug('ignored invalid certificate from %r (%s)',
