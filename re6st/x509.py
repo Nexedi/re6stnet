@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import calendar, hashlib, hmac, logging, os, struct, subprocess, threading, time
 from OpenSSL import crypto
-from . import utils
+from . import utils, version
 
 def newHmacSecret():
     return utils.newHmacSecret(int(time.time() * 1000000))
@@ -203,6 +203,7 @@ class Peer(object):
     serial = None
     stop_date = float('inf')
     version = ''
+    protocol = 0 # The version protocol used by peer, 0 means unknown
 
     def __init__(self, prefix):
         self.prefix = prefix
@@ -222,10 +223,33 @@ class Peer(object):
     def __lt__(self, other):
         return self.prefix < (other if type(other) is str else other.prefix)
 
+    def encode_protocol(self):
+        # Don't send protocol to old nodes
+        if self.protocol and self.protocol < 7:
+            return ""
+        if version.protocol < 2**7:
+            return struct.Struct("!B").pack(version.protocol)
+        if version.protocol < 2**15:
+            return struct.Struct("!H").pack(2**15 + version.protocol)
+        else:
+            logging.critical("re6stnet version is too high to be encoded.")
+            sys.exit(1)
+
+    # Decodes protocol and sets peer.protocol, and returns
+    # (prefix used to decode the protocol, rest of the message)
+    def decode_protocol(self, seqno, msg):
+        if seqno == 0 or (self.protocol and self.protocol < 7):
+            return "", msg
+        self.protocol = struct.Struct("!B").unpack(msg[:1])[0]
+        if self.protocol >= 2**7:
+            self.protocol = struct.Struct("!H").unpack(msg[:2])[0] - 2**15
+            return msg[:2], msg[2:]
+        return msg[:1], msg[1:]
+
     def hello0(self, cert):
         if self._hello < time.time():
             try:
-                msg = '\0\0\0\1' + fingerprint(self.cert).digest()
+                msg = '\0\0\0\1' + self.encode_protocol() + fingerprint(self.cert).digest()
             except AttributeError:
                 msg = '\0\0\0\0'
             return msg + crypto.dump_certificate(crypto.FILETYPE_ASN1, cert)
@@ -239,7 +263,7 @@ class Peer(object):
                     key)
         self._i = self._j = 2
         self._last = 0
-        return '\0\0\0\2' + h + cert.sign(h)
+        return '\0\0\0\2' + self.encode_protocol() + h + cert.sign(h)
 
     def _hmac(self, msg):
         return hmac.HMAC(self._key, msg, hashlib.sha1).digest()
@@ -259,7 +283,7 @@ class Peer(object):
     def decode(self, msg, _unpack=seqno_struct.unpack):
         seqno, = _unpack(msg[:4])
         if seqno <= 2:
-            return seqno, msg[4:]
+            return (seqno,) + self.decode_protocol(seqno, msg[4:])
         i = -utils.HMAC_LEN
         if self._hmac(msg[:i]) == msg[i:] and self._i < seqno:
             self._last = None
