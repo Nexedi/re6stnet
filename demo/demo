@@ -4,6 +4,7 @@ import socket, sqlite3, subprocess, sys, time, weakref
 from collections import defaultdict
 from contextlib import contextmanager
 from threading import Thread
+import thread
 IPTABLES = 'iptables'
 SCREEN = 'screen'
 VERBOSE = 4
@@ -12,11 +13,17 @@ REGISTRY2 = '10.3.0.2'
 REGISTRY_SERIAL = '0x120010db80042'
 REGISTRY2_SERIAL = '0x120010db80043'
 CA_DAYS = 1000
+# global variables for the --clone option
+REPOSITORY_URL = {'re6stnet': 'https://lab.nexedi.com/jhuge/re6stnet.git',
+                  'babeld': 'https://lab.nexedi.com/nexedi/babeld.git',
+                  'openvpn': 'https://github.com/OpenVPN/openvpn.git'}
+BINARY_PATH = {'babeld': 'babeld',
+               'openvpn': 'openvpn/src'}
 
 # Quick check to avoid wasting time if there is an error.
 with open(os.devnull, "wb") as f:
     for x in 're6stnet', 're6st-conf', 're6st-registry':
-        subprocess.check_call(('./py', x, '--help'), stdout=f)
+        subprocess.check_call(('./py', '.', '-', '-', x, '--help'), stdout=f)
 #
 # Underlying network:
 #
@@ -43,10 +50,19 @@ with open(os.devnull, "wb") as f:
 #   m1-m2-m3-m4-m5-m6-m7-m8                       m10
 #     :2::  :4::  :6::  :8::
 
-def disable_signal_on_children(sig):
-    pid = os.getpid()
-    sigint = signal.signal(sig, lambda *x: os.getpid() == pid and sigint(*x))
-disable_signal_on_children(signal.SIGINT)
+# When request_stop is true, subprocess know they need to exit
+# and execute their exit routine
+request_stop = False
+pid = os.getpid()
+sigint = signal.getsignal(signal.SIGINT)
+
+def sigint_handler(*x):
+    global request_stop
+    if os.getpid() == pid:
+        request_stop = True
+        sigint(*x)
+
+signal.signal(signal.SIGINT, sigint_handler)
 
 Node__add_interface = nemu.Node._add_interface
 def _add_interface(node, iface):
@@ -63,7 +79,16 @@ parser.add_argument('-p', '--ping', action = 'store_true',
     help = 'execute ping utility')
 parser.add_argument('-m', '--hmac', action = 'store_true',
     help = 'execute HMAC test')
+parser.add_argument('-c', '--clone', action = 'store_true',
+    help = 'clone separate re6st, babel or openvpn repository as specified in clone.conf')
+parser.add_argument('-t', '--test-ping', metavar='SEC', type = int,
+    help = 'run demo for specified duration in seconds, and write connectivity stats'
+           ' using test_ping script in test-results folder. If the demo is interrupted'
+           ' with ctrl-C, stats are still written')
 args = parser.parse_args()
+
+if args.test_ping:
+    args.ping = True
 
 def handler(signum, frame):
     sys.exit()
@@ -73,6 +98,69 @@ if args.duration:
     signal.alarm(args.duration)
 
 execfile("fixnemu.py")
+
+# Dict of machines which needs to clone one of the three repo
+clone_conf = {'re6stnet': {}, 'babeld': {}, 'openvpn': {}}
+if args.clone:
+    # Parse clone configuration file
+    with open('clone.conf', 'r') as clone_conf_file:
+        for line in clone_conf_file:
+            if line[0] == '#' or line[0] == '\n':
+                continue
+            soft, machine, object_type, git_object = line.split()
+            if soft in clone_conf:
+                clone_conf[soft][machine] = (object_type,git_object)
+
+# Parse a global conf file
+def parse_re6st_conf(conf_name):
+    with open('%s_global.conf' % conf_name, 'r') as nodes_conf_file:
+        # Get lines, remove \n and comments
+        lines = [l.lstrip()[:-1] for l in nodes_conf_file]
+        lines = list(filter(lambda x: x[0] not in ['#', '\n'], lines))
+        folder_list, confs, confs_remove = [], {}, {}
+
+        def parse_identifier(l):
+            return l[1:] if l[0] == '@' else ''
+
+        # Get list of folders in which we will write confs
+        folder_list = list(map(parse_identifier, lines))
+        folder_list = list(filter(lambda x: x and x != 'ALL', folder_list))
+
+        i = 0
+        while i < len(lines):
+            # Handle each block starting with an identifier
+            x = parse_identifier(lines[i])
+            if x:
+                # List of folder to which the identifier applies
+                folder_confs = folder_list if x == 'ALL' else [x]
+                while True:
+                    i += 1
+                    if i >= len(lines):
+                        break
+                    if parse_identifier(lines[i]):
+                        i -= 1
+                        break
+                    for f in folder_confs:
+                        # Add line to either confs dict or confs_remove if '-' is present
+                        confs.setdefault(f, [])
+                        confs_remove.setdefault(f, [])
+                        l = lines[i].replace('%', f)
+                        if l[0] == '-':
+                            confs_remove[f].append(l[1:])
+                        else:
+                            confs[f].append(l + '\n')
+            i += 1
+
+        # Write all the confs in each folder by merging confs and confs_remove
+        for f in confs:
+            with open('%s/%s.conf' % (f, conf_name), 'w+') as conf_file:
+                for l in confs[f]:
+                    if l[:-1] not in confs_remove[f]:
+                        conf_file.write(l)
+
+# Parse re6stnet and re6st-regitry global confs
+parse_re6st_conf('re6stnet')
+parse_re6st_conf('re6st-registry')
 
 # create nodes
 for name in """internet=I registry=R
@@ -85,6 +173,71 @@ for name in """internet=I registry=R
     globals()[name] = node = nemu.Node()
     node.name = name
     node.short = short
+
+    # Clone repos specified in clone.conf if --clone option is present
+    if args.clone:
+        if 'machine' in name or 'registry' in name:
+            # Clone the repository if needed
+            short_name = name.replace('machine', 'm')
+
+            # Clone the repository if there isn't a git repository already with
+            # the correct repository URL as specified in REPOSITORY_URL
+            def init_repo(repo):
+
+                if short_name not in clone_conf[repo]:
+                    return
+                repo_folder = '%s/%s' % (short_name, repo)
+
+                def init_repo_cmd():
+                    subprocess.Popen(('rm', '-r', '-f', repo_folder)).wait()
+                    subprocess.Popen(('git', 'clone', REPOSITORY_URL[repo],
+                                      repo_folder)).wait()
+
+                init_needed = False
+                try:
+                    remote_list = subprocess.Popen(('git', 'remote', '-v'),
+                                              stdout=subprocess.PIPE,
+                                              cwd=repo_folder).communicate()[0]
+                    git_toplevel = subprocess.Popen(('git', 'rev-parse', '--show-toplevel'),
+                                              stdout=subprocess.PIPE,
+                                              cwd=repo_folder).communicate()[0][:-1]
+                except OSError:
+                    # Init repo if 'git remote -v' failed
+                    init_needed = True
+                else:
+                    # Check if we are in the correct repository
+                    if git_toplevel != os.path.abspath(repo_folder):
+                        init_needed = True
+                    else:
+                        # Check if repository url is in 'git remote -v' output
+                        remote_list = list(filter(lambda x: REPOSITORY_URL[repo] in x,
+                                             remote_list.split('\n')))
+                        if not remote_list:
+                            init_needed = True
+                        else:
+                            remote_name = remote_list[0].split()[0]
+
+                if init_needed:
+                    init_repo_cmd()
+                    remote_name = 'origin'
+
+                subprocess.Popen(('git', 'fetch', remote_name), cwd=repo_folder).wait()
+                object_type, git_object = clone_conf[repo][short_name]
+                object_path = ('%s/' % remote_name if object_type == 'branch'
+                               else '') + git_object
+                subprocess.Popen(('git', 'checkout', object_path), cwd=repo_folder).wait()
+
+                if repo == 'babeld':
+                    subprocess.Popen(('make'), cwd=repo_folder).wait()
+                elif repo == 'openvpn':
+                    subprocess.Popen(('autoreconf', '-i' ,'-v' ,'-f'), cwd=repo_folder).wait()
+                    subprocess.Popen(('./configure'), cwd=repo_folder).wait()
+                    subprocess.Popen(('make'), cwd=repo_folder).wait()
+
+            init_repo('re6stnet')
+            init_repo('babeld')
+            init_repo('openvpn')
+
     node.Popen(('sysctl', '-q',
         'net.ipv4.icmp_echo_ignore_broadcasts=0')).wait()
     node._screen = node.Popen((SCREEN, '-DmS', name))
@@ -230,9 +383,20 @@ def new_network(registry, reg_addr, serial, ca):
     fingerprint = "sha256:" + hashlib.sha256(
         crypto.dump_certificate(crypto.FILETYPE_ASN1, cert)).hexdigest()
     db_path = "%s/registry.db" % registry.name
-    registry.screen("./py re6st-registry @%s/re6st-registry.conf"
-        " --db %s --mailhost %s -v%u"
-        % (registry.name, db_path, os.path.abspath('mbox'), VERBOSE))
+
+    re6stnet_path = ('demo/%s/re6stnet' % registry.name
+                      if registry.name in clone_conf['re6stnet']
+                      else '.')
+    babeld_path = ('demo/%s/%s' % (registry.name, BINARY_PATH['babeld'])
+                      if registry.name in clone_conf['babeld']
+                      else '-')
+    openvpn_path = ('demo/%s/%s' % (registry.name, BINARY_PATH['openvpn'])
+                      if registry.name in clone_conf['openvpn']
+                      else '-')
+    registry.screen('./py %s %s %s re6st-registry @%s/re6st-registry.conf'
+        ' --db %s --mailhost %s -v%u'
+        % (re6stnet_path, babeld_path, openvpn_path, registry.name, db_path,
+           os.path.abspath('mbox'), VERBOSE))
     registry_url = 'http://%s/' % reg_addr
     registry.Popen(('python', '-c', """if 1:
         import socket, time
@@ -245,14 +409,23 @@ def new_network(registry, reg_addr, serial, ca):
                 time.sleep(.1)
         """)).wait()
     db = sqlite3.connect(db_path, isolation_level=None)
-    def new_node(node, folder, args='', prefix_len=None, registry=registry_url):
+    def new_node(node, folder, node_args='', prefix_len=None, registry=registry_url):
         nodes.append(node)
+        re6stnet_path = ('demo/%s/re6stnet' % folder
+                          if folder in clone_conf['re6stnet']
+                          else '.')
+        babeld_path = ('demo/%s/%s' % (registry.name, BINARY_PATH['babeld'])
+                          if folder in clone_conf['babeld']
+                          else '-')
+        openvpn_path = ('demo/%s/%s' % (registry.name, BINARY_PATH['openvpn'])
+                          if folder in clone_conf['openvpn']
+                          else '-')
         if not os.path.exists(folder + '/cert.crt'):
             dh_path = folder + '/dh2048.pem'
             if not os.path.exists(dh_path):
                 os.symlink('../dh2048.pem', dh_path)
             email = node.name + '@example.com'
-            p = node.Popen(('../py', 're6st-conf', '--registry', registry,
+            p = node.Popen(('../py', re6stnet_path, babeld_path, openvpn_path, 're6st-conf', '--registry', registry,
                             '--email', email, '--fingerprint', fingerprint),
                 stdin=subprocess.PIPE, cwd=folder)
             token = None
@@ -267,9 +440,10 @@ def new_network(registry, reg_addr, serial, ca):
             os.remove(dh_path)
             os.remove(folder + '/ca.crt')
         node.re6st_cmdline = (
-            './py re6stnet @%s/re6stnet.conf -v%u --registry %s'
+            './py %s %s %s re6stnet @%s/re6stnet.conf -v%u --registry %s'
             ' --console %s/run/console.sock %s'
-            ) % (folder, VERBOSE, registry, folder, args)
+            ) % (re6stnet_path, babeld_path, openvpn_path, folder, VERBOSE, registry,
+                 folder, node_args)
         node.screen(node.re6st_cmdline)
     new_node(registry, registry.name, '--ip ' + reg_addr, registry='http://localhost/')
     yield new_node
@@ -301,6 +475,61 @@ if args.ping:
             if i != j]
         name = machine.name if machine.short[0] == 'R' else 'm' + machine.short
         machine.screen('python ping.py {} {}'.format(name, ' '.join(ips)))
+        ping_test_start = time.time()
+
+class testPing(Thread):
+
+    # Multipings starts when network is stable, ie when all machines can ping each other
+    # Define a maximum stabilisation duration to interrupt the test if it is exceeded
+    MAX_STABILISATION_DURATION = (60 * 1000)
+
+    def run(self):
+
+        out_name = 'test-results/test%s_%s' % (int(args.test_ping), str(time.time())[-6:])
+        with open(out_name, 'w+') as f:
+
+            # Wait until network is table and multiping test starts
+            while True:
+                if request_stop:
+                    thread.interrupt_main()
+                    return
+
+                time.sleep(1)
+                if (time.time() - ping_test_start) > testPing.MAX_STABILISATION_DURATION:
+                    print ('Machines took longer than %s seconds to stabilize' % 
+                                                               testPing.MAX_STABILISATION_DURATION)
+                    thread.interrupt_main()
+                    return
+                if os.path.isfile('m1/ping_logs.csv'):
+                    ping_start = float(subprocess.Popen(('head', '-n1', 'm1/ping_logs.csv'),
+                                        stdout=subprocess.PIPE).communicate()[0].split(',')[0])
+                    line = 'Machines took %s seconds to stabilize' % (time.time() - ping_test_start)
+                    f.write(line + '\n\n')
+                    break
+                else:
+                    continue
+
+            # Wait until the demo is interrupted or until duration specified in test_ping
+            # is exceeded
+            while time.time() < ping_start + int(args.test_ping):
+                if request_stop:
+                    break
+                time.sleep(1)
+
+            # Write connectivity stats using test_ping script
+            test_duration = time.time() - ping_start
+            test_ping_out = subprocess.Popen(('python', 'test_ping', '-r', '-', '-c'),
+                                      stdout=subprocess.PIPE).communicate()[0]
+
+            for line in test_ping_out.split():
+                tmp = line.split(',')
+                machine, h1, m1, s1, h2, m2, s2 = [tmp[0]] + list(map(int,tmp[1:]))
+                h, m, s = h1 + h2, m1 + m2, s1 + s2
+                downtime = h*3600 + m*60 + s
+                percentage = 100 * downtime / test_duration
+                line = '%s %s' % (machine.ljust(20), (('%5.2f' % percentage) + '%').ljust(10))
+                f.write(line + '\n')
+            thread.interrupt_main()
 
 class testHMAC(Thread):
 
@@ -345,6 +574,12 @@ class testHMAC(Thread):
 if args.hmac:
     import test_hmac
     t = testHMAC()
+    t.deamon = 1
+    t.start()
+    del t
+
+if args.test_ping:
+    t = testPing()
     t.deamon = 1
     t.start()
     del t
