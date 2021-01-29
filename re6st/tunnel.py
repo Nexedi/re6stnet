@@ -418,6 +418,7 @@ class BaseTunnelManager(object):
                         continue 
                     logging.debug('ignored invalid certificate from %r (%s)',
                                   address, e.args[-1])
+                    return
                 if _try:
                     logging.debug('Detected %s/%s has an old protocol',
                                   int(peer.prefix, 2), len(peer.prefix))
