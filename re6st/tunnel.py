@@ -402,10 +402,13 @@ class BaseTunnelManager(object):
                 return
             if seqno:
                 h = x509.fingerprint(self.cert.cert).digest()
-                retry_msg = (protocol_str + msg)[len(h):]
-                msg = msg[len(h):]
             for _try in range(2):
-                _seqno = msg.startswith(h) if seqno else 0
+                if seqno:
+                    _seqno = msg.startswith(h)
+                    retry_msg = protocol_str + msg
+                    msg = msg[len(h):]
+                else:
+                    _seqno = 0
                 try:
                     cert = self.cert.loadVerify(msg, True, crypto.FILETYPE_ASN1)
                     stop_date = x509.notAfter(cert)
