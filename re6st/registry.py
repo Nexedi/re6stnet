@@ -293,14 +293,14 @@ class RegistryServer(object):
 
     def getPeerProtocol(self, cn):
         session, = self.sessions[cn]
-        return int(session[1])
+        return session[1]
 
     @rpc
     def hello(self, client_prefix, protocol='1'):
         with self.lock:
             cert = self.getCert(client_prefix)
             key = utils.newHmacSecret()
-            self.sessions.setdefault(client_prefix, [])[1:] = (key, protocol),
+            self.sessions.setdefault(client_prefix, [])[1:] = (key, int(protocol)),
         key = x509.encrypt(cert, key)
         sign = self.cert.sign(key)
         assert len(key) == len(sign)

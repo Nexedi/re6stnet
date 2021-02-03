@@ -402,13 +402,11 @@ class BaseTunnelManager(object):
                 return
             if seqno:
                 h = x509.fingerprint(self.cert.cert).digest()
-            for _try in range(2):
+            for i in range(2):
                 if seqno:
-                    _seqno = msg.startswith(h)
+                    correct_fingerprint = msg.startswith(h)
                     retry_msg = protocol_str + msg
                     msg = msg[len(h):]
-                else:
-                    _seqno = 0
                 try:
                     cert = self.cert.loadVerify(msg, True, crypto.FILETYPE_ASN1)
                     stop_date = x509.notAfter(cert)
@@ -416,17 +414,17 @@ class BaseTunnelManager(object):
                     if serial in self.cache.crl:
                         raise ValueError("revoked")
                 except (x509.VerifyError, ValueError), e:
-                    if seqno and not _try:
+                    if seqno and not i:
                         msg = retry_msg
                         continue 
                     logging.debug('ignored invalid certificate from %r (%s)',
                                   address, e.args[-1])
                     return
-                if _try:
+                if i:
                     logging.debug('Detected %s/%s has an old protocol',
                                   int(peer.prefix, 2), len(peer.prefix))
                     peer.protocol = 1
-                seqno = _seqno
+                seqno = correct_fingerprint if seqno else 0
                 break
             p = utils.binFromSubnet(x509.subnetFromCert(cert))
             if p != peer.prefix:
@@ -673,11 +671,11 @@ class BaseTunnelManager(object):
             country = self._conf_country
         # Else, get the country with geoip
         else:
-            for _address in address:
+            for a in address:
                 try:
-                    family, ip = resolve(*_address)
+                    family, ip = resolve(*a)
                 except TypeError as e:
-                    logging.debug("exception: %s, address: %s", e, _address)
+                    logging.debug("exception: %s, address: %s", e, a)
                     raise TypeError
                 for ip in ip:
                     country = self._geoiplookup(ip)
