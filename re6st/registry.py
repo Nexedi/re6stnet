@@ -20,7 +20,7 @@ Authenticated communication:
 """
 import base64, hmac, hashlib, httplib, inspect, json, logging
 import mailbox, os, platform, random, select, smtplib, socket, sqlite3
-import string, struct, sys, threading, time, weakref, zlib
+import string, sys, threading, time, weakref, zlib
 from collections import defaultdict, deque
 from datetime import datetime
 from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
@@ -132,8 +132,7 @@ class RegistryServer(object):
             kw[x] = getattr(self.config, x)
         config = json.dumps(kw, sort_keys=True)
         if config != self.getConfig('last_config', None):
-            self.version = self.encodeVersion(
-                1 + self.decodeVersion(self.version))
+            self.increaseVersion()
             # BBB: Use buffer because of http://bugs.python.org/issue13676
             #      on Python 2.6
             self.setConfig('version', buffer(self.version))
@@ -144,20 +143,9 @@ class RegistryServer(object):
         kw['version'] = self.version.encode('base64')
         self.network_config = kw
 
-    # The 3 first bits code the number of bytes.
-    def encodeVersion(self, version):
-        for n in xrange(8):
-            x = 32 << 8 * n
-            if version < x:
-                x = struct.pack("!Q", version + n * x)[7-n:]
-                return x + self.cert.sign(x)
-            version -= x
-
-    def decodeVersion(self, version):
-        n = ord(version[0]) >> 5
-        version, = struct.unpack("!Q", '\0' * (7 - n) + version[:n+1])
-        return sum((32 << 8 * n for n in xrange(n)),
-                   version - (n * 32 << 8 * n))
+    def increaseVersion(self):
+        x = utils.packInteger(1 + utils.unpackInteger(self.version)[0])
+        self.version = x + self.cert.sign(x)
 
     def sendto(self, prefix, code):
         self.sock.sendto("%s\0%c" % (prefix, code), ('::1', tunnel.PORT))
@@ -584,8 +572,7 @@ class RegistryServer(object):
                 # Initialization of HMAC on the network
                 self.newHMAC(1)
                 self.newHMAC(2, '')
-            self.version = self.encodeVersion(
-                1 + self.decodeVersion(self.version))
+            self.increaseVersion()
             self.setConfig('version', buffer(self.version))
             self.network_config['version']  = self.version.encode('base64')
         self.sendto(self.prefix, 0)
