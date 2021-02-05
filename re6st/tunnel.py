@@ -374,7 +374,7 @@ class BaseTunnelManager(object):
             return
         try:
             sender = utils.binFromIp(address[0])
-        except socket.error, e:
+        except socket.error:
             return # inet_pton does not parse '<ipv6>%<iface>'
         if len(msg) <= 4 or not sender.startswith(self._network):
             return
@@ -382,7 +382,8 @@ class BaseTunnelManager(object):
         peer = self._getPeer(prefix)
         msg = peer.decode(msg)
         if type(msg) is tuple:
-            seqno, msg = msg
+          real_seqno, msg = msg
+          def handleHello(peer, seqno, msg):
             if seqno == 2:
                 i = len(msg) // 2
                 h = msg[:i]
@@ -409,6 +410,8 @@ class BaseTunnelManager(object):
                 if serial in self.cache.crl:
                     raise ValueError("revoked")
             except (x509.VerifyError, ValueError), e:
+                if real_seqno and peer.hello_protocol:
+                    return True
                 logging.debug('ignored invalid certificate from %r (%s)',
                               address, e.args[-1])
                 return
@@ -430,6 +433,12 @@ class BaseTunnelManager(object):
                 msg = peer.hello0(self.cert.cert)
                 if msg and self._sendto(to, msg):
                     peer.hello0Sent()
+          if handleHello(peer, real_seqno, msg):
+            # It is possible to reconstruct the original message because
+            # the serialization of the protocol version is always unique.
+            msg = utils.packInteger(peer.hello_protocol) + msg
+            peer.hello_protocol = 0
+            handleHello(peer, real_seqno, msg)
         elif msg:
             # We got a valid and non-empty message. Always reply
             # something so that the sender knows we're still connected.
