@@ -2,6 +2,7 @@
 import calendar, hashlib, hmac, logging, os, struct, subprocess, threading, time
 from OpenSSL import crypto
 from . import utils
+from .version import protocol
 
 def newHmacSecret():
     return utils.newHmacSecret(int(time.time() * 1000000))
@@ -171,6 +172,9 @@ class Cert(object):
             raise VerifyError(None, None, 'invalid network version')
 
 
+PACKED_PROTOCOL = utils.packInteger(protocol)
+
+
 class Peer(object):
     """
     UDP:    A ─────────────────────────────────────────────> B
@@ -225,7 +229,11 @@ class Peer(object):
     def hello0(self, cert):
         if self._hello < time.time():
             try:
-                msg = '\0\0\0\1' + fingerprint(self.cert).digest()
+                # Always assume peer is not old, in case it has just upgraded,
+                # else we would be stuck with the old protocol.
+                msg = ('\0\0\0\1'
+                    + PACKED_PROTOCOL
+                    + fingerprint(self.cert).digest())
             except AttributeError:
                 msg = '\0\0\0\0'
             return msg + crypto.dump_certificate(crypto.FILETYPE_ASN1, cert)
@@ -239,7 +247,9 @@ class Peer(object):
                     key)
         self._i = self._j = 2
         self._last = 0
-        return '\0\0\0\2' + h + cert.sign(h)
+        self.protocol = self.hello_protocol
+        return ''.join(('\0\0\0\2', PACKED_PROTOCOL if self.protocol else '',
+                        h, cert.sign(h)))
 
     def _hmac(self, msg):
         return hmac.HMAC(self._key, msg, hashlib.sha1).digest()
@@ -250,6 +260,7 @@ class Peer(object):
         self._key = key
         self._i = self._j = 2
         self._last = None
+        self.protocol = self.hello_protocol
 
     def verify(self, sign, data):
         crypto.verify(self.cert, sign, data, 'sha512')
@@ -259,7 +270,11 @@ class Peer(object):
     def decode(self, msg, _unpack=seqno_struct.unpack):
         seqno, = _unpack(msg[:4])
         if seqno <= 2:
-            return seqno, msg[4:]
+            msg = msg[4:]
+            if seqno:
+                self.hello_protocol, n = utils.unpackInteger(msg) or (0, 0)
+                msg = msg[n:]
+            return seqno, msg
         i = -utils.HMAC_LEN
         if self._hmac(msg[:i]) == msg[i:] and self._i < seqno:
             self._last = None
