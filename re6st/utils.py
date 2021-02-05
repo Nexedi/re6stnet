@@ -254,6 +254,31 @@ def newHmacSecret():
     return lambda x=None: pack(g(64) if x is None else x, g(64), g(32))
 newHmacSecret = newHmacSecret()
 
+### Integer serialization
+# - supports values from 0 to 0x202020202020201f
+# - preserves ordering
+# - there's always a unique way to encode a value
+# - the 3 first bits code the number of bytes
+
+def packInteger(i):
+    for n in xrange(8):
+        x = 32 << 8 * n
+        if i < x:
+            return struct.pack("!Q", i + n * x)[7-n:]
+        i -= x
+    raise OverflowError
+
+def unpackInteger(x):
+    n = ord(x[0]) >> 5
+    try:
+        i, = struct.unpack("!Q", '\0' * (7 - n) + x[:n+1])
+    except struct.error:
+        return
+    return sum((32 << 8 * i for i in xrange(n)),
+                i - (n * 32 << 8 * n)), n + 1
+
+###
+
 def sqliteCreateTable(db, name, *columns):
     sql = "CREATE TABLE %s (%s)" % (name, ','.join('\n  ' + x for x in columns))
     for x, in db.execute(
