@@ -65,6 +65,9 @@ def getConfig():
              " patch this process. Use:\n"
              "   socat - UNIX:<SOCK>\n"
              "to access it.")
+    _('--country', metavar='CODE',
+        help="Country code which will be advertised to other nodes"
+             "(otherwise country will be fetched from maxmind database)")
 
     _ = parser.add_argument_group('routing').add_argument
     _('-B', dest='babel_args', metavar='ARG', action='append', default=[],
@@ -294,12 +297,12 @@ def main():
         if config.client_count and not config.client:
             tunnel_manager = tunnel.TunnelManager(control_socket,
                 cache, cert, config.openvpn_args, timeout,
-                config.client_count, config.iface_list, address, ip_changed,
+                config.client_count, config.iface_list, config.country, address, ip_changed,
                 remote_gateway, config.disable_proto, config.neighbour)
             add_tunnels(tunnel_manager.new_iface_list)
         else:
             tunnel_manager = tunnel.BaseTunnelManager(control_socket,
-                cache, cert, address)
+                cache, cert, config.country, address)
         cleanup.append(tunnel_manager.sock.close)
 
         try:
