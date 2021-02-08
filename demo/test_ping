@@ -1,0 +1,220 @@
+#!/usr/bin/python2
+
+# Parses all ping_log.csv files and store the intervals of time during which
+# pings from one machine to another failed
+# Two pings done withing DELTA seconds of each other are considered to belong
+# to the same interval
+
+import sys
+import argparse
+
+DELTA = 0.2
+DELTA2 = DELTA
+# Assume we won't run the demo for more than 10 years
+MAX_DELTAS = 10 * 365 * 24 * 3600 * (1 / DELTA)
+
+# IP to machine mapping
+machines = {}
+for i in xrange(1,9):
+    machines['2001:db8:42:%s::1' % i] = 'm%s' % i
+machines.update({   '2001:db8:42::1'  : 'registry',
+                    '2001:db8:42:2::' : 'm2',
+                    '2001:db8:43::1'  : 'registry2',
+                    '2001:db8:43:1::1': 'm10'})
+ips = sorted([ip for ip in machines])
+
+parser = argparse.ArgumentParser()
+parser.add_argument('-c', '--csv', action="store_true",
+    help = 'Output in csv format')
+parser.add_argument('-t', type=argparse.FileType('w+'),
+    help = 'Create failed pings table and store it in specified file')
+parser.add_argument('-r', type=argparse.FileType('w+'),
+    help = 'Create downtimes recap and store it in specified file')
+
+args = parser.parse_args()
+
+def round_time(t):
+    return int(t / (DELTA2))
+def encode_interval(d,f):
+    return int(d * MAX_DELTAS + f)
+def decode_interval(x):
+    return (int(x // MAX_DELTAS), int(x % MAX_DELTAS))
+
+failed_pings = {}
+intervals = {}
+
+# Parse ping_log file for each machine
+# 
+# intervals[ip][peer] = list of intervals (start_time, end_time) during which
+# the ping from ip to peer failed
+# 
+# failed_pings[time_interval] = list of failed pings (ip, peer_ip)
+for ip in ips:
+    machine = machines[ip]
+    intervals[ip] = {}
+    with open("%s/ping_logs.csv" % machine, "r") as ping_log:
+
+        prev_timestamp = 0
+        current_down_peers = {}
+
+        def update_down_peer(peer, timestamp):
+            global current_down_peers
+            current_down_peers[peer] = (
+                current_down_peers[peer][0], timestamp
+                ) if peer in current_down_peers else (
+                timestamp, timestamp)
+        def end_down_peer(peer):
+            global intervals
+            global current_down_peers
+            intervals[ip].setdefault(peer, []).append(current_down_peers[peer])
+            del current_down_peers[peer]
+
+        first_timestamp = 0
+
+        lines = [l for l in ping_log]
+        for k,line in enumerate(lines):
+            _ = line[:-1].split(',')
+            timestamp, seq, _, peer_list = float(_[0]), _[1], _[2], _[3:]
+            if not first_timestamp:
+                first_timestamp = timestamp
+            timestamp -= first_timestamp
+            if not len(peer_list):
+                continue
+            peer_list = peer_list[0].split(' ')
+            if (timestamp - prev_timestamp) <= DELTA:
+                for peer in peer_list:
+                    update_down_peer(peer, timestamp)
+                end_peer_list = []
+                for peer in current_down_peers:
+                    if peer not in peer_list:
+                        end_peer_list.append(peer)
+                for peer in end_peer_list:
+                    end_down_peer(peer)
+            if k == len(lines)-1 or (timestamp - prev_timestamp) > DELTA:
+                while len(current_down_peers) > 0:
+                    end_down_peer(next(iter(current_down_peers)))
+                for peer in peer_list:
+                    update_down_peer(peer, timestamp)
+            prev_timestamp = timestamp
+
+for a in intervals:
+    for b in intervals[a]:
+        for d,f in intervals[a][b]:
+            failed_pings.setdefault(encode_interval(round_time(d),round_time(f)), []).append((a,b))
+sorted_intervals = sorted([i for i in failed_pings], key=lambda i: decode_interval(i))
+
+def time_to_str(t, list_format=False):
+    r = ""
+    h = int(t // 3600)
+    m = int(t // 60 % 60)
+    s = int(t % 60)
+    if list_format:
+        return [h, m, s]
+    if h > 0:
+        r += "%s:" % h
+    if h > 0 or m > 0:
+        r += "%s:" % m
+    r += str(s)
+    return r
+
+# Computes failed_pings_table between time interval [d,f]
+# failed_pings_table[time][ip] = number of pings that failed from or to that ip
+def compute_failed_pings_table(d,f):
+    failed_pings_table = {}
+    for i in sorted_intervals:
+        di, fi = decode_interval(i)
+        if di > f:
+            break
+        if fi < d:
+            continue
+        t = max(d, di)
+        while t <= min(f, fi):
+            if t not in failed_pings_table:
+                failed_pings_table[t] = {}
+                for ip in ips:
+                    failed_pings_table[t][ip] = 0
+            for (a, b) in failed_pings[i]:
+                failed_pings_table[t][a] += 1
+                failed_pings_table[t][b] += 1
+            t += 1
+    return failed_pings_table
+
+
+# Prints failed_pings_table between time interval [d,f]
+def print_failed_pings_table(fd, failed_pings_table, d, f, csv=False):
+
+    fp_table_str = ""
+
+    if not csv:
+        fp_table_str += "\n# Failed pings table\n\n"
+        header = "".ljust(20) + "  ".join([machines[ip] for ip in ips]) + "\n"
+        fp_table_str += header
+        fp_table_str += ("-" * len(header)) + "\n"
+
+    t = d
+    while t <= f:
+        if t in failed_pings_table:
+            if csv:
+                line = ",".join([str(t * DELTA2)] + [str(failed_pings_table[t][ip]) for ip in ips]) + "\n"
+            else:
+                line = ("%s: " % (t * DELTA2)).ljust(20)
+                line += "  ".join([str(failed_pings_table[t][ip]).ljust(len(machines[ip])) for ip in ips]) + "\n"
+            fp_table_str += line
+        t += 1
+
+    fd.write(fp_table_str)
+
+# Prints downtimes recap between time interval [d,f]
+def print_downtimes_recap(fd, failed_pings_table, d, f, csv=False):
+
+    downtimes_recap_str = ""
+
+    t = d
+    machines_downtime = {}
+    for ip in ips:
+        machines_downtime[ip] = [0, 0]
+    while t <= f:
+        if t in failed_pings_table:
+            for ip in ips:
+                if failed_pings_table[t][ip] >= 20:
+                    machines_downtime[ip][0] += 1
+                elif failed_pings_table[t][ip] >= 10:
+                    machines_downtime[ip][1] += 1
+        t += 1
+
+    if not csv:
+        downtimes_recap_str += "\n# Down times table\n\n"
+        header = "%s %s %s\n" % ("Machine".ljust(20),
+                                "Down".ljust(20),
+                                "Down from one side".ljust(20))
+        downtimes_recap_str += header
+        downtimes_recap_str += ("-" * len(header)) + "\n"
+
+    for ip in ips:
+        if csv:
+            downtimes_recap_str += ",".join([str(s) for s in ([machines[ip]] +
+                                             time_to_str(machines_downtime[ip][0] * DELTA2, True) +
+                                             time_to_str(machines_downtime[ip][1] * DELTA2, True))]) + "\n"
+        else:
+            downtimes_recap_str += ("%s %s %s\n" % ((machines[ip] + ":").ljust(20),
+                                time_to_str(machines_downtime[ip][0] * DELTA2).ljust(20),
+                                time_to_str(machines_downtime[ip][1] * DELTA2).ljust(20)))
+
+    fd.write(downtimes_recap_str)
+
+d, f = 10**60, 0
+
+total_downtime = 0
+for i in sorted_intervals:
+    di, fi = decode_interval(i)
+    d, f = min(d, di), max(f, fi)
+    total_downtime += (fi * DELTA2 - di * DELTA2) * len(failed_pings[i])
+
+failed_pings_table = compute_failed_pings_table(d,f)
+
+if args.t:
+    print_failed_pings_table(args.t if args.t != '-' else sys.stdout,
+                             failed_pings_table, d, f, args.csv)
+if args.r:
+    print_downtimes_recap(args.r if args.r != '-' else sys.stdout,
+                             failed_pings_table, d, f, args.csv)
