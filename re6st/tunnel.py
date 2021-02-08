@@ -199,7 +199,7 @@ class BaseTunnelManager(object):
     _forward = None
     _next_rina = True
 
-    def __init__(self, control_socket, cache, cert, address=()):
+    def __init__(self, control_socket, cache, cert, conf_country, address=()):
         self.cert = cert
         self._network = cert.network
         self._prefix = cert.prefix
@@ -208,6 +208,7 @@ class BaseTunnelManager(object):
         self._connection_dict = {}
         self._served = defaultdict(dict)
         self._version = cache.version
+        self._conf_country = conf_country
 
         address_dict = defaultdict(list)
         for family, address in address:
@@ -234,8 +235,9 @@ class BaseTunnelManager(object):
                     return
             self._geoiplookup = geoiplookup
             self._country = {}
-            for address in address_dict.itervalues():
-                self._updateCountry(address)
+
+            address_dict = {family: self._updateCountry(address)
+                            for family, address in address_dict.iteritems()}
         elif cache.same_country:
             sys.exit("Can not respect 'same_country' network configuration"
                      " (GEOIP2_MMDB not set)")
@@ -462,6 +464,12 @@ class BaseTunnelManager(object):
                         return
                     self._makeTunnel(peer, msg)
             else:
+                if peer:
+                    p = self._getPeer(peer)
+                    # If we know we are dealing with an old node, don't send country
+                    if p.prefix == peer and p.protocol < 7:
+                        return ';'.join([','.join(a.split(',')[:3])
+                               for a in ';'.join(self._address.itervalues()).split(';')])
                 return ';'.join(self._address.itervalues())
         elif not code: # network version
             if peer:
@@ -653,17 +661,29 @@ class BaseTunnelManager(object):
                 break
 
     def _updateCountry(self, address):
-        for address in address:
-            family, ip = resolve(*address)
-            for ip in ip:
-                country = self._geoiplookup(ip)
-                if country:
-                    if self._country.get(family) != country:
-                        self._country[family] = country
-                        logging.info('%s country: %s (%s)',
-                            family_dict[family], country, ip)
-                    return
 
+        country = None
+        # Check if a country is specified in the conf
+        if self._conf_country:
+            country = self._conf_country
+        # Else, get the country with geoip
+        else:
+            for a in address:
+                try:
+                    family, ip = resolve(*a)
+                except TypeError as e:
+                    logging.debug("exception: %s, address: %s", e, a)
+                    raise TypeError
+                for ip in ip:
+                    country = self._geoiplookup(ip)
+                    if country:
+                        if self._country.get(family) != country:
+                            self._country[family] = country
+                            logging.info('%s country: %s (%s)',
+                                family_dict[family], country, ip)
+                        break
+        # Add country to all addresses if we have one
+        return [a + (country,) for a in address] if country else address
 
 class TunnelManager(BaseTunnelManager):
 
@@ -671,10 +691,10 @@ class TunnelManager(BaseTunnelManager):
         'client_count', 'max_clients', 'same_country', 'tunnel_refresh'))
 
     def __init__(self, control_socket, cache, cert, openvpn_args,
-                 timeout, client_count, iface_list, address, ip_changed,
+                 timeout, client_count, iface_list, country, address, ip_changed,
                  remote_gateway, disable_proto, neighbour_list=()):
         super(TunnelManager, self).__init__(control_socket,
-                                            cache, cert, address)
+                                            cache, cert, country, address)
         self.ovpn_args = openvpn_args
         self.timeout = timeout
         self._read_sock, self.write_sock = socket.socketpair(
@@ -869,11 +889,13 @@ class TunnelManager(BaseTunnelManager):
             if x[2] in self._disable_proto:
                 continue
             if same_country:
-                family, ip = resolve(*x)
-                my_country = self._country.get(family)
+                family, ip = resolve(*x[:3])
+                my_country = self._conf_country if self._conf_country \
+                             else self._country.get(family)
                 if my_country:
                     for ip in ip:
-                        country = self._geoiplookup(ip)
+                        # Use geoip if there is no country in the address
+                        country = x[3] if len(x) > 3 else self._geoiplookup(ip)
                         if country and (country != my_country
                                         if my_country in same_country else
                                         country in same_country):
@@ -882,7 +904,7 @@ class TunnelManager(BaseTunnelManager):
                         else:
                             address_list.append((ip, x[1], x[2]))
                     continue
-            address_list.append(x)
+            address_list.append(x[:3])
         self.cache.connecting(prefix, 1)
         if not address_list:
             return False
@@ -1018,9 +1040,9 @@ class TunnelManager(BaseTunnelManager):
         if self._ip_changed:
             family, address = self._ip_changed(ip)
             if address:
+                if self._geoiplookup or self._conf_country:
+                    address = self._updateCountry(address)
                 self._address[family] = utils.dump_address(address)
-                if self._geoiplookup:
-                    self._updateCountry(address)
                 self.cache.my_address = ';'.join(self._address.itervalues())
 
     def broadcastNewVersion(self):
