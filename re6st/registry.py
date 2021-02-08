@@ -37,8 +37,11 @@ BABEL_HMAC = 'babel_hmac0', 'babel_hmac1', 'babel_hmac2'
 
 def rpc(f):
     args, varargs, varkw, defaults = inspect.getargspec(f)
-    assert not (varargs or varkw or defaults), f
-    f.getcallargs = eval("lambda %s: locals()" % ','.join(args[1:]))
+    assert not (varargs or varkw), f
+    args, defaults = args[1:], defaults if defaults else []
+    defaults = [''] * (len(args) - len(defaults)) + ["=%s" % repr(_) for _ in defaults]
+    f.getcallargs = eval("lambda %s: locals()" % ','.join(
+                         [args[i] + defaults[i] for i in range(len(args))]))
     return f
 
 def rpc_private(f):
@@ -48,7 +51,6 @@ def rpc_private(f):
 
 class HTTPError(Exception):
     pass
-
 
 class RegistryServer(object):
 
@@ -242,13 +244,13 @@ class RegistryServer(object):
             h = base64.b64decode(request.headers[HMAC_HEADER])
             with self.lock:
                 session = self.sessions[key]
-                for key in session:
+                for key, protocol in session:
                     if h == hmac.HMAC(key, request.path, hashlib.sha1).digest():
                         break
                 else:
                     raise Exception("Wrong HMAC")
                 key = hashlib.sha1(key).digest()
-                session[:] = hashlib.sha1(key).digest(),
+                session[:] = (hashlib.sha1(key).digest(), protocol),
         else:
             logging.info("%s%s: %s, %s",
                 method,
@@ -277,12 +279,16 @@ class RegistryServer(object):
         if result:
             request.wfile.write(result)
 
+    def getPeerProtocol(self, cn):
+        session, = self.sessions[cn]
+        return session[1]
+
     @rpc
-    def hello(self, client_prefix):
+    def hello(self, client_prefix, protocol='1'):
         with self.lock:
             cert = self.getCert(client_prefix)
             key = utils.newHmacSecret()
-            self.sessions.setdefault(client_prefix, [])[1:] = key,
+            self.sessions.setdefault(client_prefix, [])[1:] = (key, int(protocol)),
         key = x509.encrypt(cert, key)
         sign = self.cert.sign(key)
         assert len(key) == len(sign)
@@ -482,7 +488,7 @@ class RegistryServer(object):
                     v and x509.encrypt(cert, v).encode('base64')
         return zlib.compress(json.dumps(config))
 
-    def _queryAddress(self, peer):
+    def _queryAddress(self, peer, protocol):
         self.sendto(peer, 1)
         s = self.sock,
         timeout = 3
@@ -491,7 +497,12 @@ class RegistryServer(object):
         while select.select(s, (), (), timeout)[0]:
             prefix, msg = self.recv(1)
             if prefix == peer:
-                return msg
+                # Remove country for old nodes
+                if protocol < 7:
+                    return ';'.join([','.join(a.split(',')[:3])
+                                       for a in msg.split(';')])
+                else:
+                    return msg
             timeout = max(0, end - time.time())
         logging.info("Timeout while querying address for %s/%s",
                      int(peer, 2), len(peer))
@@ -516,7 +527,7 @@ class RegistryServer(object):
                 # (in case 'peers' is empty).
                 peer = self.prefix
         with self.lock:
-            msg = self._queryAddress(peer)
+            msg = self._queryAddress(peer, self.getPeerProtocol(cn))
             if msg is None:
                 return
             cert = self.getCert(cn)
@@ -705,7 +716,7 @@ class RegistryClient(object):
                         key = self._hmac
                         if not key:
                             retry = False
-                            h = self.hello(client_prefix)
+                            h = self.hello(client_prefix, str(version.protocol))
                             n = len(h) // 2
                             self.cert.verify(h[n:], h[:n])
                             key = self.cert.decrypt(h[:n])
