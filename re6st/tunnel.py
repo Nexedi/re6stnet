@@ -661,19 +661,11 @@ class BaseTunnelManager(object):
                 break
 
     def _updateCountry(self, address):
-
-        country = None
-        # Check if a country is specified in the conf
-        if self._conf_country:
-            country = self._conf_country
-        # Else, get the country with geoip
-        else:
+        def getCountry():
+            if self._conf_country:
+                return self._conf_country
             for a in address:
-                try:
-                    family, ip = resolve(*a)
-                except TypeError as e:
-                    logging.debug("exception: %s, address: %s", e, a)
-                    raise TypeError
+                family, ip = resolve(*a)
                 for ip in ip:
                     country = self._geoiplookup(ip)
                     if country:
@@ -681,8 +673,8 @@ class BaseTunnelManager(object):
                             self._country[family] = country
                             logging.info('%s country: %s (%s)',
                                 family_dict[family], country, ip)
-                        break
-        # Add country to all addresses if we have one
+                        return country
+        country = getCountry()
         return [a + (country,) for a in address] if country else address
 
 class TunnelManager(BaseTunnelManager):
