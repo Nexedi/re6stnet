@@ -37,8 +37,12 @@ BABEL_HMAC = 'babel_hmac0', 'babel_hmac1', 'babel_hmac2'
 
 def rpc(f):
     args, varargs, varkw, defaults = inspect.getargspec(f)
-    assert not (varargs or varkw or defaults), f
-    f.getcallargs = eval("lambda %s: locals()" % ','.join(args[1:]))
+    assert not (varargs or varkw), f
+    if not defaults:
+	defaults = ()
+    i = len(args) - len(defaults)
+    f.getcallargs = eval("lambda %s: locals()" % ','.join(args[1:i]
+        + map("%s=%r".__mod__, zip(args[i:], defaults))))
     return f
 
 def rpc_private(f):
@@ -242,13 +246,13 @@ class RegistryServer(object):
             h = base64.b64decode(request.headers[HMAC_HEADER])
             with self.lock:
                 session = self.sessions[key]
-                for key in session:
+                for key, protocol in session:
                     if h == hmac.HMAC(key, request.path, hashlib.sha1).digest():
                         break
                 else:
                     raise Exception("Wrong HMAC")
                 key = hashlib.sha1(key).digest()
-                session[:] = hashlib.sha1(key).digest(),
+                session[:] = (hashlib.sha1(key).digest(), protocol),
         else:
             logging.info("%s%s: %s, %s",
                 method,
@@ -277,12 +281,16 @@ class RegistryServer(object):
         if result:
             request.wfile.write(result)
 
+    def getPeerProtocol(self, cn):
+        session, = self.sessions[cn]
+        return session[1]
+
     @rpc
-    def hello(self, client_prefix):
+    def hello(self, client_prefix, protocol='1'):
         with self.lock:
             cert = self.getCert(client_prefix)
             key = utils.newHmacSecret()
-            self.sessions.setdefault(client_prefix, [])[1:] = key,
+            self.sessions.setdefault(client_prefix, [])[1:] = (key, int(protocol)),
         key = x509.encrypt(cert, key)
         sign = self.cert.sign(key)
         assert len(key) == len(sign)
@@ -705,7 +713,7 @@ class RegistryClient(object):
                         key = self._hmac
                         if not key:
                             retry = False
-                            h = self.hello(client_prefix)
+                            h = self.hello(client_prefix, str(version.protocol))
                             n = len(h) // 2
                             self.cert.verify(h[n:], h[:n])
                             key = self.cert.decrypt(h[:n])
