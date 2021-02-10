@@ -381,6 +381,9 @@ class BaseTunnelManager(object):
         if len(msg) <= 4 or not sender.startswith(self._network):
             return
         prefix = sender[len(self._network):]
+        # If seqno > 1 then peer is in our cache, else peer might not be 
+        # correct but decode is used as if it was a class method
+        # There is always at least one peer in the cache (ourselves)
         peer = self._getPeer(prefix)
         msg = peer.decode(msg)
         if type(msg) is tuple:
