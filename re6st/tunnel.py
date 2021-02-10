@@ -465,9 +465,8 @@ class BaseTunnelManager(object):
                     self._makeTunnel(peer, msg)
             else:
                 if peer:
-                    p = self._getPeer(peer)
                     # If we know we are dealing with an old node, don't send country
-                    if p.prefix == peer and p.protocol < 7:
+                    if self._getPeer(peer).protocol < 7:
                         return ';'.join([','.join(a.split(',')[:3])
                                for a in ';'.join(self._address.itervalues()).split(';')])
                 return ';'.join(self._address.itervalues())
