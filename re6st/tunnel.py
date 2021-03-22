@@ -384,14 +384,14 @@ class BaseTunnelManager(object):
         peer = self._getPeer(prefix)
         msg = peer.decode(msg)
         if type(msg) is tuple:
-          real_seqno, msg = msg
-          def handleHello(peer, seqno, msg):
+          seqno, msg, protocol = msg
+          def handleHello(peer, seqno, msg, retry):
             if seqno == 2:
                 i = len(msg) // 2
                 h = msg[:i]
                 try:
                     peer.verify(msg[i:], h)
-                    peer.newSession(self.cert.decrypt(h))
+                    peer.newSession(self.cert.decrypt(h), protocol)
                 except (AttributeError, crypto.Error, x509.NewSessionError,
                         subprocess.CalledProcessError):
                     logging.debug('ignored new session key from %r',
@@ -412,7 +412,7 @@ class BaseTunnelManager(object):
                 if serial in self.cache.crl:
                     raise ValueError("revoked")
             except (x509.VerifyError, ValueError), e:
-                if real_seqno and peer.hello_protocol:
+                if retry:
                     return True
                 logging.debug('ignored invalid certificate from %r (%s)',
                               address, e.args[-1])
@@ -430,17 +430,17 @@ class BaseTunnelManager(object):
             peer.stop_date = stop_date
             self.selectTimeout(stop_date, self.invalidatePeers, False)
             if seqno:
-                self._sendto(to, peer.hello(self.cert))
+                self._sendto(to, peer.hello(self.cert, protocol))
             else:
                 msg = peer.hello0(self.cert.cert)
                 if msg and self._sendto(to, msg):
                     peer.hello0Sent()
-          if handleHello(peer, real_seqno, msg):
+          if handleHello(peer, seqno, msg, seqno):
             # It is possible to reconstruct the original message because
             # the serialization of the protocol version is always unique.
-            msg = utils.packInteger(peer.hello_protocol) + msg
-            peer.hello_protocol = 0
-            handleHello(peer, real_seqno, msg)
+            msg = utils.packInteger(protocol) + msg
+            protocol = 0
+            handleHello(peer, seqno, msg, False)
         elif msg:
             # We got a valid and non-empty message. Always reply
             # something so that the sender knows we're still connected.
