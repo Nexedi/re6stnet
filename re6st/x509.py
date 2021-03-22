@@ -241,26 +241,26 @@ class Peer(object):
     def hello0Sent(self):
         self._hello = time.time() + 60
 
-    def hello(self, cert):
+    def hello(self, cert, protocol):
         key = self._key = newHmacSecret()
         h = encrypt(crypto.dump_certificate(crypto.FILETYPE_PEM, self.cert),
                     key)
         self._i = self._j = 2
         self._last = 0
-        self.protocol = self.hello_protocol
+        self.protocol = protocol
         return ''.join(('\0\0\0\2', PACKED_PROTOCOL if self.protocol else '',
                         h, cert.sign(h)))
 
     def _hmac(self, msg):
         return hmac.HMAC(self._key, msg, hashlib.sha1).digest()
 
-    def newSession(self, key):
+    def newSession(self, key, protocol):
         if key <= self._key:
             raise NewSessionError(self._key, key)
         self._key = key
         self._i = self._j = 2
         self._last = None
-        self.protocol = self.hello_protocol
+        self.protocol = protocol
 
     def verify(self, sign, data):
         crypto.verify(self.cert, sign, data, 'sha512')
@@ -272,9 +272,11 @@ class Peer(object):
         if seqno <= 2:
             msg = msg[4:]
             if seqno:
-                self.hello_protocol, n = utils.unpackInteger(msg) or (0, 0)
+                protocol, n = utils.unpackInteger(msg) or (0, 0)
                 msg = msg[n:]
-            return seqno, msg
+            else:
+                protocol = None
+            return seqno, msg, protocol
         i = -utils.HMAC_LEN
         if self._hmac(msg[:i]) == msg[i:] and self._i < seqno:
             self._last = None
