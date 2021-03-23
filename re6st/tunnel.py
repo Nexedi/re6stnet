@@ -662,6 +662,8 @@ class BaseTunnelManager(object):
     def _updateCountry(self, address):
         def update():
             for a in address:
+                if len(a) > 3:
+                    return a[3]
                 family, ip = resolve(*a)
                 for ip in ip:
                     country = self._geoiplookup(ip)
@@ -672,7 +674,7 @@ class BaseTunnelManager(object):
                                 family_dict[family], country, ip)
                         return country
         country = self._conf_country or update()
-        return [a + (country,) for a in address] if country else address
+        return [a[:3] + (country,) for a in address] if country else address
 
 class TunnelManager(BaseTunnelManager):
 
