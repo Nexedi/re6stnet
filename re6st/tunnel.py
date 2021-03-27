@@ -230,7 +230,7 @@ class BaseTunnelManager(object):
             country = database.Reader(db).country
             def geoiplookup(ip):
                 try:
-                    return country(ip).country.iso_code
+                    return country(ip).country.iso_code.encode()
                 except errors.AddressNotFoundError:
                     return
             self._geoiplookup = geoiplookup
