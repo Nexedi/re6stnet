@@ -45,8 +45,8 @@ def getConfig():
              " 2=INFO, 3=DEBUG, 4=TRACE. Use SIGUSR1 to reopen log."
              " See also --babel-verb and --verb for logs of spawned processes.")
     _('-i', '--interface', action='append', dest='iface_list', default=[],
-        help="Extra interface for LAN discovery. Highly recommanded if there"
-             " are other re6st node on the same network segment.")
+        help="Extra interface for LAN discovery. Highly recommended if there"
+             " are other re6st nodes on the same network segment.")
     _('-I', '--main-interface', metavar='IFACE', default='lo',
         help="Set re6stnet IP on given interface. Any interface not used for"
              " tunnelling can be chosen.")
