@@ -840,7 +840,8 @@ class TunnelManager(BaseTunnelManager):
         # Keep only a small number of tunnels if server is not reachable
         # (user should configure NAT properly).
         if (self._client_count if self._served or self._disconnected else
-              min(2, self._client_count)) <= len(peer_set):
+              min(2, self._client_count)) <= len(peer_set) and \
+           peer_set != self._neighbour_set:
             prefix = min(peer_set, key=self._tunnelScore)
             self._killing[prefix] = TunnelKiller(prefix, self, True)
 
