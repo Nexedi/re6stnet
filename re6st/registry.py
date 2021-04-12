@@ -59,6 +59,9 @@ class RegistryServer(object):
     peers = 0, ()
     cert_duration = 365 * 86400
 
+    def _geoiplookup(self, _):
+        raise HTTPError(httplib.BAD_REQUEST)
+
     def __init__(self, config):
         self.config = config
         self.lock = threading.Lock()
@@ -102,6 +105,20 @@ class RegistryServer(object):
         self.peers_lock = threading.Lock()
         self.ctl = ctl.Babel(os.path.join(config.run, 'babeld.sock'),
             weakref.proxy(self), self.network)
+
+        db = os.getenv('GEOIP2_MMDB')
+        if db:
+            from geoip2 import database, errors
+            country = database.Reader(db).country
+            def geoiplookup(ip):
+                try:
+                    return country(ip).country.iso_code.encode()
+                except errors.AddressNotFoundError:
+                    return
+            self._geoiplookup = geoiplookup
+        elif self.config.same_country:
+            sys.exit("Can not respect 'same_country' network configuration"
+                     " (GEOIP2_MMDB not set)")
 
         self.onTimeout()
         if self.prefix:
@@ -503,6 +520,10 @@ class RegistryServer(object):
             timeout = max(0, end - time.time())
         logging.info("Timeout while querying address for %s/%s",
                      int(peer, 2), len(peer))
+
+    @rpc
+    def getCountry(self, cn, address):
+        return self._geoiplookup(address)
 
     @rpc
     def getBootstrapPeer(self, cn):
