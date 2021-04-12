@@ -28,6 +28,7 @@ from email.mime.text import MIMEText
 from operator import itemgetter
 from OpenSSL import crypto
 from urllib import splittype, splithost, unquote, urlencode
+from geoip2 import database, errors
 from . import ctl, tunnel, utils, version, x509
 
 HMAC_HEADER = "Re6stHMAC"
@@ -102,6 +103,21 @@ class RegistryServer(object):
         self.peers_lock = threading.Lock()
         self.ctl = ctl.Babel(os.path.join(config.run, 'babeld.sock'),
             weakref.proxy(self), self.network)
+
+        db = os.getenv('GEOIP2_MMDB')
+        if db:
+            try:
+                country = database.Reader(db).country
+            except IOError:
+                logging.warning("Error while opening %s", db)
+        else:
+            logging.warning("GEOIP2_MMDB environment variable doesn't exist")
+        def geoiplookup(ip):
+            try:
+                return country(ip).country.iso_code.encode()
+            except errors.AddressNotFoundError:
+                return
+        self._geoiplookup = geoiplookup
 
         self.onTimeout()
         if self.prefix:
@@ -503,6 +519,15 @@ class RegistryServer(object):
             timeout = max(0, end - time.time())
         logging.info("Timeout while querying address for %s/%s",
                      int(peer, 2), len(peer))
+
+    @rpc
+    def getCountry(self, cn, address):
+        with self.lock:
+            cert = self.getCert(cn)
+        msg = self._geoiplookup(address)
+        if not msg:
+            return
+        return x509.encrypt(cert, msg)
 
     @rpc
     def getBootstrapPeer(self, cn):
