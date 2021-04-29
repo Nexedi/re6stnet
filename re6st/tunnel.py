@@ -213,17 +213,26 @@ class BaseTunnelManager(object):
         address_dict = defaultdict(list)
         for family, address in address:
             address_dict[family] += address
-        if any(address_dict.itervalues()):
-            del cache.my_address
-        else:
+
+        cache_address = cache.my_address
+        # Cache may contain our country, we want to use it if possible to
+        # prevent interaction with registry
+        use_cache = bool(cache_address)
+        if any(address_dict.itervalues()) and use_cache:
+            cache_address_list = [a[:3] for a in utils.parse_address(cache_address)]
+            address_list = address_dict[socket.AF_INET] + address_dict[socket.AF_INET6]
+            use_cache = set(cache_address_list) == set(address_list)
+        if use_cache:
             address = cache.my_address
-            if address:
-                for address in utils.parse_address(address):
-                    try:
-                        proto = proto_dict[address[2]]
-                    except KeyError:
-                        continue
-                    address_dict[proto[0]].append(address)
+            address_dict = defaultdict(list)
+            for address in utils.parse_address(address):
+                try:
+                    proto = proto_dict[address[2]]
+                except KeyError:
+                    continue
+                address_dict[proto[0]].append(address)
+        else:
+            del cache.my_address
         db = os.getenv('GEOIP2_MMDB')
         if db:
             from geoip2 import database, errors
@@ -244,6 +253,8 @@ class BaseTunnelManager(object):
         self._address = {family: utils.dump_address(address)
                          for family, address in address_dict.iteritems()
                          if address}
+        if not use_cache:
+            self.cache.my_address = ';'.join(self._address.itervalues())
 
         self.sock = socket.socket(socket.AF_INET6,
             socket.SOCK_DGRAM | socket.SOCK_CLOEXEC)
@@ -664,7 +675,12 @@ class BaseTunnelManager(object):
             for a in address:
                 family, ip = resolve(*a[:3])
                 for ip in ip:
-                    country = a[3] if len(a) > 3 else self._geoiplookup(ip)
+                    try:
+                        country = a[3] if len(a) > 3 else self.cache._decrypt(
+                                  self.cache._registry.getCountry(self._prefix, ip))
+                    except (socket.error, subprocess.CalledProcessError, ValueError), e:
+                        logging.warning('Failed to get country (%s)', ip)
+                        country = None
                     if country:
                         if self._country.get(family) != country:
                             self._country[family] = country
