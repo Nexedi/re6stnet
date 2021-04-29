@@ -67,7 +67,7 @@ def getConfig():
              "to access it.")
     _('--country', metavar='CODE',
         help="Country code that is advertised to other nodes"
-             "(default: country is fetched from MaxMind database)")
+             "(default: country from registry)")
 
     _ = parser.add_argument_group('routing').add_argument
     _('-B', dest='babel_args', metavar='ARG', action='append', default=[],
