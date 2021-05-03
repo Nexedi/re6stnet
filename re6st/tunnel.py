@@ -662,9 +662,10 @@ class BaseTunnelManager(object):
     def _updateCountry(self, address):
         def update():
             for a in address:
+                family, ip = resolve(*a[:3])
                 if len(a) > 3:
+                    self._country[family] = a[3]
                     return a[3]
-                family, ip = resolve(*a)
                 for ip in ip:
                     country = self._geoiplookup(ip)
                     if country:
