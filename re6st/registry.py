@@ -39,7 +39,7 @@ def rpc(f):
     args, varargs, varkw, defaults = inspect.getargspec(f)
     assert not (varargs or varkw), f
     if not defaults:
-	defaults = ()
+        defaults = ()
     i = len(args) - len(defaults)
     f.getcallargs = eval("lambda %s: locals()" % ','.join(args[1:i]
         + map("%s=%r".__mod__, zip(args[i:], defaults))))
