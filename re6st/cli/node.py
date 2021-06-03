@@ -296,8 +296,8 @@ def main():
         control_socket = os.path.join(config.run, 'babeld.sock')
         if config.client_count and not config.client:
             tunnel_manager = tunnel.TunnelManager(control_socket,
-                cache, cert, config.openvpn_args, timeout,
-                config.client_count, config.iface_list, config.country, address, ip_changed,
+                cache, cert, config.openvpn_args, timeout, config.client_count,
+                config.iface_list, config.country, address, ip_changed,
                 remote_gateway, config.disable_proto, config.neighbour)
             add_tunnels(tunnel_manager.new_iface_list)
         else:

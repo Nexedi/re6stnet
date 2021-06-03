@@ -694,8 +694,8 @@ class TunnelManager(BaseTunnelManager):
         'client_count', 'max_clients', 'same_country', 'tunnel_refresh'))
 
     def __init__(self, control_socket, cache, cert, openvpn_args,
-                 timeout, client_count, iface_list, conf_country, address, ip_changed,
-                 remote_gateway, disable_proto, neighbour_list=()):
+                 timeout, client_count, iface_list, conf_country, address,
+                 ip_changed, remote_gateway, disable_proto, neighbour_list=()):
         super(TunnelManager, self).__init__(control_socket,
                                             cache, cert, conf_country, address)
         self.ovpn_args = openvpn_args
