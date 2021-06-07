@@ -67,7 +67,7 @@ def getConfig():
              "to access it.")
     _('--country', metavar='CODE',
         help="Country code that is advertised to other nodes"
-             "(default: country is fetched from MaxMind database)")
+             "(default: country is resolved by the registry)")
 
     _ = parser.add_argument_group('routing').add_argument
     _('-B', dest='babel_args', metavar='ARG', action='append', default=[],
@@ -296,8 +296,8 @@ def main():
         control_socket = os.path.join(config.run, 'babeld.sock')
         if config.client_count and not config.client:
             tunnel_manager = tunnel.TunnelManager(control_socket,
-                cache, cert, config.openvpn_args, timeout,
-                config.client_count, config.iface_list, config.country, address, ip_changed,
+                cache, cert, config.openvpn_args, timeout, config.client_count,
+                config.iface_list, config.country, address, ip_changed,
                 remote_gateway, config.disable_proto, config.neighbour)
             add_tunnels(tunnel_manager.new_iface_list)
         else:
