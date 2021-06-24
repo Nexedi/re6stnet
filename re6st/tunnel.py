@@ -531,6 +531,11 @@ class BaseTunnelManager(object):
             # XXX: Quick'n dirty way to log in a common place.
             if peer and self._prefix == self.cache.registry_prefix:
                 logging.info("%s/%s: %s", int(peer, 2), len(peer), msg)
+        elif code == 8:
+            plen = len(self._prefix)
+            prefixes = [msg[i * plen:(i + 1) * plen] for i in range(len(msg) // plen)]
+            print(utils.ipFromBin(self._network + peer) + " has neighbours: "
+                  + str(list(map(lambda prefix: utils.ipFromBin(self._network + prefix), prefixes))))
 
     def askInfo(self, prefix):
         return self.sendto(prefix, '\4' + self._info(True))
@@ -541,6 +546,15 @@ class BaseTunnelManager(object):
             version.protocol,
             rina.shim is not None,
             ))
+
+    def sendPeers(self, prefix):
+        # Send our connected peers to the given neighbour
+        msg = '\x08'
+        for neighbour in self.ctl.neighbours:
+            if neighbour is None or neighbour == prefix:
+                continue
+            msg += neighbour
+        return self.sendto(prefix, msg)
 
     @staticmethod
     def _restart():
@@ -776,6 +790,12 @@ class TunnelManager(BaseTunnelManager):
         else:
             self._next_refresh = time.time() + 5
         self.checkRoutingCache()
+
+        for neighbour in self.ctl.neighbours.keys():
+            if neighbour is None:
+                continue
+            self.sendPeers(neighbour)
+
 
     def babel_dump(self):
         t = time.time()
