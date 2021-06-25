@@ -548,10 +548,6 @@ class RegistryServer(object):
             msg = self._queryAddress(peer)
             if msg is None:
                 return
-            # Remove country for old nodes
-            if self.getPeerProtocol(cn) < 7:
-                msg = ';'.join(','.join(a.split(',')[:3])
-                               for a in msg.split(';'))
             cert = self.getCert(cn)
         msg = "%s %s" % (peer, msg)
         logging.info("Sending bootstrap peer: %s", msg)

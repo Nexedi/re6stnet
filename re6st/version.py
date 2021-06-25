@@ -32,8 +32,8 @@ if dirty:
 # they are intended to the network admin.
 # Only 'protocol' is important and it must be increased whenever they would be
 # a wish to force an update of nodes.
-protocol = 7
-min_protocol = 1
+protocol = 8
+min_protocol = 7
 
 if __name__ == "__main__":
     print version

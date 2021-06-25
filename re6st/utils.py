@@ -233,7 +233,7 @@ def ipFromBin(ip, suffix=''):
 def dump_address(address):
     return ';'.join(map(','.join, address))
 
-# Yield ip, port, protocol, and country if it is in the address
+# Yield ip, port, protocol, and country
 def parse_address(address_list):
     for address in address_list.split(';'):
         try:

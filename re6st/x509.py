@@ -229,8 +229,6 @@ class Peer(object):
     def hello0(self, cert):
         if self._hello < time.time():
             try:
-                # Always assume peer is not old, in case it has just upgraded,
-                # else we would be stuck with the old protocol.
                 msg = ('\0\0\0\1'
                     + PACKED_PROTOCOL
                     + fingerprint(self.cert).digest())

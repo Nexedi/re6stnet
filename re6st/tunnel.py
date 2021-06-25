@@ -195,7 +195,6 @@ class BaseTunnelManager(object):
                               'babel_hmac_sign', 'encrypt',
                               'hello', 'ipv4', 'ipv4_sublen'))
 
-    _geoiplookup = None
     _forward = None
     _next_rina = True
 
@@ -229,16 +228,6 @@ class BaseTunnelManager(object):
                } == address_dict:
                 address_dict = cache_dict
 
-        db = os.getenv('GEOIP2_MMDB')
-        if db:
-            from geoip2 import database, errors
-            country = database.Reader(db).country
-            def geoiplookup(ip):
-                try:
-                    return country(ip).country.iso_code.encode()
-                except errors.AddressNotFoundError:
-                    return
-            self._geoiplookup = geoiplookup
         if cache.same_country:
             self._country = {}
 
@@ -392,62 +381,53 @@ class BaseTunnelManager(object):
         msg = peer.decode(msg)
         if type(msg) is tuple:
           seqno, msg, protocol = msg
-          def handleHello(peer, seqno, msg, retry):
-            if seqno == 2:
-                i = len(msg) // 2
-                h = msg[:i]
-                try:
-                    peer.verify(msg[i:], h)
-                    peer.newSession(self.cert.decrypt(h), protocol)
-                except (AttributeError, crypto.Error, x509.NewSessionError,
-                        subprocess.CalledProcessError):
-                    logging.debug('ignored new session key from %r',
-                                  address, exc_info=1)
-                    return
-                peer.version = self._version \
-                    if self._sendto(to, '\0' + self._version, peer) else ''
-                return
-            if seqno:
-                h = x509.fingerprint(self.cert.cert).digest()
-                seqno = msg.startswith(h)
-                msg = msg[len(h):]
-            try:
-                cert = self.cert.loadVerify(msg,
-                    True, crypto.FILETYPE_ASN1)
-                stop_date = x509.notAfter(cert)
-                serial = cert.get_serial_number()
-                if serial in self.cache.crl:
-                    raise ValueError("revoked")
-            except (x509.VerifyError, ValueError), e:
-                if retry:
-                    return True
-                logging.debug('ignored invalid certificate from %r (%s)',
-                              address, e.args[-1])
-                return
-            p = utils.binFromSubnet(x509.subnetFromCert(cert))
-            if p != peer.prefix:
-                if not prefix.startswith(p):
-                    logging.debug('received %s/%s cert from wrong source %r',
-                                  int(p, 2), len(p), address)
-                    return
-                peer = x509.Peer(p)
-                insort(self._peers, peer)
-            peer.cert = cert
-            peer.serial = serial
-            peer.stop_date = stop_date
-            self.selectTimeout(stop_date, self.invalidatePeers, False)
-            if seqno:
-                self._sendto(to, peer.hello(self.cert, protocol))
-            else:
-                msg = peer.hello0(self.cert.cert)
-                if msg and self._sendto(to, msg):
-                    peer.hello0Sent()
-          if handleHello(peer, seqno, msg, seqno):
-            # It is possible to reconstruct the original message because
-            # the serialization of the protocol version is always unique.
-            msg = utils.packInteger(protocol) + msg
-            protocol = 0
-            handleHello(peer, seqno, msg, False)
+          if seqno == 2:
+              i = len(msg) // 2
+              h = msg[:i]
+              try:
+                  peer.verify(msg[i:], h)
+                  peer.newSession(self.cert.decrypt(h), protocol)
+              except (AttributeError, crypto.Error, x509.NewSessionError,
+                      subprocess.CalledProcessError):
+                  logging.debug('ignored new session key from %r',
+                                address, exc_info=1)
+                  return
+              peer.version = self._version \
+                  if self._sendto(to, '\0' + self._version, peer) else ''
+              return
+          if seqno:
+              h = x509.fingerprint(self.cert.cert).digest()
+              seqno = msg.startswith(h)
+              msg = msg[len(h):]
+          try:
+              cert = self.cert.loadVerify(msg,
+                  True, crypto.FILETYPE_ASN1)
+              stop_date = x509.notAfter(cert)
+              serial = cert.get_serial_number()
+              if serial in self.cache.crl:
+                  raise ValueError("revoked")
+          except (x509.VerifyError, ValueError), e:
+              logging.debug('ignored invalid certificate from %r (%s)',
+                            address, e.args[-1])
+              return
+          p = utils.binFromSubnet(x509.subnetFromCert(cert))
+          if p != peer.prefix:
+              if not prefix.startswith(p):
+                  logging.debug('received %s/%s cert from wrong source %r',
+                                int(p, 2), len(p), address)
+                  return
+              peer = x509.Peer(p)
+              insort(self._peers, peer)
+          peer.cert = cert
+          peer.serial = serial
+          peer.stop_date = stop_date
+          self.selectTimeout(stop_date, self.invalidatePeers, False)
+          if seqno:
+              self._sendto(to, peer.hello(self.cert, protocol))
+          else:
+              msg = peer.hello0(self.cert.cert)
+              if msg and self._sendto(to, msg):
+                  peer.hello0Sent()
         elif msg:
             # We got a valid and non-empty message. Always reply
             # something so that the sender knows we're still connected.
@@ -471,11 +451,6 @@ class BaseTunnelManager(object):
                         return
                     self._makeTunnel(peer, msg)
             else:
-                if peer:
-                    # Don't send country to old nodes
-                    if self._getPeer(peer).protocol < 7:
-                        return ';'.join(','.join(a.split(',')[:3]) for a in
-                            ';'.join(self._address.itervalues()).split(';'))
                 return ';'.join(self._address.itervalues())
         elif not code: # network version
             if peer:
@@ -886,12 +861,13 @@ class TunnelManager(BaseTunnelManager):
             if x[2] in self._disable_proto:
                 continue
             if same_country:
+                if len(x) < 4:
+                    continue
                 family, ip = resolve(*x[:3])
                 my_country = self._country.get(family, self._conf_country)
                 if my_country:
                     for ip in ip:
-                        # Use geoip if there is no country in the address
-                        country = x[3] if len(x) > 3 else self._geoiplookup(ip)
+                        country = x[3]
                         if country and (country != my_country
                                         if my_country in same_country else
                                         country in same_country):
