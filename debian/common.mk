@@ -1,8 +1,6 @@
 PACKAGE = $(shell dh_listpackages)
 TMP = $(CURDIR)/debian/$(PACKAGE)
 
-INIT = $(TMP)/etc/init.d
-
 ifdef VERSION
 define CHANGELOG
 $(PACKAGE) ($(VERSION)) nexedi; urgency=low
@@ -19,14 +17,3 @@ endif
 
 override_dh_install:
 	make DESTDIR=$(TMP) PREFIX=/usr PYTHON=/usr/bin/python install
-
-override_dh_installinit:
-	install -d $(INIT)
-	sed 's/#NAME#/re6st-registry/; s,#DAEMON_DIR#,/usr/bin,' \
-		<debian/init.d >$(INIT)/re6st-registry
-	sed 's/#NAME#/re6stnet/; s,#DAEMON_DIR#,/usr/sbin,' \
-		<debian/init.d >$(INIT)/re6stnet
-	# -R is the default with debian/compat 10
-	for x in $(INIT)/*; \
-	do chmod +x $$x && dh_installinit -R --onlyscripts --name=$${x##*/}; \
-	done
