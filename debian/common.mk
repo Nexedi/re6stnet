@@ -17,3 +17,7 @@ endif
 
 override_dh_install:
 	make DESTDIR=$(TMP) PREFIX=/usr PYTHON=/usr/bin/python install
+
+# BBB: compat < 10
+override_dh_systemd_start:
+	dh_systemd_start --restart-after-upgrade
