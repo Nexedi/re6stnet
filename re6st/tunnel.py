@@ -2,6 +2,7 @@ import errno, json, logging, os, platform, random, socket
 import subprocess, struct, sys, time, weakref
 from collections import defaultdict, deque
 from bisect import bisect, insort
+from datetime import datetime
 from OpenSSL import crypto
 from . import ctl, plib, rina, utils, version, x509
 
@@ -206,6 +207,9 @@ class BaseTunnelManager(object):
         self.cache = cache
         self._connecting = set()
         self._connection_dict = {}
+        self._neighbours_of_neighbours = {}
+        self._sent_pings_distance_2 = {}
+        self._received_pings_distance_2 = {}
         self._served = defaultdict(dict)
         self._version = cache.version
         self._conf_country = conf_country
@@ -535,9 +539,16 @@ class BaseTunnelManager(object):
             # The peer announced its neighbours
             plen = len(self._prefix)
             prefixes = [msg[i * plen:(i + 1) * plen] for i in range(len(msg) // plen)]
-            # FIXME Store neighbours of the peer instead of printing them
-            print(utils.ipFromBin(self._network + peer) + " has neighbours: "
-                  + str(list(map(lambda prefix: utils.ipFromBin(self._network + prefix), prefixes))))
+            self._neighbours_of_neighbours[peer] = prefixes
+        elif code == 9:  # ping
+            if msg == "\x00":
+                # Pong !
+                self.sendto(peer, '\x09\x01')
+            elif msg == "\x01":
+                self._received_pings_distance_2.setdefault(peer, [])
+                self._received_pings_distance_2[peer].append(datetime.now())
+            else:
+                print("[ping] Unknown code: " + msg)
 
     def askInfo(self, prefix):
         return self.sendto(prefix, '\4' + self._info(True))
@@ -801,6 +812,27 @@ class TunnelManager(BaseTunnelManager):
             if neighbour is None:
                 continue
             self.sendNeighbours(neighbour)
+
+        # Try to contact neighbours of neighbours
+        neighbours_order_2 = set()
+        for neighbours in self._neighbours_of_neighbours.values():
+            neighbours_order_2.update(neighbours)
+
+        # Don't considerate our neighbours, they have a distance 1
+        neighbours_order_2.difference_update(self.ctl.neighbours.keys())
+
+        # Try to ping distant nodes
+        for node in neighbours_order_2:
+            self.sendto(node, '\x09\x00')
+            self._sent_pings_distance_2.setdefault(node, [])
+            # Store the sent ping
+            self._sent_pings_distance_2[node].append(datetime.now())
+
+        # Clean old pings
+        self._sent_pings_distance_2 = {k: [d for d in v if (datetime.now() - d).seconds < 60]
+                                       for k, v in self._sent_pings_distance_2.items()}
+        self._received_pings_distance_2 = {k: [d for d in v if (datetime.now() - d).seconds < 60]
+                                           for k, v in self._received_pings_distance_2.items()}
 
 
     def babel_dump(self):
