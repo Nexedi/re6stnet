@@ -210,6 +210,7 @@ class BaseTunnelManager(object):
         self._neighbours_of_neighbours = {}
         self._sent_pings_distance_2 = {}
         self._received_pings_distance_2 = {}
+        self._bad_scores = {}
         self._served = defaultdict(dict)
         self._version = cache.version
         self._conf_country = conf_country
@@ -825,14 +826,39 @@ class TunnelManager(BaseTunnelManager):
         for node in neighbours_order_2:
             self.sendto(node, '\x09\x00')
             self._sent_pings_distance_2.setdefault(node, [])
+            self._received_pings_distance_2.setdefault(node, [])
             # Store the sent ping
             self._sent_pings_distance_2[node].append(datetime.now())
+
+        # Check bad nodes
+        for peer in self._sent_pings_distance_2.keys():
+            # 10 pings over 12 failed, node is not contactable.
+            # Add bad score to the forwarding node
+            if len(self._sent_pings_distance_2[peer]) - len(self._received_pings_distance_2[peer]) >= 10:
+                print(peer + " is not reachable")
+                for node, value in self.ctl.neighbours.items():
+                    neighbour, routes = value
+                    if peer in routes.keys():
+                        break
+                else:
+                    print("Unknown peer: " + peer + ", ignoring...")
+                    break
+                self._bad_scores.setdefault(node, [])
+                self._bad_scores[node].append((peer, datetime.now()))
 
         # Clean old pings
         self._sent_pings_distance_2 = {k: [d for d in v if (datetime.now() - d).seconds < 60]
                                        for k, v in self._sent_pings_distance_2.items()}
         self._received_pings_distance_2 = {k: [d for d in v if (datetime.now() - d).seconds < 60]
                                            for k, v in self._received_pings_distance_2.items()}
+        self._bad_scores = {k: [(peer, d) for (peer, d) in v if (datetime.now() - d).seconds < 60]
+                            for k, v in self._bad_scores.items()}
+
+        # Ignore bad nodes
+        for peer in self._bad_scores.keys():
+            # FIXME Find better rule
+            if self._bad_scores[peer]:
+                print(peer + " IS A BAD PEER!")
 
 
     def babel_dump(self):
