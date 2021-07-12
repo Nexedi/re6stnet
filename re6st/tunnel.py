@@ -549,7 +549,7 @@ class BaseTunnelManager(object):
                 self._received_pings_distance_2.setdefault(peer, [])
                 self._received_pings_distance_2[peer].append(datetime.now())
             else:
-                print("[ping] Unknown code: " + msg)
+                logging.warn("[ping] Unknown code: " + msg)
 
     def askInfo(self, prefix):
         return self.sendto(prefix, '\4' + self._info(True))
@@ -835,13 +835,13 @@ class TunnelManager(BaseTunnelManager):
             # 10 pings over 12 failed, node is not contactable.
             # Add bad score to the forwarding node
             if len(self._sent_pings_distance_2[peer]) - len(self._received_pings_distance_2[peer]) >= 10:
-                print(peer + " is not reachable")
+                logging.warn(peer + " is not reachable")
                 for node, value in self.ctl.neighbours.items():
                     neighbour, routes = value
                     if peer in routes.keys():
                         break
                 else:
-                    print("Unknown peer: " + peer + ", ignoring...")
+                    logging.warn("Unknown peer: " + peer + ", ignoring...")
                     break
                 self._bad_scores.setdefault(node, [])
                 self._bad_scores[node].append((peer, datetime.now()))
@@ -854,12 +854,28 @@ class TunnelManager(BaseTunnelManager):
         self._bad_scores = {k: [(peer, d) for (peer, d) in v if (datetime.now() - d).seconds < 60]
                             for k, v in self._bad_scores.items()}
 
+        # Reset cost multiplier
+        for node, value in self.ctl.neighbours.items():
+            neigh = value[0]
+            if neigh is None:
+                continue
+            # Default to 256
+            self.ctl.send(ctl.SetCostMultiplier(neigh.address, neigh.ifindex, 256))
+
         # Ignore bad nodes
         for peer in self._bad_scores.keys():
-            # FIXME Find better rule
-            if self._bad_scores[peer]:
-                print(peer + " IS A BAD PEER!")
+            if peer is None or not self._bad_scores[peer] or peer not in self.ctl.neighbours:
+                continue
 
+            paths_count = len(self.ctl.neighbours[peer][1].keys())
+            bad_paths = len(set(v[0] for v in self._bad_scores[peer]))
+            if bad_paths >= paths_count - 1 and paths_count > 1:
+                print(peer + " IS A BAD PEER!")
+                try:
+                    neigh = self.ctl.neighbours[peer][0]
+                    self.ctl.send(ctl.SetCostMultiplier(neigh.address, neigh.ifindex, 65535))
+                except Exception, e:
+                    print(e)
 
     def babel_dump(self):
         t = time.time()
