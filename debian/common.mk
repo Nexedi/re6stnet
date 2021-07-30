@@ -18,6 +18,7 @@ endif
 override_dh_install:
 	make DESTDIR=$(TMP) PREFIX=/usr PYTHON=/usr/bin/python install
 
-# BBB: compat < 10
+# BBB: compat < 10 ; https://bugs.debian.org/879727
 override_dh_systemd_start:
 	dh_systemd_start --restart-after-upgrade
+	sed -i 's/_dh_action=try-restart/_dh_action=restart; for x in re6stnet re6st-registry; do systemctl is-enabled --quiet $$x.service || &; done/' debian/$(PACKAGE).postinst.debhelper
