@@ -54,7 +54,7 @@ def setupLog(log_level, filename=None, **kw):
         handler = logging.StreamHandler()
         sig = signal.SIG_IGN
     handler.setFormatter(logging.Formatter(
-        '%(asctime)s %(levelname)-9s %(message)s', '%d-%m-%Y %H:%M:%S'))
+        '%(asctime)s %(levelname)-9s %(message)s', '%Y-%m-%d %H:%M:%S'))
     root = logging.getLogger()
     root.addHandler(handler)
     signal.signal(signal.SIGUSR1, sig)
