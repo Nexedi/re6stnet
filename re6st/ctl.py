@@ -2,6 +2,12 @@ import logging, socket, struct
 from collections import namedtuple
 from . import utils
 
+try:
+  range = xrange
+  del xrange
+except NameError:
+  pass
+
 uint16 = struct.Struct("!H")
 header = struct.Struct("!HI")
 
@@ -44,7 +50,7 @@ class Array(object):
         r = []
         o = offset + 2
         decode = self._item.decode
-        for i in xrange(*uint16.unpack_from(buffer, offset)):
+        for i in range(*uint16.unpack_from(buffer, offset)):
             o, x = decode(buffer, o)
             r.append(x)
         return o, r
@@ -57,7 +63,7 @@ class String(object):
 
     @staticmethod
     def decode(buffer, offset=0):
-        i = buffer.index("\0", offset)
+        i = buffer.index(b"\0", offset)
         return i + 1, buffer[offset:i]
 
 
@@ -149,7 +155,7 @@ class Packet(object):
         logging.trace('send %s%r', self.__class__.__name__,
                                    (self.id,) + self.args)
         offset = len(buffer)
-        buffer += '\0' * header.size
+        buffer += b'\0' * header.size
         r = self.request
         if isinstance(r, Struct):
             r.encode(buffer, self.args)
@@ -206,10 +212,10 @@ class Babel(object):
         def select(*args):
             try:
                 s.connect(self.socket_path)
-            except socket.error, e:
+            except socket.error as e:
                 logging.debug("Can't connect to %r (%r)", self.socket_path, e)
                 return e
-            s.send("\1")
+            s.send(b"\1")
             s.setblocking(0)
             del self.select
             self.socket = s
@@ -268,7 +274,7 @@ class Babel(object):
         a = len(self.network)
         for route in routes:
             assert route.flags & 1, route # installed
-            if route.prefix.startswith('\0\0\0\0\0\0\0\0\0\0\xff\xff'):
+            if route.prefix.startswith(b'\0\0\0\0\0\0\0\0\0\0\xff\xff'):
                 continue
             assert route.neigh_address == route.nexthop, route
             address = route.neigh_address, route.ifindex
