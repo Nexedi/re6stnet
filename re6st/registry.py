@@ -68,6 +68,17 @@ class RegistryServer(object):
         self.sessions = {}
         self.sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
 
+        # Parse community file
+        self.community_map = {}
+	if config.community:
+            with open(config.community, 'r') as f:
+                for line in filter(lambda l:l and not l.startswith('#'),
+                                   map(str.strip, f.readlines())):
+                        x = list(filter(bool, line.split(' ')))
+                        self.community_map[x[0]] = x[1:]
+        else:
+            self.community_map = {'': '*'}
+
         # Database initializing
         db_dir = os.path.dirname(self.config.db)
         db_dir and utils.makedirs(db_dir)
@@ -88,7 +99,30 @@ class RegistryServer(object):
                 "prefix TEXT PRIMARY KEY NOT NULL",
                 "email TEXT",
                 "cert TEXT")
-        self.db.execute("INSERT OR IGNORE INTO cert VALUES ('',null,null)")
+
+        community_list = self.community_map.keys()
+        # Check if community overlaps
+        prev = False
+        for c in sorted(community_list):
+            if prev and prev in c:
+                sys.exit("Community %s and %s overlap, refusing to run" % (prev, c))
+            prev = c
+        # Check if allocated prefix contains community
+        for c in community_list:
+            for i in range(len(c)):
+                try:
+                    prefix, = self.db.execute("""SELECT prefix FROM cert WHERE cert IS NOT NULL
+                                                AND prefix = ?""", (c[:i+1],)).next()
+                    if prefix != c:
+                        sys.exit("Prefix %s strictly contains community %s, refusing to run" % (prefix, c))
+                except StopIteration:
+                    pass
+
+        if self.db.execute("SELECT prefix FROM cert").fetchone() == None:
+            self.db.execute("INSERT OR IGNORE INTO cert VALUES ('',null,null)")
+        else:
+            self.mergePrefixes()
+
         utils.sqliteCreateTable(self.db, "crl",
                 "serial INTEGER PRIMARY KEY NOT NULL",
                 # Expiration date of revoked certificate.
@@ -112,9 +146,10 @@ class RegistryServer(object):
             country = database.Reader(db).country
             def geoiplookup(ip):
                 try:
-                    return country(ip).country.iso_code.encode()
-                except errors.AddressNotFoundError:
-                    return
+                    req = country(ip)
+                    return req.country.iso_code.encode(), req.continent.code.encode()
+                except (errors.AddressNotFoundError, ValueError):
+                    return '*', '*'
             self._geoiplookup = geoiplookup
         elif self.config.same_country:
             sys.exit("Can not respect 'same_country' network configuration"
@@ -246,8 +281,7 @@ class RegistryServer(object):
                       (prefix,))
                 elif not_after is None or x < not_after:
                     not_after = x
-            # TODO: reduce 'cert' table by merging free slots
-            #       (IOW, do the contrary of newPrefix)
+            self.mergePrefixes()
             self.timeout = not_after and not_after + GRACE_PERIOD
 
     def handle_request(self, request, method, kw):
@@ -279,6 +313,9 @@ class RegistryServer(object):
                 request.headers.get("X-Forwarded-For") or
                 request.headers.get("host"),
                 request.headers.get("user-agent"))
+        if 'ip' in kw and not kw['ip']:
+            kw['ip'] = request.headers.get("X-Forwarded-For") or request.headers.get("host")
+            kw['ip'] = kw['ip'].split(',')[0].strip()
         try:
             result = m(**kw)
         except HTTPError, e:
@@ -385,26 +422,62 @@ class RegistryServer(object):
             s.sendmail(self.email, email, msg.as_string())
             s.quit()
 
-    def newPrefix(self, prefix_len):
+    def getCommunity(self, country, continent):
+        default = ''
+        for prefix in self.community_map:
+            if country in self.community_map[prefix]:
+                return prefix
+        for prefix in self.community_map:
+            if continent in self.community_map[prefix]:
+                return prefix
+            if '*' in self.community_map[prefix]:
+                default = prefix
+        return default
+
+    def mergePrefixes(self):
+        max_len, = self.db.execute("""SELECT max(length(prefix)) FROM cert
+                                     WHERE cert IS NULL""").next()
+        for i in range(max_len or 0, 0, -1):
+            prev_prefix = False
+            for prefix, in self.db.execute("""SELECT prefix FROM cert WHERE cert IS NULL
+                                        AND length(prefix) = ? ORDER BY prefix""",
+                                        (i,)).fetchall():
+                if prev_prefix and (prefix[:-1] == prev_prefix[:-1]):
+                    self.db.execute("DELETE FROM cert WHERE prefix = ?", (prefix,))
+                    self.db.execute("DELETE FROM cert WHERE prefix = ?", (prev_prefix,))
+                    self.db.execute("INSERT INTO cert VALUES (?,null,null)", (prefix[:-1],))
+                prev_prefix = prefix
+
+    def newPrefix(self, prefix_len, community):
         max_len = 128 - len(self.network)
         assert 0 < prefix_len <= max_len
-        try:
-            prefix, = self.db.execute("""SELECT prefix FROM cert WHERE length(prefix) <= ? AND cert is null
-                                         ORDER BY length(prefix) DESC""", (prefix_len,)).next()
-        except StopIteration:
+        # Find the longest free prefix which is a prefix of community
+        for i in range(len(community), -1, -1):
+            try:
+                prefix, = self.db.execute("""SELECT prefix FROM cert WHERE length(prefix) <= ? AND cert IS NULL
+                                             AND prefix LIKE ? ORDER BY length(prefix) DESC""",
+                                             (prefix_len, community[:i] + '%')).next()
+                break
+            except StopIteration:
+                continue
+        else:
             logging.error('No more free /%u prefix available', prefix_len)
             raise
+        # Split the tree until prefix has wanted length
         while len(prefix) < prefix_len:
-            self.db.execute("UPDATE cert SET prefix = ? WHERE prefix = ?", (prefix + '1', prefix))
-            prefix += '0'
+            # If prefix is in the community, split to the left ('0') to get the smallest prefix
+            # Else, keep matching the community
+            b = community[len(prefix)] if len(community) > len(prefix) else '0'
+            self.db.execute("UPDATE cert SET prefix = ? WHERE prefix = ?", (prefix + str(1-int(b)), prefix))
+            prefix += b
             self.db.execute("INSERT INTO cert VALUES (?,null,null)", (prefix,))
         if len(prefix) < max_len or '1' in prefix:
             return prefix
         self.db.execute("UPDATE cert SET cert = 'reserved' WHERE prefix = ?", (prefix,))
-        return self.newPrefix(prefix_len)
+        return self.newPrefix(prefix_len, community)
 
     @rpc
-    def requestCertificate(self, token, req):
+    def requestCertificate(self, token, req, location='', ip=''):
         req = crypto.load_certificate_request(crypto.FILETYPE_PEM, req)
         with self.lock:
             with self.db:
@@ -424,7 +497,10 @@ class RegistryServer(object):
                     if not prefix_len:
                         raise HTTPError(httplib.FORBIDDEN)
                     email = None
-                prefix = self.newPrefix(prefix_len)
+                country, continent = location.split(',') if location else self._geoiplookup(ip)
+                continent = '@' + continent if continent != '*' else continent
+                community = self.getCommunity(country, continent)
+                prefix = self.newPrefix(prefix_len, community)
                 self.db.execute("UPDATE cert SET email = ? WHERE prefix = ?",
                                 (email, prefix))
                 if self.prefix is None:
@@ -523,7 +599,8 @@ class RegistryServer(object):
 
     @rpc
     def getCountry(self, cn, address):
-        return self._geoiplookup(address)
+        country = self._geoiplookup(address)[0]
+        return None if country == '*' else country
 
     @rpc
     def getBootstrapPeer(self, cn):

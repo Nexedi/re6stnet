@@ -167,6 +167,12 @@ For bootstrapping, you may have to explicitly set an IP in the configuration
 of the first node, via the ``--ip`` option. Otherwise, additional nodes won't
 be able to connect to it.
 
+You can use communities to group prefixes in different subprefixes based on
+their location in. Each line in the community configuration is a mapping
+from a subprefix (in binary) to a list of locations. Each location is either
+"*" (default assignment), a country (Alpha-2 code), or continent (Alpha-2
+code) preceded by "@". See demo/registry/community.conf for an example.
+
 TROUBLESHOOTING
 ===============
 
