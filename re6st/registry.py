@@ -290,8 +290,6 @@ class RegistryServer(object):
                 request.headers.get("X-Forwarded-For") or
                 request.headers.get("host"),
                 request.headers.get("user-agent"))
-        if 'ip' in kw:
-            kw['ip'] = request.headers.get("X-Forwarded-For") or request.headers.get("host")
         try:
             result = m(**kw)
         except HTTPError, e:
@@ -418,7 +416,7 @@ class RegistryServer(object):
         return self.newPrefix(prefix_len, country)
 
     @rpc
-    def requestCertificate(self, token, req, country='', ip=''):
+    def requestCertificate(self, token, req, country='_'):
         req = crypto.load_certificate_request(crypto.FILETYPE_PEM, req)
         with self.lock:
             with self.db:
@@ -438,7 +436,6 @@ class RegistryServer(object):
                     if not prefix_len:
                         raise HTTPError(httplib.FORBIDDEN)
                     email = None
-                country = country if country else self._geoiplookup(ip)
                 prefix = self.newPrefix(prefix_len,
                                         country if country in self.community_map else '_')
                 self.db.execute("UPDATE cert SET email = ? WHERE prefix = ?",
