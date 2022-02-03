@@ -45,6 +45,9 @@ def main():
     _('--anonymous', action='store_true',
         help="Request an anonymous certificate. No email is required but the"
              " registry may deliver a longer prefix.")
+    _('--country',
+            help="Specify country for the community assignment (default:"
+             " country is detected based on IP in X-Forwarded-For header")
     config = parser.parse_args()
     if config.dir:
         os.chdir(config.dir)
@@ -141,7 +144,8 @@ def main():
         # to avoid using our token for nothing.
         cert_fd = os.open(cert_path, os.O_CREAT | os.O_WRONLY, 0666)
         print "Requesting certificate ..."
-        cert = s.requestCertificate(token, req)
+        cert = s.requestCertificate(token, req, country=config.country) \
+                 if config.country else s.requestCertificate(token, req)
         if not cert:
             token_advice = None
             sys.exit("Error: invalid or expired token")

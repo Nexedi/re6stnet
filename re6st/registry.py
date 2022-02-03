@@ -68,6 +68,13 @@ class RegistryServer(object):
         self.sessions = {}
         self.sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
 
+	# Community
+        self.community_map = {}
+	if config.community:
+	    with open(config.community, 'r') as f:
+		self.community_map = {country: prefix
+	                for country, prefix in [l[:-1].split(' ') for l in f]}
+
         # Database initializing
         db_dir = os.path.dirname(self.config.db)
         db_dir and utils.makedirs(db_dir)
@@ -88,7 +95,11 @@ class RegistryServer(object):
                 "prefix TEXT PRIMARY KEY NOT NULL",
                 "email TEXT",
                 "cert TEXT")
-        self.db.execute("INSERT OR IGNORE INTO cert VALUES ('',null,null)")
+        for c in self.community_map:
+            self.db.execute(
+                "INSERT OR IGNORE INTO cert VALUES (?,null,null)", (self.community_map[c],))
+        if not self.community_map:
+            self.db.execute("INSERT OR IGNORE INTO cert VALUES ('',null,null)")
         utils.sqliteCreateTable(self.db, "crl",
                 "serial INTEGER PRIMARY KEY NOT NULL",
                 # Expiration date of revoked certificate.
@@ -279,6 +290,8 @@ class RegistryServer(object):
                 request.headers.get("X-Forwarded-For") or
                 request.headers.get("host"),
                 request.headers.get("user-agent"))
+        if 'ip' in kw:
+            kw['ip'] = request.headers.get("X-Forwarded-For") or request.headers.get("host")
         try:
             result = m(**kw)
         except HTTPError, e:
@@ -385,12 +398,13 @@ class RegistryServer(object):
             s.sendmail(self.email, email, msg.as_string())
             s.quit()
 
-    def newPrefix(self, prefix_len):
+    def newPrefix(self, prefix_len, country=''):
         max_len = 128 - len(self.network)
         assert 0 < prefix_len <= max_len
         try:
             prefix, = self.db.execute("""SELECT prefix FROM cert WHERE length(prefix) <= ? AND cert is null
-                                         ORDER BY length(prefix) DESC""", (prefix_len,)).next()
+                                         AND prefix LIKE ? ORDER BY length(prefix) DESC""",
+                                      (prefix_len, self.community_map.get(country, '') + '%')).next()
         except StopIteration:
             logging.error('No more free /%u prefix available', prefix_len)
             raise
@@ -401,10 +415,10 @@ class RegistryServer(object):
         if len(prefix) < max_len or '1' in prefix:
             return prefix
         self.db.execute("UPDATE cert SET cert = 'reserved' WHERE prefix = ?", (prefix,))
-        return self.newPrefix(prefix_len)
+        return self.newPrefix(prefix_len, country)
 
     @rpc
-    def requestCertificate(self, token, req):
+    def requestCertificate(self, token, req, country='', ip=''):
         req = crypto.load_certificate_request(crypto.FILETYPE_PEM, req)
         with self.lock:
             with self.db:
@@ -424,7 +438,9 @@ class RegistryServer(object):
                     if not prefix_len:
                         raise HTTPError(httplib.FORBIDDEN)
                     email = None
-                prefix = self.newPrefix(prefix_len)
+                country = country if country else self._geoiplookup(ip)
+                prefix = self.newPrefix(prefix_len,
+                                        country if country in self.community_map else '_')
                 self.db.execute("UPDATE cert SET email = ? WHERE prefix = ?",
                                 (email, prefix))
                 if self.prefix is None:
