@@ -110,6 +110,8 @@ def main():
         help="Reject nodes that are too old. Current is %s." % version.protocol)
     _('--authorized-origin', action='append', default=['127.0.0.1', '::1'],
         help="Authorized IPs to access origin-restricted RPC.")
+    _('--community',
+        help="File containing community configuration")
 
     _ = parser.add_argument_group('routing').add_argument
     _('--hello', type=int, default=15,
