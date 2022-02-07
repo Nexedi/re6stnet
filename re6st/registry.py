@@ -95,11 +95,58 @@ class RegistryServer(object):
                 "prefix TEXT PRIMARY KEY NOT NULL",
                 "email TEXT",
                 "cert TEXT")
-        for c in self.community_map:
-            self.db.execute(
-                "INSERT OR IGNORE INTO cert VALUES (?,null,null)", (self.community_map[c],))
-        if not self.community_map:
-            self.db.execute("INSERT OR IGNORE INTO cert VALUES ('',null,null)")
+
+        community_list = self.community_map.values()
+        # Check if community overlaps
+        prev = False
+        for c in sorted(community_list):
+            if prev and prev in c:
+                sys.exit("%s and %s overlap, refusing to run" % (prev, c))
+            prev = c
+        # Check if allocated prefix contains community
+        for c in community_list:
+            for i in range(len(c)):
+                try:
+                    prefix = self.db.execute("""SELECT prefix FROM cert WHERE cert is not null
+                                                AND prefix = ?""", (c[:i+1],)).next()
+                    if prefix != c:
+                        sys.exit("Prefix %s strictly contains community %s" % (prefix, c))
+                except StopIteration:
+                    pass
+
+	# Add complementary prefixes to preserve complete tree
+	def getComplementaryList(prefix_list):
+            # Base cases
+	    if not prefix_list:
+		return ['']
+	    if '' in prefix_list:
+		return []
+	    c = []
+            # Divide and conquer:
+            #   split prefix list into prefixes starting by '0' and those starting by '1'
+	    for i in range(2):
+		l = list(map(lambda x: x[1:], filter(lambda x: x and x[0] == str(i), prefix_list)))
+		if not l:
+		    c.append(str(i))
+		    continue
+		c += [(str(i) + x) for x in getComplementaryList(l)]
+            return c
+        community_list += getComplementaryList(community_list)
+
+        # Add new communities
+        for c in community_list:
+            # Tree is already complete, all we want is at least one prefix
+            # starting with c
+            if self.db.execute("""SELECT prefix FROM cert WHERE cert is not null
+                                        AND prefix LIKE ?""", (c + '%',)).fetchone():
+                continue
+            # Remove prefixes contained in c
+            for i in range(len(c)):
+                self.db.execute("""DELETE FROM cert WHERE cert is null
+                                   AND prefix = ?""", (c[:i+1],))
+            self.db.execute("INSERT OR IGNORE INTO cert VALUES (?,null,null)", (c,))
+        self.mergePrefixes()
+
         utils.sqliteCreateTable(self.db, "crl",
                 "serial INTEGER PRIMARY KEY NOT NULL",
                 # Expiration date of revoked certificate.
@@ -395,6 +442,22 @@ class RegistryServer(object):
                 s.login(self.config.smtp_user, self.config.smtp_pwd)
             s.sendmail(self.email, email, msg.as_string())
             s.quit()
+
+    def mergePrefixes(self):
+        max_len, = self.db.execute("""SELECT max(length(prefix)) FROM cert
+                                     WHERE cert is null""").next()
+        for i in range(max_len or 0, 0, -1):
+            prev_p = False
+            for p, in self.db.execute("""SELECT prefix FROM cert WHERE cert is null
+                                        AND length(prefix) = ? ORDER BY prefix""",
+                                        (i,)).fetchall():
+                if prev_p and (p[:-1] == prev_p[:-1]) and \
+                   (p not in self.community_map.values()) and \
+                   (prev_p not in self.community_map.values()):
+                    self.db.execute("DELETE FROM cert WHERE prefix = ?", (p,))
+                    self.db.execute("DELETE FROM cert WHERE prefix = ?", (prev_p,))
+                    self.db.execute("INSERT INTO cert VALUES (?,null,null)", (p[:-1],))
+                prev_p = p
 
     def newPrefix(self, prefix_len, country=''):
         max_len = 128 - len(self.network)
