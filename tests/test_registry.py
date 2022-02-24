@@ -446,5 +446,15 @@ class TestRegistrtServer(unittest.TestCase):
         self.assertEqual(res, expect_res)
 
 
+def main():
+    test_dir = os.path.dirname(os.path.abspath(__file__))
+    os.chdir(test_dir)
+    suite = unittest.TestSuite()
+    for method in dir(TestRegistrtServer):
+       if method.startswith("test"):
+          suite.addTest(TestRegistrtServer(method))
+    result = unittest.TextTestRunner().run(suite)
+
+
 if __name__ == "__main__":
-    unittest.main()
+    main()
