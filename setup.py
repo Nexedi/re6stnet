@@ -81,6 +81,7 @@ setup(
             're6st-conf=re6st.cli.conf:main',
             're6stnet=re6st.cli.node:main',
             're6st-registry=re6st.cli.registry:main',
+            're6st-testrunner=tests.runner:main'
         ],
     },
     package_data = {
@@ -94,10 +95,12 @@ setup(
     install_requires = ['pyOpenSSL >= 0.13', 'miniupnpc'],
     extras_require = {
         'geoip': ['geoip2'],
+        'test': ['mock', 'pathlib2']
     },
     #dependency_links = [
     #    "http://miniupnp.free.fr/files/download.php?file=miniupnpc-1.7.20120714.tar.gz#egg=miniupnpc-1.7",
     #    ],
     zip_safe = False,
     cmdclass=dict(build_py=build_py, sdist=sdist),
+    test_suite="tests",
 )
