@@ -1,4 +1,7 @@
 #!/usr/bin/python2
+""" unit test for re6st-conf
+"""
+
 import os
 import sys
 import unittest
@@ -9,7 +12,7 @@ from mock import patch
 if 're6st' not in sys.modules:
     sys.path.append(os.path.dirname(sys.path[0]))
 from re6st.cli import conf
-from tests.tools import generate_cert, serial2prefix
+from tools import generate_cert, serial2prefix
 
 
 # gloable value from conf.py
@@ -33,10 +36,9 @@ class TestConf(unittest.TestCase):
         if not os.path.exists(cls.work_dir):
             os.makedirs(cls.work_dir)
 
-        # mockked service cert and pkey
+        # mocked service cert and pkey
         with open("root.crt") as f:
             cls.cert = f.read()
-
         with open("registry.key") as f:
             cls.pkey = f.read()
 
@@ -45,6 +47,7 @@ class TestConf(unittest.TestCase):
 
         cls.serial = 0
 
+        cls.stdout = sys.stdout
         cls.null = open(os.devnull, 'w')
         sys.stdout = cls.null
 
@@ -54,7 +57,7 @@ class TestConf(unittest.TestCase):
         # remove work directory
         rmtree(cls.work_dir)
         cls.null.close()
-
+        sys.stdout = cls.stdout
 
 
     def setUp(self):
@@ -67,6 +70,7 @@ class TestConf(unittest.TestCase):
         self.client.requestCertificate.side_effect = \
             lambda _, req: generate_cert(self.cert, self.pkey, req, prefix, self.serial)
         self.serial += 1
+
 
     def tearDown(self):
         # go back to original dir
