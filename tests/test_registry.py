@@ -506,7 +506,7 @@ def main():
     for method in dir(TestRegistrtServer):
        if method.startswith("test"):
           suite.addTest(TestRegistrtServer(method))
-    unittest.TextTestRunner().run(suite)
+    result = unittest.TextTestRunner().run(suite)
 
 
 if __name__ == "__main__":

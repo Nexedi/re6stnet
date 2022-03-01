@@ -81,7 +81,7 @@ setup(
             're6st-conf=re6st.cli.conf:main',
             're6stnet=re6st.cli.node:main',
             're6st-registry=re6st.cli.registry:main',
-            're6st-testrunner=tests.test_registry:main'
+            're6st-testrunner=tests.runner:main'
         ],
     },
     package_data = {
