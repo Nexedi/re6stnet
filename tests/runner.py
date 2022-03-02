@@ -17,7 +17,7 @@ class TestResult(unittest.TextTestResult):
                             error_count = len(self.errors),
                             failure_count = len(self.failures),
                             skip_count = len(self.skipped),
-                            duration =  "%.2fs" % (self.end - self.start)
+                            duration =  round(self.end - self.start, 2)
         )
 
  
