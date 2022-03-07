@@ -342,6 +342,7 @@ class RegistryServer(object):
                 request.headers.get("user-agent"))
         if 'ip' in kw and not kw['ip']:
             kw['ip'] = request.headers.get("X-Forwarded-For") or request.headers.get("host")
+            kw['ip'] = kw['ip'].split(',')[0].strip()
         try:
             result = m(**kw)
         except HTTPError, e:
