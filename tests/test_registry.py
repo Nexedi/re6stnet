@@ -6,18 +6,17 @@ import json
 import httplib
 import base64
 import unittest
-import subprocess
 import hmac
 import hashlib
-import select
 import time
 from argparse import Namespace
 from OpenSSL import crypto
 from mock import Mock, patch
+
 if 're6st' not in sys.modules:
     sys.path.append(os.path.dirname(sys.path[0]))
 from re6st import registry
-
+from test.tools import *
 
 # TODO test for request_dump, requestToken, getNetworkConfig, getBoostrapPeer
 # getIPV4Information, versions
@@ -29,24 +28,6 @@ def load_config(filename="registry.json"):
     return Namespace(**config)
 
 
-def generate_csr():
-    """
-    generate a certificate request file
-
-    return: 
-        crypto.Pekey and crypto.X509Req  both in pem format
-    """
-    key = crypto.PKey()
-    key.generate_key(crypto.TYPE_RSA, 2048)
-    req = crypto.X509Req()
-    req.set_pubkey(key)
-    req.get_subject().CN = "test ca"
-    req.sign(key, 'sha256')
-    private_key = crypto.dump_privatekey(crypto.FILETYPE_PEM, key)
-    csr = crypto.dump_certificate_request(crypto.FILETYPE_PEM, req)
-    return private_key, csr
-
-
 def get_cert(cur, prefix):
     res = cur.execute(
         "SELECT cert FROM cert WHERE prefix=?", (prefix,)).fetchone()
@@ -54,28 +35,10 @@ def get_cert(cur, prefix):
 
 
 def insert_cert(cur, ca, prefix, not_after=None, email=None):
-    '''
-        insert a cert to db
-    '''
     key, csr = generate_csr()
-    req = crypto.load_certificate_request(crypto.FILETYPE_PEM, csr)
-    cert = crypto.X509()
-    cert.gmtime_adj_notBefore(0)
-    if not_after:
-        cert.set_notAfter(
-            time.strftime("%Y%m%d%H%M%SZ", time.gmtime(not_after)))
-    else:
-        cert.gmtime_adj_notAfter(registry.RegistryServer.cert_duration)
-
-    subject = req.get_subject()
-    subject.CN = prefix2cn(prefix)
-    cert.set_subject(req.get_subject())
-    cert.set_pubkey(req.get_pubkey())
-    cert.set_serial_number(insert_cert.serial)
-    insert_cert.serial += 1
-    cert.sign(ca.key, 'sha512')
-    cert = crypto.dump_certificate(crypto.FILETYPE_PEM, cert)
+    cert = generate_cert(ca.key, csr, prefix, insert_cert.serial, not_after)
     cur.execute("INSERT INTO cert VALUES (?,?,?)", (prefix, email, cert))
+    insert_cert.serial += 1
     return key, cert
 
 insert_cert.serial = 0
@@ -84,18 +47,6 @@ insert_cert.serial = 0
 def delete_cert(cur, prefix):
     cur.execute("DELETE FROM cert WHERE prefix = ?", (prefix,))
 
-# pkey: private key
-def decrypt(pkey, incontent):
-    with open("node.key", 'w') as f:
-        f.write(pkey)
-    args = "openssl rsautl -decrypt -inkey node.key".split()
-    p = subprocess.Popen(
-        args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    outcontent, err = p.communicate(incontent)
-    return outcontent
-
-def prefix2cn(prefix):
-    return "%u/%u" % (int(prefix, 2), len(prefix))
 
 # TODO function for get a unique prefix
 
@@ -113,7 +64,7 @@ class TestRegistrtServer(unittest.TestCase):
         # remove database
         try:
             os.unlink(cls.config.db)
-        except e:
+        except Exception:
             pass
 
 
@@ -180,8 +131,8 @@ class TestRegistrtServer(unittest.TestCase):
         self.server.deleteToken(token)
 
 
-    @patch("re6st.registry.RegistryServer.func", Mock(), create=True)
-    def test_handle_request(self):
+    @patch("re6st.registry.RegistryServer.func", create=True)
+    def test_handle_request(self, func):
         '''
             rpc with cn and have result
         '''
@@ -189,7 +140,6 @@ class TestRegistrtServer(unittest.TestCase):
         method = "func"
         protocol = 7
         params = {"cn" : prefix, "a" : 1, "b" : 2}
-        func = self.server.func
         func.getcallargs.return_value = params
         del func._private
         func.return_value = result = "this_is_a_result"
@@ -219,14 +169,13 @@ class TestRegistrtServer(unittest.TestCase):
         del self.server.sessions[prefix]
 
 
-    @patch("re6st.registry.RegistryServer.func", Mock(), create=True)
-    def test_handle_request_private(self):
+    @patch("re6st.registry.RegistryServer.func", create=True)
+    def test_handle_request_private(self, func):
         """
             case request with _private attr
         """
         method = "func"
         params = {"a" : 1, "b" : 2}
-        func = self.server.func
         func.getcallargs.return_value = params
         func.return_value = None
         request_good = Mock()
@@ -303,12 +252,11 @@ class TestRegistrtServer(unittest.TestCase):
         # TODO test too many prefix
 
 
-    @patch("re6st.registry.RegistryServer.createCertificate", Mock())
-    def test_requestCertificate(self):
+    @patch("re6st.registry.RegistryServer.createCertificate")
+    def test_requestCertificate(self, mock_func):
         token = self.server.addToken(self.email, None)
         fake_token = "aaaabbbb"
         _, csr = generate_csr()
-        mmock = self.server.createCertificate
 
         # unvalide token
         self.server.requestCertificate(fake_token, csr)
@@ -316,9 +264,9 @@ class TestRegistrtServer(unittest.TestCase):
         self.server.requestCertificate(token, csr)
 
         self.assertIsNone(self.server.isToken(token), "token not delete")
-        mmock.assert_called_once()
+        mock_func.assert_called_once()
         # check the call parameter
-        prefix, subject, pubkey = mmock.call_args.args
+        prefix, subject, pubkey = mock_func.call_args.args
         self.assertIsNotNone(subject.serialNumber)
 
 
@@ -359,10 +307,9 @@ class TestRegistrtServer(unittest.TestCase):
         self.assertIsNotNone(get_cert(self.server.db, prefix))
 
 
-    @patch("re6st.registry.RegistryServer.createCertificate", Mock())
-    def test_renewCertificate(self):
+    @patch("re6st.registry.RegistryServer.createCertificate")
+    def test_renewCertificate(self, mock_func):
         # TODO condition crl
-        mmock = self.server.createCertificate
         cur = self.server.db.cursor()
         prefix_old = "11111"
         prefix_new = "11110"
@@ -376,7 +323,7 @@ class TestRegistrtServer(unittest.TestCase):
         # no need renew
         res_new = self.server.renewCertificate(prefix_new)
 
-        prefix, subject, pubkey, not_after = mmock.call_args.args
+        prefix, subject, pubkey, not_after = mock_func.call_args.args
         self.assertEqual(prefix, prefix_old)
         self.assertEqual(not_after, None)
         self.assertEqual(res_new, cert_new)
@@ -387,10 +334,9 @@ class TestRegistrtServer(unittest.TestCase):
         cur.close()
 
 
-    @patch("re6st.registry.RegistryServer.recv", Mock())
+    @patch("re6st.registry.RegistryServer.recv")
     @patch("select.select", Mock(return_value=[1]))
-    def test_queryAddress(self):
-        recv = self.server.recv
+    def test_queryAddress(self, recv):
         prefix = "000100100010001"
         # one bad, one correct prefix
         recv.side_effect = [("0", "a msg"), (prefix, "other msg")]
@@ -400,8 +346,8 @@ class TestRegistrtServer(unittest.TestCase):
         self.assertEqual(res, "other msg")
 
 
-    @patch('re6st.registry.RegistryServer.updateNetworkConfig', Mock())
-    def test_revoke(self):
+    @patch('re6st.registry.RegistryServer.updateNetworkConfig')
+    def test_revoke(self, mock_func):
         # case: no ValueError
         serial = insert_cert.serial
         prefix = bin(serial)[2:].rjust(16, '0') # length 16 prefix
@@ -410,7 +356,7 @@ class TestRegistrtServer(unittest.TestCase):
         self.server.revoke(serial)
         # ValueError if serial correspond cert not exist
 
-        self.server.updateNetworkConfig.assert_called_once()
+        mock_func.assert_called_once()
 
 
     @patch('re6st.registry.RegistryServer.updateNetworkConfig', Mock())
@@ -467,16 +413,14 @@ class TestRegistrtServer(unittest.TestCase):
 
         res = self.server.getNodePrefix(self.email)
 
-        self.assertEqual(res, "%u/%u" % (int(prefix, 2), len(prefix)))
+        self.assertEqual(res, prefix2cn(prefix))
 
 
-    @patch("select.select", Mock())
-    @patch("re6st.registry.RegistryServer.recv", Mock())
+    @patch("select.select")
+    @patch("re6st.registry.RegistryServer.recv")
     @patch("re6st.registry.RegistryServer.sendto", Mock())
     # use case which recored form demo
-    def test_topology(self):
-        recv = self.server.recv
-        sendto = self.server.sendto
+    def test_topology(self, recv, select):
         recv_case = [
             ('0000000000000000', '2 6/16 7/16 1/16 3/16 36893488147419103232/80 4/16'),
             ('00000000000000100000000000000000000000000000000000000000000000000000000000000000', '2 0/16 7/16'),
@@ -491,23 +435,16 @@ class TestRegistrtServer(unittest.TestCase):
             side_effct.i -= side_effct.i > 0
             return [side_effct.i, wlist, None]
         side_effct.i = len(recv_case) + 1
-        select.select.side_effect = side_effct
+        select.side_effect = side_effct
 
         res = self.server.topology()
 
-        expect_res = '{"36893488147419103232/80": ["0/16", "7/16"], "": ["36893488147419103232/80", "3/16", "1/16", "0/16", "7/16"], "4/16": ["0/16"], "3/16": ["0/16", "7/16"], "0/16": ["6/16", "7/16"], "1/16": ["6/16", "0/16"], "7/16": ["6/16", "4/16"]}'
+        expect_res = '{"36893488147419103232/80": ["0/16", "7/16"], ' \
+            '"": ["36893488147419103232/80", "3/16", "1/16", "0/16", "7/16"], ' \
+            '"4/16": ["0/16"], "3/16": ["0/16", "7/16"], "0/16": ["6/16", "7/16"], '\
+            '"1/16": ["6/16", "0/16"], "7/16": ["6/16", "4/16"]}'''
         self.assertEqual(res, expect_res)
 
 
-def main():
-    test_dir = os.path.dirname(os.path.abspath(__file__))
-    os.chdir(test_dir)
-    suite = unittest.TestSuite()
-    for method in dir(TestRegistrtServer):
-       if method.startswith("test"):
-          suite.addTest(TestRegistrtServer(method))
-    result = unittest.TextTestRunner().run(suite)
-
-
 if __name__ == "__main__":
-    main()
+    unittest.main()
