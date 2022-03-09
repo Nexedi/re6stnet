@@ -73,8 +73,9 @@ class RegistryServer(object):
 	if config.community:
 	    with open(config.community, 'r') as f:
                 for line in f:
-                    if not line.startswith('#'):
-                        l = list(filter(lambda x:x, line[:-1].split(' ')))
+                    line = line.strip()
+                    if line and not line.startswith('#'):
+                        l = list(filter(lambda x:x, line.split(' ')))
                         self.community_map[l[0]] = l[1:]
 
         # Database initializing
@@ -340,7 +341,7 @@ class RegistryServer(object):
                 request.headers.get("X-Forwarded-For") or
                 request.headers.get("host"),
                 request.headers.get("user-agent"))
-        if 'ip' in kw and not kw['ip']:
+        if 'ip' in inspect.getargspec(m)[0] and not 'ip' in kw:
             kw['ip'] = request.headers.get("X-Forwarded-For") or request.headers.get("host")
             kw['ip'] = kw['ip'].split(',')[0].strip()
         try:
