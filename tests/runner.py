@@ -30,17 +30,29 @@ class runner(unittest.TextTestRunner):
         return TestResult(self.stream, self.descriptions, self.verbosity)
 
 
+def load_test():
+    test_module = [(name,mod) for name, mod in globals().items() if name.split('_',1)[0] == 'test']
+    test_case = {}
+    for name, mod in test_module:
+        if hasattr(mod, "__all__"):
+            test_module += \
+                [( name+ "." + sub_mod, getattr(mod, sub_mod)) for sub_mod in mod.__all__ ]
+        else:
+            test_case[name] = unittest.TestLoader().loadTestsFromModule(mod)
+    return test_case
+
+
 def main():
 
     test_dir = os.path.dirname(os.path.abspath(__file__))
     os.chdir(test_dir)
-    test_case = {name: mod for name, mod in globals().items() if name.split('_',1)[0] == 'test'}
+    test_case = load_test()
     result = {}
-    for case, mod in test_case.items(): 
-        suite = unittest.TestLoader().loadTestsFromModule(mod)
+    for case, suite in test_case.items(): 
         err = StringIO()
         result[case] = runner(stream=err, verbosity=3).run(suite).report
         result[case]['stderr'] = err.getvalue()
+        sys.stderr.write("-------%s start--------\n" % case)
         sys.stderr.write(err.getvalue())
         err.close()
 
