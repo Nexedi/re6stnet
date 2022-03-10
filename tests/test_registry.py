@@ -16,7 +16,7 @@ from mock import Mock, patch
 if 're6st' not in sys.modules:
     sys.path.append(os.path.dirname(sys.path[0]))
 from re6st import registry
-from test.tools import *
+from tools import *
 
 # TODO test for request_dump, requestToken, getNetworkConfig, getBoostrapPeer
 # getIPV4Information, versions
