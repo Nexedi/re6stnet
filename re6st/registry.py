@@ -496,7 +496,7 @@ class RegistryServer(object):
         return self.newPrefix(prefix_len, community)
 
     @rpc
-    def requestCertificate(self, token, req, country='', continent='', ip=''):
+    def requestCertificate(self, token, req, location=None):
         req = crypto.load_certificate_request(crypto.FILETYPE_PEM, req)
         with self.lock:
             with self.db:
@@ -516,10 +516,7 @@ class RegistryServer(object):
                     if not prefix_len:
                         raise HTTPError(httplib.FORBIDDEN)
                     email = None
-                if country or continent:
-                    country, continent = country or '*', continent or '*'
-                else:
-                    country, continent = self._geoiplookup(ip)
+                country, continent = location.split(',') if location else self._geoiplookup(ip)
                 continent = '@' + continent if continent != '*' else continent
                 community = self.getCommunity(country, continent)
                 prefix = self.newPrefix(prefix_len, community)
