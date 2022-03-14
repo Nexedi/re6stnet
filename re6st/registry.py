@@ -77,6 +77,8 @@ class RegistryServer(object):
                     if line and not line.startswith('#'):
                         l = list(filter(lambda x:x, line.split(' ')))
                         self.community_map[l[0]] = l[1:]
+        else:
+            self.community_map = {'': '*'}
 
         # Database initializing
         db_dir = os.path.dirname(self.config.db)
@@ -117,38 +119,10 @@ class RegistryServer(object):
                 except StopIteration:
                     pass
 
-	# Add complementary prefixes to preserve complete tree
-	def getComplementaryList(prefix_list):
-            # Base cases
-	    if not prefix_list:
-		return ['']
-	    if '' in prefix_list:
-		return []
-	    c = []
-            # Divide and conquer:
-            #   split prefix list into prefixes starting by '0' and those starting by '1'
-	    for i in range(2):
-		l = list(map(lambda x: x[1:], filter(lambda x: x and x[0] == str(i), prefix_list)))
-		if not l:
-		    c.append(str(i))
-		    continue
-		c += [(str(i) + x) for x in getComplementaryList(l)]
-            return c
-        community_list += getComplementaryList(community_list)
-
-        # Add new communities
-        for c in community_list:
-            # Tree is already complete, all we want is at least one prefix
-            # starting with c
-            if self.db.execute("""SELECT prefix FROM cert WHERE cert is not null
-                                        AND prefix LIKE ?""", (c + '%',)).fetchone():
-                continue
-            # Remove prefixes contained in c
-            for i in range(len(c)):
-                self.db.execute("""DELETE FROM cert WHERE cert is null
-                                   AND prefix = ?""", (c[:i+1],))
-            self.db.execute("INSERT OR IGNORE INTO cert VALUES (?,null,null)", (c,))
-        self.mergePrefixes()
+        if self.db.execute("SELECT prefix FROM cert").fetchone() == None:
+            self.db.execute("INSERT OR IGNORE INTO cert VALUES ('',null,null)")
+        else:
+            self.mergePrefixes()
 
         utils.sqliteCreateTable(self.db, "crl",
                 "serial INTEGER PRIMARY KEY NOT NULL",
@@ -479,16 +453,25 @@ class RegistryServer(object):
     def newPrefix(self, prefix_len, community):
         max_len = 128 - len(self.network)
         assert 0 < prefix_len <= max_len
-        try:
-            prefix, = self.db.execute("""SELECT prefix FROM cert WHERE length(prefix) <= ? AND cert is null
-                                         AND prefix LIKE ? ORDER BY length(prefix) DESC""",
-                                      (prefix_len, community + '%')).next()
-        except StopIteration:
+        # Find the longest free prefix which is a prefix of community
+        for i in range(len(community), -1, -1):
+            try:
+                prefix, = self.db.execute("""SELECT prefix FROM cert WHERE length(prefix) <= ? AND cert is null
+                                             AND prefix LIKE ? ORDER BY length(prefix) DESC""",
+                                             (prefix_len, community[:i] + '%')).next()
+                break
+            except StopIteration:
+                continue
+        else:
             logging.error('No more free /%u prefix available', prefix_len)
             raise
+        # Split the tree until prefix has wanted length
         while len(prefix) < prefix_len:
-            self.db.execute("UPDATE cert SET prefix = ? WHERE prefix = ?", (prefix + '1', prefix))
-            prefix += '0'
+            # If prefix is in the community, split to the left ('0') to get the smallest prefix
+            # Else, keep matching the community
+            b = community[len(prefix)] if len(community) > len(prefix) else '0'
+            self.db.execute("UPDATE cert SET prefix = ? WHERE prefix = ?", (prefix + str(1-int(b)), prefix))
+            prefix += b
             self.db.execute("INSERT INTO cert VALUES (?,null,null)", (prefix,))
         if len(prefix) < max_len or '1' in prefix:
             return prefix
