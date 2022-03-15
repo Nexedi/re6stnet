@@ -25,8 +25,11 @@ class testBaseTunnelManager(unittest.TestCase):
 
     def setUp(self):
         patcher = patch("re6st.cache.Cache")
+        pacher_sock = patch("socket.socket")
         self.addCleanup(patcher.stop)
+        self.addCleanup(pacher_sock.stop)
         self.cache = patcher.start()()
+        self.sock = pacher_sock.start()
         self.cache.same_country = False
 
         address = [(2, [('10.0.0.2', '1194', 'udp'), ('10.0.0.2', '1194', 'tcp')])]

@@ -51,9 +51,11 @@ def main():
     for case, suite in test_case.items(): 
         err = StringIO()
         result[case] = runner(stream=err, verbosity=3).run(suite).report
-        result[case]['stderr'] = err.getvalue()
-        sys.stderr.write("-------%s start--------\n" % case)
+        sys.stderr.write("\n-------%s start--------\n" % case)
         sys.stderr.write(err.getvalue())
+        sys.stderr.write(json.dumps(result[case]) + '\n')
+        sys.stderr.write("\n-------%s end--------\n" % case)
+        result[case]['stderr'] = err.getvalue() 
         err.close()
 
     print json.dumps(result)
