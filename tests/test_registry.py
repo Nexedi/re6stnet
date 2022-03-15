@@ -36,7 +36,7 @@ def get_cert(cur, prefix):
 
 def insert_cert(cur, ca, prefix, not_after=None, email=None):
     key, csr = generate_csr()
-    cert = generate_cert(ca.key, csr, prefix, insert_cert.serial, not_after)
+    cert = generate_cert(ca.ca, ca.key, csr, prefix, insert_cert.serial, not_after)
     cur.execute("INSERT INTO cert VALUES (?,?,?)", (prefix, email, cert))
     insert_cert.serial += 1
     return key, cert

@@ -68,7 +68,7 @@ class TestConf(unittest.TestCase):
         self.client.getCa.return_value = self.cert
         prefix = serial2prefix(self.serial)
         self.client.requestCertificate.side_effect = \
-            lambda _, req: generate_cert(self.pkey, req, prefix, self.serial)
+            lambda _, req: generate_cert(self.cert, self.pkey, req, prefix, self.serial)
         self.serial += 1
 
 
