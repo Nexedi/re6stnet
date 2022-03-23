@@ -91,7 +91,7 @@ setup(
     },
     # BBB: use MANIFEST.in only so that egg_info works with very old setuptools
     include_package_data = True,
-    install_requires = ['pyOpenSSL >= 0.13', 'miniupnpc'],
+    install_requires = ['pyOpenSSL >= 0.13', 'miniupnpc', 'PyYAML'],
     extras_require = {
         'geoip': ['geoip2'],
     },

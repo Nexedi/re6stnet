@@ -10,6 +10,9 @@ socket.SOCK_CLOEXEC = 0x80000
 
 HMAC_LEN = len(hashlib.sha1('').digest())
 
+RTM_NEWLINK = 16
+IFLA_IFNAME = 3
+
 class ReexecException(Exception):
     pass
 
@@ -291,3 +294,38 @@ def sqliteCreateTable(db, name, *columns):
             "table %r already exists with unexpected schema" % name)
     db.execute(sql)
     return True
+
+def isInterfaceUp(ifname):
+    with open(os.path.join('/sys/class/net', ifname, 'operstate')) as state_file:
+        return 'up' in state_file.read()
+
+def addPimInterfaceWhenReady(socket, not_ready_interface_list):
+    if not not_ready_interface_list:
+        return
+
+    data = socket.recv(65535)
+    msg_len, msg_type, flags, seq, pid = struct.unpack("=LHHLL", data[:16])
+    if msg_type != RTM_NEWLINK:
+        return
+
+    data = data[16:]
+    family, _, if_type, index, flags, change = struct.unpack("=BBHiII", data[:16])
+    remaining = msg_len - 32
+    data = data[16:]
+
+    while remaining:
+        rta_len, rta_type = struct.unpack("=HH", data[:4])
+        if rta_len < 4:
+            break
+        rta_data = data[4:rta_len]
+
+        increment = (rta_len + 4 - 1) & ~(4 - 1)
+        data = data[increment:]
+        remaining -= increment
+
+        if rta_type == IFLA_IFNAME:
+            rta_data = rta_dta.replace('\00', '')
+            if rta_data in not_ready_interface_list:
+                subprocess.call(['pim-dm', '-6', '-aisr', rta_data])
+                subprocess.call(['pim-dm', '-aimld', rta_data])
+                not_ready_interface_list.remove(rta_data)

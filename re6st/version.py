@@ -12,6 +12,7 @@ def _git_output(*args):
         raise _S.CalledProcessError(p.returncode, "git", err)
     return out.strip()
 
+'''
 _git_call("update-index", "-q", "--refresh")
 dirty = _git_call("diff-index", "--quiet", "HEAD", "--")
 if dirty not in (0, 1):
@@ -26,7 +27,8 @@ version = "0-%s.g%s" % (revision, short)
 
 if dirty:
     version += ".dirty"
-
+'''
+version = '0-574.g374b508'
 # Because the software could be forked or have local changes/commits, above
 # properties can't be used to decide whether a peer runs an appropriate version:
 # they are intended to the network admin.
