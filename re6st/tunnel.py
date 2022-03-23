@@ -199,7 +199,8 @@ class BaseTunnelManager(object):
     _forward = None
     _next_rina = True
 
-    def __init__(self, control_socket, cache, cert, conf_country, address=()):
+    def __init__(self, control_socket, cache, cert, conf_country, address=(),
+                 multicast=False):
         self.cert = cert
         self._network = cert.network
         self._prefix = cert.prefix
@@ -209,6 +210,10 @@ class BaseTunnelManager(object):
         self._served = defaultdict(dict)
         self._version = cache.version
         self._conf_country = conf_country
+        self._multicast = multicast
+
+        if multicast:
+            from . import multicast
 
         address_dict = defaultdict(list)
         for family, address in address:
@@ -688,7 +693,8 @@ class TunnelManager(BaseTunnelManager):
 
     def __init__(self, control_socket, cache, cert, openvpn_args,
                  timeout, client_count, iface_list, conf_country, address,
-                 ip_changed, remote_gateway, disable_proto, neighbour_list=()):
+                 ip_changed, remote_gateway, disable_proto, neighbour_list=(),
+                 multicast=False):
         super(TunnelManager, self).__init__(control_socket,
                                             cache, cert, conf_country, address)
         self.ovpn_args = openvpn_args
@@ -865,8 +871,11 @@ class TunnelManager(BaseTunnelManager):
                      int(prefix, 2), len(prefix))
         self._abortTunnelKiller(prefix)
         connection = self._connection_dict.pop(prefix)
-        self.freeInterface(connection.iface)
+        iface = connection.iface
+        self.freeInterface(iface)
         connection.close()
+        if self._multicast:
+            multicast.removeInterface(iface)
         if self._gateway_manager is not None:
             for ip in connection:
                 self._gateway_manager.remove(ip)
@@ -914,6 +923,8 @@ class TunnelManager(BaseTunnelManager):
             for ip in c:
                 self._gateway_manager.add(ip, True)
         c.open()
+        if self._multicast:
+            multicast.addInterface(iface)
         return True
 
     def _makeNewTunnels(self, route_dumped):
