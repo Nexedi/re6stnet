@@ -1,4 +1,4 @@
-import logging, errno, os
+import logging, errno, os, subprocess, yaml
 from . import utils
 
 here = os.path.realpath(os.path.dirname(__file__))
@@ -116,3 +116,23 @@ def router(ip, ip4, src, hello_interval, log_path, state_path, pidfile,
             raise
     logging.info('%r', cmd)
     return utils.Popen(cmd, **kw)
+
+def pimdm(iface_list, run_path):
+  conf = {
+    'PIM-DM': {
+      'Interfaces': {},
+    },
+    'MLD': {
+      'Interfaces': {},
+    },
+  }
+  for iface in iface_list:
+    conf['PIM-DM']['Interfaces'][iface] = {'ipv6': {'enabled': True}}
+    conf['MLD']['Interfaces'][iface] = {'enabled': True}
+
+  conf_file_path = os.path.join(run_path, 'pim-dm.conf')
+  with open(conf_file_path, 'w') as conf_file:
+    yaml.dump(conf, conf_file)
+
+  #TO CHANGE to a Popen call once it is possible to run pim-dm in foreground
+  subprocess.call(['pim-dm', '-config', conf_file_path])
