@@ -50,6 +50,8 @@ def getConfig():
     _('-I', '--main-interface', metavar='IFACE', default='lo',
         help="Set re6stnet IP on given interface. Any interface not used for"
              " tunnelling can be chosen.")
+    _('-m', '--multicast', action='store_true',
+        help="Enable multicast routing.")
     _('--up', metavar='CMD',
         help="Shell command to run after successful initialization.")
     _('--daemon', action='append', metavar='CMD',
@@ -178,6 +180,7 @@ def main():
     address = []
     server_tunnels = {}
     forwarder = None
+    physical_iface_list = config.iface_list[:]
     if config.client:
         add_tunnels(('re6stnet',))
     elif config.max_clients:
@@ -298,12 +301,16 @@ def main():
             tunnel_manager = tunnel.TunnelManager(control_socket,
                 cache, cert, config.openvpn_args, timeout, config.client_count,
                 config.iface_list, config.country, address, ip_changed,
-                remote_gateway, config.disable_proto, config.neighbour)
+                remote_gateway, config.disable_proto, config.neighbour,
+                config.multicast)
             add_tunnels(tunnel_manager.new_iface_list)
         else:
             tunnel_manager = tunnel.BaseTunnelManager(control_socket,
-                cache, cert, config.country, address)
+                cache, cert, config.country, address, config.multicast)
         cleanup.append(tunnel_manager.sock.close)
+
+        if config.multicast:
+            cleanup.append(plib.pimdm(physical_iface_list, config.run).stop)
 
         try:
             exit.acquire()
