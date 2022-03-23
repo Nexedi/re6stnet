@@ -50,6 +50,8 @@ def getConfig():
     _('-I', '--main-interface', metavar='IFACE', default='lo',
         help="Set re6stnet IP on given interface. Any interface not used for"
              " tunnelling can be chosen.")
+    _('-m', '--multicast', action='store_true',
+        help="Enable multicast routing.")
     _('--up', metavar='CMD',
         help="Shell command to run after successful initialization.")
     _('--daemon', action='append', metavar='CMD',
@@ -363,6 +365,12 @@ def main():
                         '--ping-exit', str(timeout), *config.openvpn_args).stop)
                     R[r] = partial(tunnel_manager.handleServerEvent, r)
                     x.close()
+
+            if config.multicast:
+                from re6st.multicast import PimDm
+                pimdm = PimDm()
+                cleanup.append(pimdm.run(config.iface_list, config.run).stop)
+                R[pimdm.s_netlink] = pimdm.addInterfaceWhenReady
 
             ip('addr', my_ip + '/%s' % len(subnet),
                'dev', config.main_interface)
