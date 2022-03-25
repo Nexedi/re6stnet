@@ -106,7 +106,7 @@ class RegistryServer(object):
         prev = False
         for c in sorted(community_list):
             if prev and prev in c:
-                sys.exit("%s and %s overlap, refusing to run" % (prev, c))
+                sys.exit("Community %s and %s overlap, refusing to run" % (prev, c))
             prev = c
         # Check if allocated prefix contains community
         for c in community_list:
@@ -115,7 +115,7 @@ class RegistryServer(object):
                     prefix, = self.db.execute("""SELECT prefix FROM cert WHERE cert is not null
                                                 AND prefix = ?""", (c[:i+1],)).next()
                     if prefix != c:
-                        sys.exit("Prefix %s strictly contains community %s" % (prefix, c))
+                        sys.exit("Prefix %s strictly contains community %s, refusing to run" % (prefix, c))
                 except StopIteration:
                     pass
 
@@ -315,7 +315,7 @@ class RegistryServer(object):
                 request.headers.get("X-Forwarded-For") or
                 request.headers.get("host"),
                 request.headers.get("user-agent"))
-        if 'ip' in inspect.getargspec(m)[0] and not 'ip' in kw:
+        if 'ip' in kw and not kw['ip']:
             kw['ip'] = request.headers.get("X-Forwarded-For") or request.headers.get("host")
             kw['ip'] = kw['ip'].split(',')[0].strip()
         try:
@@ -427,8 +427,10 @@ class RegistryServer(object):
     def getCommunity(self, country, continent):
         default = ''
         for prefix in self.community_map:
-            if country in self.community_map[prefix] or \
-               continent in self.community_map[prefix]:
+            if country in self.community_map[prefix]:
+                return prefix
+        for prefix in self.community_map:
+            if continent in self.community_map[prefix]:
                 return prefix
             if '*' in self.community_map[prefix]:
                 default = prefix
@@ -479,7 +481,7 @@ class RegistryServer(object):
         return self.newPrefix(prefix_len, community)
 
     @rpc
-    def requestCertificate(self, token, req, location=None):
+    def requestCertificate(self, token, req, location='', ip=''):
         req = crypto.load_certificate_request(crypto.FILETYPE_PEM, req)
         with self.lock:
             with self.db:
