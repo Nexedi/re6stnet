@@ -88,7 +88,8 @@ class RegistryServer(object):
                 "prefix TEXT PRIMARY KEY NOT NULL",
                 "email TEXT",
                 "cert TEXT")
-        self.db.execute("INSERT OR IGNORE INTO cert VALUES ('',null,null)")
+        if not self.db.execute("SELECT 1 FROM cert LIMIT 1").fetchone():
+            self.db.execute("INSERT INTO cert VALUES ('',null,null)")
         utils.sqliteCreateTable(self.db, "crl",
                 "serial INTEGER PRIMARY KEY NOT NULL",
                 # Expiration date of revoked certificate.
@@ -388,20 +389,25 @@ class RegistryServer(object):
     def newPrefix(self, prefix_len):
         max_len = 128 - len(self.network)
         assert 0 < prefix_len <= max_len
-        try:
-            prefix, = self.db.execute("""SELECT prefix FROM cert WHERE length(prefix) <= ? AND cert is null
-                                         ORDER BY length(prefix) DESC""", (prefix_len,)).next()
-        except StopIteration:
-            logging.error('No more free /%u prefix available', prefix_len)
-            raise
-        while len(prefix) < prefix_len:
-            self.db.execute("UPDATE cert SET prefix = ? WHERE prefix = ?", (prefix + '1', prefix))
-            prefix += '0'
-            self.db.execute("INSERT INTO cert VALUES (?,null,null)", (prefix,))
-        if len(prefix) < max_len or '1' in prefix:
-            return prefix
-        self.db.execute("UPDATE cert SET cert = 'reserved' WHERE prefix = ?", (prefix,))
-        return self.newPrefix(prefix_len)
+        q = self.db.execute
+        while True:
+            try:
+                prefix, = q(
+                    "SELECT prefix FROM cert"
+                    " WHERE length(prefix) <= ? AND cert is null"
+                    " ORDER BY length(prefix) DESC",
+                    (prefix_len,)).next()
+            except StopIteration:
+                logging.error('No more free /%u prefix available', prefix_len)
+                raise
+            while len(prefix) < prefix_len:
+                q("UPDATE cert SET prefix = ? WHERE prefix = ?",
+                  (prefix + '1', prefix))
+                prefix += '0'
+                q("INSERT INTO cert VALUES (?,null,null)", (prefix,))
+            if len(prefix) < max_len or '1' in prefix:
+                return prefix
+            q("UPDATE cert SET cert = 'reserved' WHERE prefix = ?", (prefix,))
 
     @rpc
     def requestCertificate(self, token, req):
