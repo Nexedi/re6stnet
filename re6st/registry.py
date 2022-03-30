@@ -247,8 +247,7 @@ class RegistryServer(object):
                       (prefix,))
                 elif not_after is None or x < not_after:
                     not_after = x
-            # TODO: reduce 'cert' table by merging free slots
-            #       (IOW, do the contrary of newPrefix)
+            self.mergePrefixes()
             self.timeout = not_after and not_after + GRACE_PERIOD
 
     def handle_request(self, request, method, kw):
@@ -385,6 +384,28 @@ class RegistryServer(object):
                 s.login(self.config.smtp_user, self.config.smtp_pwd)
             s.sendmail(self.email, email, msg.as_string())
             s.quit()
+
+    def mergePrefixes(self):
+        q = self.db.execute
+        prev_prefix = None
+        max_len = 128,
+        while True:
+            max_len = q("SELECT max(length(prefix)) FROM cert"
+                        " WHERE cert is null AND length(prefix) < ?",
+                        max_len).next()
+            if not max_len[0]:
+                break
+            for prefix, in q("SELECT prefix FROM cert"
+                             " WHERE cert is null AND length(prefix) = ?"
+                             " ORDER BY prefix",
+                             max_len):
+                if prev_prefix and prefix[:-1] == prev_prefix[:-1]:
+                    q("UPDATE cert SET prefix = ? WHERE prefix = ?",
+                      (prefix[:-1], prev_prefix))
+                    q("DELETE FROM cert WHERE prefix = ?", (prefix,))
+                    prev_prefix = None
+                else:
+                    prev_prefix = prefix
 
     def newPrefix(self, prefix_len):
         max_len = 128 - len(self.network)
