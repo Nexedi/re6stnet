@@ -277,7 +277,7 @@ def new_network(registry, reg_addr, serial, ca):
 
 with new_network(registry, REGISTRY, REGISTRY_SERIAL, 'ca.crt') as new_node:
     new_node(machine1, 'm1', '-I%s' % m1_if_0.name)
-    new_node(machine2, 'm2', '--remote-gateway 10.1.1.1', prefix_len=80)
+    new_node(machine2, 'm2', '--remote-gateway 10.1.1.1', prefix_len=77)
     new_node(machine3, 'm3', '-i%s' % m3_if_0.name)
     new_node(machine4, 'm4', '-i%s' % m4_if_0.name)
     new_node(machine5, 'm5', '-i%s' % m5_if_0.name)
