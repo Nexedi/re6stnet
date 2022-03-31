@@ -8,7 +8,10 @@ def newHmacSecret():
     return utils.newHmacSecret(int(time.time() * 1000000))
 
 def networkFromCa(ca):
-    return bin(ca.get_serial_number())[3:]
+    serial = ca.get_serial_number()
+    first_byte = int(hex(serial)[2], 16)
+    prefix = bin(serial)[2 + first_byte.bit_length():]
+    return prefix[:len(prefix) - (4 - (first_byte - 1) / 2) % 4]
 
 def subnetFromCert(cert):
     return cert.get_subject().CN

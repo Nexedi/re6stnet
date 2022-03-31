@@ -7,8 +7,11 @@ if 're6st' not in sys.modules:
     sys.path[0] = os.path.dirname(os.path.dirname(sys.path[0]))
 from re6st import registry, utils, version
 
-# To generate server ca and key with serial for 2001:db8:42::/48
-#  openssl req -nodes -new -x509 -key ca.key -set_serial 0x120010db80042 -days 3650 -out ca.crt
+# Registry certifiate serial number has the following format:
+# - First half byte is: '0', prefix length % 4, '1'
+# - The rest of the bytes is the network prefix
+# Ex: To generate server ca and key with serial for 2001:db8:42::/47
+#  openssl req -nodes -new -x509 -key ca.key -set_serial 0x720010db80042 -days 3650 -out ca.crt
 
 IPV6_V6ONLY = 26
 SOL_IPV6 = 41
