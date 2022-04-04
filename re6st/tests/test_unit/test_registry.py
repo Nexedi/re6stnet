@@ -403,6 +403,11 @@ class TestRegistrtServer(unittest.TestCase):
 
         self.assertEqual(get_hmac(), [None, key_2, key_1])
 
+        #setp 5
+        self.server.updateHMAC()
+
+        self.assertEqual(get_hmac(), [key_2, None, None])
+
 
     def test_getNodePrefix(self):
         # prefix in short format

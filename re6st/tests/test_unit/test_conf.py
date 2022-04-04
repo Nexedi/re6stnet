@@ -22,8 +22,7 @@ key_path = 'cert.key'
 # TODO test for is needed
 
 class TestConf(unittest.TestCase):
-    """ Unit test case for re6st-conf
-    """
+    """ Unit test case for re6st-conf"""
 
     @classmethod
     def setUpClass(cls):
@@ -114,7 +113,7 @@ class TestConf(unittest.TestCase):
 
 
     def test_ca_only(self):
-        """ only create ca file and exit
+        """ only create ca.crt file and exit
         """
         command = self.command + " --ca-only"
         sys.argv = command.split()
