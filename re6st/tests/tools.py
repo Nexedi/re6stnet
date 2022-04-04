@@ -68,8 +68,9 @@ def create_cert_file(pkey_file, cert_file, ca, ca_key, prefix, serial):
 
 
 
-def create_ca_file(pkey_file, cert_file):
-
+def create_ca_file(pkey_file, cert_file, serial=0x120010db80042):
+    """create key and ca file with specify name
+    return key, cert in pem format """
     key = crypto.PKey()
     key.generate_key(crypto.TYPE_RSA, 2048)
     cert = crypto.X509()
@@ -82,7 +83,7 @@ def create_ca_file(pkey_file, cert_file):
     subject.O = "nexedi"
     subject.CN = "TEST-CA"
     cert.set_issuer(cert.get_subject())
-    cert.set_serial_number(10000)
+    cert.set_serial_number(serial)
     cert.set_pubkey(key)
     cert.sign(key, "sha512")
 
