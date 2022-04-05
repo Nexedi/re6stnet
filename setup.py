@@ -95,6 +95,7 @@ setup(
     install_requires = ['pyOpenSSL >= 0.13', 'miniupnpc'],
     extras_require = {
         'geoip': ['geoip2'],
+        'test': ['mock', 'pathlib2', 'nemu', 'python-unshare', 'passfd']
     },
     #dependency_links = [
     #    "http://miniupnp.free.fr/files/download.php?file=miniupnpc-1.7.20120714.tar.gz#egg=miniupnpc-1.7",
