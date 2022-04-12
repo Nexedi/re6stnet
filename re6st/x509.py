@@ -44,37 +44,40 @@ def fingerprint(cert, alg='sha1'):
 
 def maybe_renew(path, cert, info, renew, force=False):
     from .registry import RENEW_PERIOD
+    retry_period = 86400
+    not_after = 0 if force else notAfter(cert)
     while True:
-        if force:
-            force = False
-        else:
-            next_renew = notAfter(cert) - RENEW_PERIOD
+        while True:
+            next_renew = not_after - RENEW_PERIOD
             if time.time() < next_renew:
                 return cert, next_renew
-        try:
-            pem = renew()
-            if not pem or pem == crypto.dump_certificate(
-                  crypto.FILETYPE_PEM, cert):
-                exc_info = 0
+            try:
+                pem = renew()
+                if not pem or pem == crypto.dump_certificate(
+                      crypto.FILETYPE_PEM, cert):
+                    exc_info = 0
+                    break
+                cert = crypto.load_certificate(crypto.FILETYPE_PEM, pem)
+            except Exception:
+                exc_info = 1
                 break
-            cert = crypto.load_certificate(crypto.FILETYPE_PEM, pem)
-        except Exception:
-            exc_info = 1
-            break
-        new_path = path + '.new'
-        with open(new_path, 'w') as f:
-            f.write(pem)
-        try:
-            s = os.stat(path)
-            os.chown(new_path, s.st_uid, s.st_gid)
-        except OSError:
-            pass
-        os.rename(new_path, path)
-        logging.info("%s renewed until %s UTC",
-            info, time.asctime(time.gmtime(notAfter(cert))))
-    logging.error("%s not renewed. Will retry tomorrow.",
-                  info, exc_info=exc_info)
-    return cert, time.time() + 86400
+            new_path = path + '.new'
+            with open(new_path, 'w') as f:
+                f.write(pem)
+            try:
+                s = os.stat(path)
+                os.chown(new_path, s.st_uid, s.st_gid)
+            except OSError:
+                pass
+            os.rename(new_path, path)
+            not_after = notAfter(cert)
+            logging.info("%s renewed until %s UTC",
+                info, time.asctime(time.gmtime(not_after)))
+        logging.error("%s not renewed. Will retry tomorrow.",
+                      info, exc_info=exc_info)
+        if time.time() < not_after:
+            return cert, time.time() + retry_period
+        time.sleep(retry_period)
 
 
 class VerifyError(Exception):
