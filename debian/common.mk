@@ -16,7 +16,7 @@ debian/changelog:
 endif
 
 override_dh_install:
-	make DESTDIR=$(TMP) PREFIX=/usr PYTHON=/usr/bin/python install
+	make DESTDIR=$(TMP) PREFIX=/usr install
 
 # BBB: compat < 10 ; https://bugs.debian.org/879727
 override_dh_systemd_start:
