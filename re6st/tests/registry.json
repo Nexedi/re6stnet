@@ -26,5 +26,6 @@
     "smtp_user": null,
     "same_country": null,
     "tunnel_refresh": 300,
-    "hello": 15
+    "hello": 15,
+    "community": null
 }
