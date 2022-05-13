@@ -20,6 +20,8 @@ import re
 from new import function
 from nemu.iproute import backticks, get_if_data, route, \
     get_addr_data, get_all_route_data, interface
+from nemu.interface import Switch, Interface
+import os
 
 def _get_all_route_data():
     ipdata = backticks([IP_PATH, "-o", "route", "list"]) # "table", "all"
@@ -69,3 +71,18 @@ def _get_addr_data():
     byidx, bynam = get_addr_data.orig()
     return byidx, {name.split('@',1)[0]: a for name, a in bynam.iteritems()}
 get_addr_data.func_code = _get_addr_data.func_code
+
+@staticmethod
+def _gen_if_name():
+    n = Interface._gen_next_id()
+    # Max 15 chars
+    return "NETNSif-" + ("%.4x%.3x" % (os.getpid(), n))[-7:]
+Interface._gen_if_name = _gen_if_name
+
+@staticmethod
+def _gen_br_name():
+    n = Switch._gen_next_id()
+    # Max 15 chars
+    return "NETNSbr-" + ("%.4x%.3x" % (os.getpid(), n))[-7:]
+Switch._gen_br_name = _gen_br_name
+
