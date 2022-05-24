@@ -122,6 +122,26 @@ class TestNet(unittest.TestCase):
 
         self.assertTrue(wait_stable(nodes, 400), "network can't recover")
 
+    def test_reboot_one_machine_router(self):
+        """create a network router, wait the net stable, reboot on machine,
+        then test if network recover,
+        """
+        nm = network_build.net_route()
+        nodes, _ = deploy_re6st(nm)
+
+        wait_stable(nodes, 40)
+
+        # stop on machine randomly
+        index = int(random.random() * 2) + 1
+        machine = nodes[index]
+        machine.stop()
+        time.sleep(5)
+        machine.run("-i" + machine.node.iface.name)
+        logging.info("restart %s", machine.name)
+
+        self.assertTrue(wait_stable(nodes, 100), "network can't recover")
+
+
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG, filename='test.log', filemode='w',
