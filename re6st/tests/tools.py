@@ -10,7 +10,7 @@ from re6st import registry
 def generate_csr():
     """generate a certificate request
 
-    return: 
+    return:
         crypto.Pekey and crypto.X509Req  both in pem format
     """
     key = crypto.PKey()
@@ -27,7 +27,7 @@ def generate_csr():
 def generate_cert(ca, ca_key, csr, prefix, serial, not_after=None):
     """generate a certificate
 
-    return 
+    return
         crypto.X509Cert in pem format
     """
     if type(ca) is str:
@@ -51,10 +51,7 @@ def generate_cert(ca, ca_key, csr, prefix, serial, not_after=None):
     cert.set_pubkey(req.get_pubkey())
     cert.set_serial_number(serial)
     cert.sign(ca_key, 'sha512')
-    cert = crypto.dump_certificate(crypto.FILETYPE_PEM, cert)
-
-    return cert
-
+    return crypto.dump_certificate(crypto.FILETYPE_PEM, cert)
 
 def create_cert_file(pkey_file, cert_file, ca, ca_key, prefix, serial):
     pkey, csr = generate_csr()
@@ -91,7 +88,7 @@ def create_ca_file(pkey_file, cert_file, serial=0x120010db80042):
         pkey_file.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, key))
     with open(cert_file, 'w') as cert_file:
         cert_file.write(crypto.dump_certificate(crypto.FILETYPE_PEM, cert))
-    
+
     return key, cert
 
 
@@ -99,7 +96,7 @@ def prefix2cn(prefix):
     return "%u/%u" % (int(prefix, 2), len(prefix))
 
 def serial2prefix(serial):
-    return bin(serial)[2:].rjust(16, '0') 
+    return bin(serial)[2:].rjust(16, '0')
 
 # pkey: private key
 def decrypt(pkey, incontent):
