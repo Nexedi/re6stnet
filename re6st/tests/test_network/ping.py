@@ -29,9 +29,7 @@ class MultiPing(MultiPing):
             except socket.timeout:
                 pass
             except socket.error as e:
-                if e.errno == errno.EWOULDBLOCK:
-                    pass
-                else:
+                if e.errno != errno.EWOULDBLOCK:
                     raise
         return pkts
 
@@ -39,21 +37,18 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-a', nargs = '+', help = 'the list of addresses to ping')
     parser.add_argument('--retry', action='store_true', help='retry ping unitl success')
-    
+
     args = parser.parse_args()
     addrs = args.a
     retry = args.retry
+    no_responses = ""
 
-    while True:
+    while retry and no_responses:
         mp = MultiPing(addrs)
         mp.send()
         _, no_responses = mp.receive(PING_TIMEOUT)
-        
-        if retry and no_responses:
-            continue
-        else:
-            sys.stdout.write(" ".join(no_responses))
-            return
+
+    sys.stdout.write(" ".join(no_responses))
 
 
 if __name__ == '__main__':
