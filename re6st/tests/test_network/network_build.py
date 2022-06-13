@@ -6,7 +6,8 @@ import logging
 from subprocess import PIPE
 from pathlib2 import Path
 
-fix_file =  Path(__file__).parent.resolve() / "fixnemu.py"
+DEMO_PATH = Path(__file__).resolve().parent.parent.parent.parent / "demo"
+fix_file = DEMO_PATH / "fixnemu.py"
 execfile(str(fix_file))
 IPTABLES = 'iptables-nft'
 
