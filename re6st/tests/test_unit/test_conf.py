@@ -8,9 +8,10 @@ import unittest
 from shutil import rmtree
 from StringIO import StringIO
 from mock import patch
+from OpenSSL import crypto
 
 from re6st.cli import conf
-from re6st.tests.tools import generate_cert, serial2prefix
+from re6st.tests.tools import generate_cert, serial2prefix, create_ca_file
 
 
 # gloable value from conf.py
@@ -33,11 +34,11 @@ class TestConf(unittest.TestCase):
         if not os.path.exists(cls.work_dir):
             os.makedirs(cls.work_dir)
 
-        # mocked service cert and pkey
-        with open("root.crt") as f:
-            cls.cert = f.read()
-        with open("registry.key") as f:
-            cls.pkey = f.read()
+        # mocked server cert and pkey
+        cls.pkey, cls.cert = create_ca_file(os.devnull, os.devnull)
+        cls.fingerprint = "".join( cls.cert.digest("sha1").split(":"))
+        # client.getCa should return a string form cert
+        cls.cert = crypto.dump_certificate(crypto.FILETYPE_PEM, cls.cert)
 
         cls.command = "re6st-conf --registry http://localhost/" \
             " --dir %s" % cls.work_dir
@@ -80,7 +81,7 @@ class TestConf(unittest.TestCase):
         token = "a_token"
         mock_raw_input.side_effect = [mail, token]
         command = self.command \
-            + " --fingerprint sha1:a1861330f1299b98b529fa52c3d8e5d1a94dc63a" \
+            + " --fingerprint sha1:%s" % self.fingerprint \
             + " --req L lille"
         sys.argv = command.split()
 

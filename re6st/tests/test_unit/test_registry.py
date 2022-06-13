@@ -9,9 +9,11 @@ import unittest
 import hmac
 import hashlib
 import time
+import tempfile
 from argparse import Namespace
 from OpenSSL import crypto
 from mock import Mock, patch
+from pathlib2 import Path
 
 from re6st import registry
 from re6st.tests.tools import *
@@ -19,10 +21,19 @@ from re6st.tests.tools import *
 # TODO test for request_dump, requestToken, getNetworkConfig, getBoostrapPeer
 # getIPV4Information, versions
 
+DEMO_PATH = Path(__file__).parent.parent.parent.parent / "demo"
 
 def load_config(filename="registry.json"):
     with open(filename) as f:
         config = json.load(f)
+    config["dh"] = DEMO_PATH / "dh2048.pem"
+
+    fd, config["ca"] = tempfile.mkstemp()
+    os.close(fd)
+    fd, config["key"] = tempfile.mkstemp()
+    os.close(fd)
+    create_ca_file(config["key"], config["ca"])
+
     return Namespace(**config)
 
 
@@ -59,10 +70,11 @@ class TestRegistryServer(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         # remove database
-        try:
-            os.unlink(cls.config.db)
-        except Exception:
-            pass
+        for file in [cls.config.db, cls.config.ca, cls.config.key]:
+            try:
+                os.unlink(file)
+            except Exception:
+                pass
 
     def setUp(self):
         self.email = ''.join(random.sample(string.ascii_lowercase, 4)) \
