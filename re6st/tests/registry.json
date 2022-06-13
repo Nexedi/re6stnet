@@ -1,6 +1,5 @@
 {
     "verbose": 1,
-    "ca": "root.crt",
     "port": 9090,
     "anonymous_prefix_length": null,
     "smtp_pwd": null,
@@ -16,10 +15,8 @@
     "smtp_starttls": false,
     "run": "run",
     "bind4": "0.0.0.0",
-    "dh": "dh2048.pem",
     "db": "registry.db",
     "mailhost": "miku@miku.com",
-    "key": "registry.key",
     "encrypt": false,
     "logfile": "registry.log",
     "max_clients": null,
