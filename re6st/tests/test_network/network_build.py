@@ -25,17 +25,17 @@ class Node(nemu.Node):
 
     @property
     def ip(self):
-        if hasattr(self, "_ip"):
+        try:
             return str(self._ip)
-
-        # return 1 ipv4 address of the one interface, reverse mode
-        for iface in self.get_interfaces()[::-1]:
-            for addr in iface.get_addresses():
-                addr = addr['address']
-                if '.' in addr:
-                    #TODO different type problem?
-                    self._ip = addr
-                    return addr
+        except AttributeError:
+            # return 1 ipv4 address of the one interface, reverse mode
+            for iface in self.get_interfaces()[::-1]:
+                for addr in iface.get_addresses():
+                    addr = addr['address']
+                    if '.' in addr:
+                        #TODO different type problem?
+                        self._ip = addr
+                        return addr
 
 
     def connect_switch(self, switch, ip, prefix_len=24):
@@ -49,7 +49,7 @@ class NetManager(object):
     """contain all the nemu object created, so they can live more time"""
     def __init__(self):
         self.object = []
-        self.registrys = {}
+        self.registries = {}
 
 
 def connectible_test(nm):
@@ -61,11 +61,13 @@ def connectible_test(nm):
     Raise:
         AssertionError
     """
-    for reg in nm.registrys:
-        for node in nm.registrys[reg]:
+    for reg in nm.registries:
+        for node in nm.registries[reg]:
             app0 = node.Popen(["ping", "-c", "1", reg.ip], stdout=PIPE)
             ret = app0.wait()
-            assert ret == 0, "network construct failed {} to {}".format(node.ip, reg.ip)
+            if ret:
+                raise ConnectionError(
+                    "network construct failed {} to {}".format(node.ip, reg.ip))
 
     logging.debug("each node can ping to their registry")
 
@@ -89,7 +91,7 @@ def net_route():
     m2_if_0 = machine2.connect_switch(switch1, "192.168.1.3")
 
     nm.object.append(switch1)
-    nm.registrys[registry] = [machine1, machine2]
+    nm.registries[registry] = [machine1, machine2]
 
     connectible_test(nm)
     return nm
@@ -116,7 +118,7 @@ def net_demo():
 
     nm = NetManager()
     nm.object = [internet, switch3, switch1, switch2, gateway1, gateway2]
-    nm.registrys = {registry: [m1, m2, m3, m4, m5, m6, m7, m8]}
+    nm.registries = {registry: [m1, m2, m3, m4, m5, m6, m7, m8]}
 
     # for node in [g1, m3, m4, m5]:
     #     print "pid: {}".format(node.pid)
@@ -183,7 +185,7 @@ def network_direct():
     registry = Node()
     m0 = Node()
     nm = NetManager()
-    nm.registrys = {registry: [m0]}
+    nm.registries = {registry: [m0]}
 
     re_if_0, m_if_0 = nemu.P2PInterface.create_pair(registry, m0)
 
@@ -200,5 +202,5 @@ def network_direct():
     return nm
 
 if __name__ == "__main__":
-    nm = network_demo()
+    nm = net_demo()
     time.sleep(1000000)
