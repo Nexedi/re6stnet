@@ -90,17 +90,20 @@ class TestRegistryServer(unittest.TestCase):
             "0000000000000\0" # ERROR, IndexError: msg is null
         ]
 
-        res1 = self.server.recv(4)
-        res2 = self.server.recv(4)
-        res3 = self.server.recv(4)
-        res4 = self.server.recv(4)
+        try:
+            res1 = self.server.recv(4)
+            res2 = self.server.recv(4)
+            res3 = self.server.recv(4)
+            res4 = self.server.recv(4)
 
-        self.assertEqual(res1, (None, None)) # not contain \0
-        self.assertEqual(res2, (None, None)) # binary to digital failed
-        self.assertEqual(res3, (None, None)) # code don't match
-        self.assertEqual(res4, ("0001001001001", "a_msg"))
-
-        del self.server.sock.recv
+            self.assertEqual(res1, (None, None)) # not contain \0
+            self.assertEqual(res2, (None, None)) # binary to digital failed
+            self.assertEqual(res3, (None, None)) # code don't match
+            self.assertEqual(res4, ("0001001001001", "a_msg"))
+        except:
+            pass
+        finally:
+            del self.server.sock.recv
 
     def test_onTimeout(self):
         # old token, cert, not old token, cert
