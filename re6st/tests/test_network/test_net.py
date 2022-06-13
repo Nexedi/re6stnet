@@ -15,23 +15,23 @@ PING_PATH = str(Path(__file__).parent.resolve() / "ping.py")
 BABEL_HMAC = 'babel_hmac0', 'babel_hmac1', 'babel_hmac2'
 
 def deploy_re6st(nm, recreate=False):
-    net = nm.registrys
+    net = nm.registries
     nodes = []
-    registrys = []
+    registries = []
     re6st_wrap.Re6stRegistry.registry_seq = 0
     re6st_wrap.Re6stNode.node_seq = 0
     for registry in net:
         reg = re6st_wrap.Re6stRegistry(registry, "2001:db8:42::", len(net[registry]),
                                        recreate=recreate)
         reg_node = re6st_wrap.Re6stNode(registry, reg, name=reg.name)
-        registrys.append(reg)
+        registries.append(reg)
         reg_node.run("--gateway", "--disable-proto", "none", "--ip", registry.ip)
         nodes.append(reg_node)
         for m in net[registry]:
             node = re6st_wrap.Re6stNode(m, reg)
             node.run("-i" + m.iface.name)
             nodes.append(node)
-    return nodes, registrys
+    return nodes, registries
 
 def wait_stable(nodes, timeout=240):
     """try use ping6 from each node to the other until ping success to all the

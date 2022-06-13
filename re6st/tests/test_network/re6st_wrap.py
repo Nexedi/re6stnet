@@ -10,6 +10,7 @@ import time
 import re
 import tempfile
 import logging
+import errno
 from subprocess import PIPE, call
 from pathlib2 import Path
 
@@ -117,21 +118,27 @@ class Re6stRegistry(object):
                              serial=ip_to_serial(self.ip6))
 
     def run(self):
-        cmd = ("{script} --ca {ca} --key {key} --dh {dh} --ipv4 10.42.0.0/16 8 "
-               " --logfile {log} --db {db} --run {run} --hello 4 --mailhost s "
-               "-v4 --client-count {nb}")
-        cmd = cmd.format(script=RE6ST_REGISTRY, ca=self.ca_crt,
-                         key=self.ca_key, dh=DH_FILE, log=self.log, db=self.db,
-                         run=self.run_path, nb=(self.client_number+1)//2).split()
+        cmd =['--ca', self.ca_crt, '--key', self.ca_key, '--dh', DH_FILE,
+              '--ipv4', '10.42.0.0/16', '8', '--logfile', self.log, '--db', self.db,
+              '--run', self.run_path, '--hello', '4', '--mailhost', 's', '-v4',
+              '--client-count', (self.client_number+1)//2]
+
+        #convert PosixPath to str, can be remove in python3
+        cmd = map(str, cmd)
+
+        cmd = RE6ST_REGISTRY.split() + cmd
+
         logging.debug("run registry %s at ns: %s with cmd: %s",
                      self.name, self.node.pid, " ".join(cmd))
         self.proc = self.node.Popen(cmd, stdout=PIPE, stderr=PIPE)
 
     def clean(self):
         """remove the file created last time"""
-        for f in [self.log]:
-            if f.exists():
-                f.unlink()
+        try:
+            self.log.unlink()
+        except OSError as e:
+            if e.errno != errno.ENOENT:
+                raise
 
     def __del__(self):
         try:
@@ -206,9 +213,8 @@ class Re6stNode(object):
     def create_node(self):
         """create necessary file for node"""
         logging.info("create dir of node %s", self.name)
-        cmd = "{script} --registry {registry_url} --email {email}"
-        cmd = cmd.format(script=RE6ST_CONF, registry_url=self.registry.url,
-                         email=self.email).split()
+        cmd = ["--registry", self.registry.url, '--email', self.email]
+        cmd = RE6ST_CONF.split() + cmd
         p = self.node.Popen(cmd, stdin=PIPE, stdout=PIPE, stderr=PIPE,
                             cwd=str(self.path))
         # read token
@@ -235,14 +241,13 @@ class Re6stNode(object):
 
     def run(self, *args):
         """execute re6stnet"""
-        cmd = ("{script} --log {log} --run {run} --state {state}"
-               " --dh {dh} --ca {ca} --cert {cert} --key {key} -v4"
-               " --registry {registry} --console {console}"
-              )
-        cmd = cmd.format(script=RE6STNET, log=self.path, run=self.run_path,
-                         state=self.path, dh=DH_FILE, ca=self.registry.ca_crt,
-                         cert=self.crt, key=self.key, registry=self.registry.url,
-                         console=self.console).split()
+        cmd = ['--log', self.path, '--run', self.run_path, '--state', self.path,
+               '--dh', DH_FILE, '--ca', self.registry.ca_crt, '--cert', self.crt,
+               '--key', self.key, '-v4', '--registry', self.registry.url,
+               '--console', self.console]
+        cmd = map(str, cmd)
+        cmd = RE6STNET.split() + cmd
+
         cmd += args
         logging.debug("run node %s at ns: %s with cmd: %s",
                      self.name, self.node.pid, " ".join(cmd))
@@ -252,8 +257,11 @@ class Re6stNode(object):
         """remove the file created last time"""
         for name in ["re6stnet.log", "babeld.state", "cache.db", "babeld.log"]:
             f = self.path / name
-            if f.exists():
+            try:
                 f.unlink()
+            except OSError as e:
+                if e.errno != errno.ENOENT:
+                    raise
 
     def stop(self):
         """stop running re6stnet process"""
