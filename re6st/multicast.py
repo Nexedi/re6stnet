@@ -72,9 +72,6 @@ class PimDm(object):
         subprocess.call(['pim-dm', '-aimld', ifname])
 
     def addInterfaceWhenReady(self):
-        if not self.not_ready_iface_set:
-            return
-
         data = self.s_netlink.recv(65535)
         unpack = unpacker(data)
         msg_len, msg_type, flags, seq, pid = unpack("=LHHLL")
@@ -101,7 +98,7 @@ class PimDm(object):
     def isStarted(self):
         if not self.started:
             self.started = os.path.exists('/run/pim-dm/0')
-        return self.started   
+        return self.started
 
     def run(self, iface_list, run_path):
         # pim-dm requires interface to be up at startup, 
@@ -126,6 +123,10 @@ class PimDm(object):
             yaml.dump(conf, conf_file)
 
         return utils.Popen(['pim-dm', '-config', conf_file_path])
+
+    def select(self, r, w, t):
+        if self.not_ready_iface_set:
+            r[self.s_netlink] = self.addInterfaceWhenReady
 
 def ifap_iter(ifa):
     '''Iterate over linked list of ifaddrs'''
