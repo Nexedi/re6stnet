@@ -27,12 +27,9 @@ RE6ST_CONF = "re6st-conf"
 RE6ST_CONF = "python -m re6st.cli.conf"
 
 def initial():
-    """create the workplace and dh file"""
+    """create the workplace"""
     if not WORK_DIR.exists():
         WORK_DIR.mkdir()
-    if not DH_FILE.exists():
-        logging.info("create dh file")
-        call(['openssl', 'dhparam', '-out', str(DH_FILE), '2048'], stderr=PIPE)
 
 def ip_to_serial(ip6):
     """convert ipv6 address to serial"""
@@ -45,12 +42,13 @@ class Re6stRegistry(object):
     """class run a re6st-registry service on a namespace"""
     registry_seq = 0
 
-    def __init__(self, node, ip6, client_number, recreate=False):
+    def __init__(self, node, ip6, client_number, port=80, recreate=False):
         self.node = node
         # TODO need set once
         self.ip = node.ip
         self.ip6 = ip6
         self.client_number = client_number
+        self.port = port
         self.name = self.generate_name()
 
         self.path = WORK_DIR / self.name
@@ -72,25 +70,20 @@ class Re6stRegistry(object):
             text = f.read()
             self.ident = hash(text)
 
-        # clear log file
-        if self.log.exists():
-            self.log.unlink()
-
         self.clean()
 
         self.run()
-
         # wait the servcice started
         p = self.node.Popen(['python', '-c', """if 1:
         import socket, time
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         while True:
             try:
-                s.connect(('localhost', 80))
+                s.connect(('localhost', {}))
                 break
             except socket.error:
                 time.sleep(.1)
-        """])
+        """.format(self.port)])
 
         now = time.time()
         while time.time() - now < 10:
@@ -98,8 +91,8 @@ class Re6stRegistry(object):
                 break
             time.sleep(0.1)
         else:
-            p.destroy()
             logging.error("registry failed to start, %s", self.name)
+            p.destroy()
             raise Exception("registry failed to start")
         logging.info("re6st service started")
 
@@ -121,7 +114,7 @@ class Re6stRegistry(object):
         cmd =['--ca', self.ca_crt, '--key', self.ca_key, '--dh', DH_FILE,
               '--ipv4', '10.42.0.0/16', '8', '--logfile', self.log, '--db', self.db,
               '--run', self.run_path, '--hello', '4', '--mailhost', 's', '-v4',
-              '--client-count', (self.client_number+1)//2]
+              '--client-count', (self.client_number+1)//2, '--port', self.port]
 
         #convert PosixPath to str, can be remove in python3
         cmd = map(str, cmd)
