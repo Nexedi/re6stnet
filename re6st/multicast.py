@@ -64,6 +64,7 @@ class PimDm(object):
         self.s_netlink = s_netlink
 
         self.started = False
+        self._next_refresh = time.time()
 
     def addInterface(self, ifname):
         while not self.isStarted():
@@ -101,7 +102,10 @@ class PimDm(object):
     def isStarted(self):
         if not self.started:
             self.started = os.path.exists('/run/pim-dm/0')
-        return self.started   
+        return self.started
+
+    def refresh(self):
+        self._next_refresh = time.time() + 5 if self.not_ready_iface_set else None
 
     def run(self, iface_list, run_path):
         # pim-dm requires interface to be up at startup, 
@@ -126,6 +130,11 @@ class PimDm(object):
             yaml.dump(conf, conf_file)
 
         return utils.Popen(['pim-dm', '-config', conf_file_path])
+
+    def select(self, r, w, t):
+        r[self.s_netlink] = self.addInterfaceWhenReady
+        if self._next_refresh:
+            t.append((self._next_refresh, self.refresh))
 
 def ifap_iter(ifa):
     '''Iterate over linked list of ifaddrs'''

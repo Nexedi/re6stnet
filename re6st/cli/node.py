@@ -366,12 +366,6 @@ def main():
                     R[r] = partial(tunnel_manager.handleServerEvent, r)
                     x.close()
 
-            if config.multicast:
-                from re6st.multicast import PimDm
-                pimdm = PimDm()
-                cleanup.append(pimdm.run(config.iface_list, config.run).stop)
-                R[pimdm.s_netlink] = pimdm.addInterfaceWhenReady
-
             ip('addr', my_ip + '/%s' % len(subnet),
                'dev', config.main_interface)
             if_rt = ['ip', '-6', 'route', 'del',
@@ -459,6 +453,11 @@ def main():
             select_list = [forwarder.select] if forwarder else []
             if config.console:
                 select_list.append(console.select)
+            if config.multicast:
+                from re6st.multicast import PimDm
+                pimdm = PimDm()
+                cleanup.append(pimdm.run(config.iface_list, config.run).stop)
+                select_list.append(pimdm.select)
             select_list += tunnel_manager.select, utils.select
             while True:
                 args = R.copy(), {}, []
