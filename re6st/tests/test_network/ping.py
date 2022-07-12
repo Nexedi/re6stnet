@@ -41,7 +41,7 @@ def main():
     args = parser.parse_args()
     addrs = args.a
     retry = args.retry
-    no_responses = ""
+    no_responses = "1"
 
     while retry and no_responses:
         mp = MultiPing(addrs)
