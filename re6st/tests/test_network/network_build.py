@@ -8,7 +8,8 @@ from pathlib2 import Path
 
 DEMO_PATH = Path(__file__).resolve().parent.parent.parent.parent / "demo"
 fix_file = DEMO_PATH / "fixnemu.py"
-execfile(str(fix_file))
+# execfile(str(fix_file)) Removed in python3
+exec(open(str(fix_file)).read())
 IPTABLES = 'iptables-nft'
 
 class Node(nemu.Node):
@@ -50,26 +51,21 @@ class NetManager(object):
     def __init__(self):
         self.object = []
         self.registries = {}
+    def connectable_test(self):
+        """test each node can ping to their registry
+        Raise:
+            AssertionError
+        """
+        for reg, nodes in self.registries.items():
+            for node in nodes:
+                app0 = node.Popen(["ping", "-c", "1", reg.ip], stdout=PIPE)
+                ret = app0.wait()
+                if ret:
+                    raise ConnectionError(
+                        "network construct failed {} to {}".format(node.ip, reg.ip))
 
+        logging.debug("each node can ping to their registry")
 
-def connectible_test(nm):
-    """test each node can ping to their registry
-
-    Args:
-        nm: NetManger
-
-    Raise:
-        AssertionError
-    """
-    for reg in nm.registries:
-        for node in nm.registries[reg]:
-            app0 = node.Popen(["ping", "-c", "1", reg.ip], stdout=PIPE)
-            ret = app0.wait()
-            if ret:
-                raise ConnectionError(
-                    "network construct failed {} to {}".format(node.ip, reg.ip))
-
-    logging.debug("each node can ping to their registry")
 
 def net_route():
     """build a network connect by a route(bridge)
@@ -93,7 +89,7 @@ def net_route():
     nm.object.append(switch1)
     nm.registries[registry] = [machine1, machine2]
 
-    connectible_test(nm)
+    nm.connectable_test()
     return nm
 
 def net_demo():
@@ -177,7 +173,7 @@ def net_demo():
                                     stdout=PIPE, stderr=PIPE)
 
     switch1.up = switch2.up = switch3.up =True
-    connectible_test(nm)
+    nm.connectable_test()
     return nm
 
 def network_direct():
