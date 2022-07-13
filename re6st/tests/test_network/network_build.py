@@ -6,7 +6,8 @@ import logging
 from subprocess import PIPE
 from pathlib2 import Path
 
-DEMO_PATH = Path(__file__).resolve().parent.parent.parent.parent / "demo"
+from re6st.tests import DEMO_PATH
+
 fix_file = DEMO_PATH / "fixnemu.py"
 # execfile(str(fix_file)) Removed in python3
 exec(open(str(fix_file)).read())

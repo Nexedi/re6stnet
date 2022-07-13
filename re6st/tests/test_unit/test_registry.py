@@ -17,11 +17,10 @@ from pathlib2 import Path
 
 from re6st import registry
 from re6st.tests.tools import *
+from re6st.tests import DEMO_PATH
 
 # TODO test for request_dump, requestToken, getNetworkConfig, getBoostrapPeer
 # getIPV4Information, versions
-
-DEMO_PATH = Path(__file__).parent.parent.parent.parent / "demo"
 
 def load_config(filename="registry.json"):
     with open(filename) as f:
