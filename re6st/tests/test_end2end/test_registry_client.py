@@ -11,8 +11,8 @@ import zlib
 from re6st import registry, x509
 from re6st.tests.test_network import re6st_wrap
 from re6st.tests import tools
+from re6st.tests import DEMO_PATH
 
-DEMO_PATH = Path(__file__).parent.parent.parent.parent / "demo"
 DH_FILE = DEMO_PATH / "dh2048.pem"
 
 class dummyNode():

@@ -11,13 +11,14 @@ import re
 import tempfile
 import logging
 import errno
-from subprocess import PIPE, call
+from subprocess import PIPE
 from pathlib2 import Path
 
-import re6st.tests.tools as tools
+from re6st.tests import tools
+from re6st.tests import DEMO_PATH
 
 WORK_DIR = Path(__file__).parent / "temp_net_test"
-DH_FILE = WORK_DIR / "dh2048.pem"
+DH_FILE = DEMO_PATH / "dh2048.pem"
 
 RE6STNET = "re6stnet"
 RE6STNET = "python -m re6st.cli.node"
@@ -244,6 +245,9 @@ class Re6stNode(object):
         cmd += args
         logging.debug("run node %s at ns: %s with cmd: %s",
                      self.name, self.node.pid, " ".join(cmd))
+        # if len(args) > 4 :
+        #     self.proc = self.node.Popen(cmd)
+        # else:
         self.proc = self.node.Popen(cmd, stdout=PIPE, stderr=PIPE)
 
     def clean(self):
