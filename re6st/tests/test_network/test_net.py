@@ -12,7 +12,6 @@ import re6st_wrap
 import  network_build
 
 PING_PATH = str(Path(__file__).parent.resolve() / "ping.py")
-BABEL_HMAC = 'babel_hmac0', 'babel_hmac1', 'babel_hmac2'
 
 def deploy_re6st(nm, recreate=False):
     net = nm.registries
