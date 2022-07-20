@@ -1,11 +1,11 @@
+
+import json
 import os
-import unittest
-import time
 import sqlite3
-from pathlib2 import Path
 import subprocess
 import tempfile
-import json
+import time
+import unittest
 import zlib
 
 from re6st import registry, x509
@@ -15,7 +15,7 @@ from re6st.tests import DEMO_PATH
 
 DH_FILE = DEMO_PATH / "dh2048.pem"
 
-class dummyNode():
+class DummyNode(object):
     """fake node to reuse Re6stRegistry
 
     error: node.Popen has destory method which not in subprocess.Popen
@@ -37,7 +37,7 @@ class TestRegistryClentInteract(unittest.TestCase):
     def setUp(self):
         self.port = 18080
         self.url = "http://localhost:{}/".format(self.port)
-        # not inportant, used in network_config check
+        # not important, used in network_config check
         self.max_clients = 10
 
     def tearDown(self):
@@ -46,13 +46,13 @@ class TestRegistryClentInteract(unittest.TestCase):
     def test_1_main(self):
         """ a client interact a server, no re6stnet node test basic function"""
         try:
-            self.server = re6st_wrap.Re6stRegistry(dummyNode(), "2001:db8:42::",
+            self.server = re6st_wrap.Re6stRegistry(DummyNode(), "2001:db8:42::",
                                                    self.max_clients, port=self.port,
                                                    recreate=True)
         except:
             self.skipTest("start registry failed")
 
-        client  = registry.RegistryClient(self.url)
+        client = registry.RegistryClient(self.url)
         email = "m1@miku.com"
 
         # simulate the process in conf
@@ -60,15 +60,15 @@ class TestRegistryClentInteract(unittest.TestCase):
         client.requestToken(email)
         # read token from db
         db = sqlite3.connect(str(self.server.db), isolation_level=None)
-        count = 0
         token = None
-        while not token:
+        for _ in xrange(100):
             time.sleep(.1)
             token = db.execute("SELECT token FROM token WHERE email=?",
                                (email,)).fetchone()
-            count += 1
-            if count > 100:
-                raise Exception("Request token failed, no token in database")
+            if token:
+                break
+        else:
+            raise Exception("Request token failed, no token in database")
         # token: tuple[unicode,]
         token = str(token[0])
         self.assertEqual(client.isToken(token), "1")

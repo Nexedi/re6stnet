@@ -1,16 +1,16 @@
 """wrap the deploy of re6st node, ease the creation of cert
 file and run of the node
 """
+import errno
+import ipaddress
 import json
+import logging
+import re
 import shutil
 import sqlite3
-import weakref
-import ipaddress
-import time
-import re
 import tempfile
-import logging
-import errno
+import time
+import weakref
 from subprocess import PIPE
 from pathlib2 import Path
 
@@ -20,11 +20,8 @@ from re6st.tests import DEMO_PATH
 WORK_DIR = Path(__file__).parent / "temp_net_test"
 DH_FILE = DEMO_PATH / "dh2048.pem"
 
-RE6STNET = "re6stnet"
 RE6STNET = "python -m re6st.cli.node"
-RE6ST_REGISTRY = "re6st-registry"
 RE6ST_REGISTRY = "python -m re6st.cli.registry"
-RE6ST_CONF = "re6st-conf"
 RE6ST_CONF = "python -m re6st.cli.conf"
 
 def initial():
@@ -112,18 +109,18 @@ class Re6stRegistry(object):
                              serial=ip_to_serial(self.ip6))
 
     def run(self):
-        cmd =['--ca', self.ca_crt, '--key', self.ca_key, '--dh', DH_FILE,
-              '--ipv4', '10.42.0.0/16', '8', '--logfile', self.log, '--db', self.db,
-              '--run', self.run_path, '--hello', '4', '--mailhost', 's', '-v4',
-              '--client-count', (self.client_number+1)//2, '--port', self.port]
+        cmd = ['--ca', self.ca_crt, '--key', self.ca_key, '--dh', DH_FILE,
+               '--ipv4', '10.42.0.0/16', '8', '--logfile', self.log, '--db', self.db,
+               '--run', self.run_path, '--hello', '4', '--mailhost', 's', '-v4',
+               '--client-count', (self.client_number+1)//2, '--port', self.port]
 
-        #convert PosixPath to str, can be remove in python3
+        #PY3: convert PosixPath to str, can be remove in Python 3
         cmd = map(str, cmd)
 
-        cmd = RE6ST_REGISTRY.split() + cmd
+        cmd[:0] = RE6ST_REGISTRY.split()
 
         logging.debug("run registry %s at ns: %s with cmd: %s",
-                     self.name, self.node.pid, " ".join(cmd))
+                      self.name, self.node.pid, " ".join(cmd))
         self.proc = self.node.Popen(cmd, stdout=PIPE, stderr=PIPE)
 
     def clean(self):
@@ -151,7 +148,7 @@ class Re6stNode(object):
         node: nemu node
         name: name for res6st node
         """
-        self.name = name if name else self.generate_name()
+        self.name = name or self.generate_name()
         self.node = node
         self.registry = weakref.proxy(registry)
 
@@ -163,7 +160,7 @@ class Re6stNode(object):
         else:
             self.run_path = tempfile.mkdtemp()
 
-        self.log = self.path  / "re6stnet.log"
+        self.log = self.path / "re6stnet.log"
         self.crt = self.path / "cert.crt"
         self.key = self.path / 'cert.key'
         self.console = self.run_path + "/console.sock"
@@ -179,8 +176,8 @@ class Re6stNode(object):
             if self.data_file.exists():
                 with self.data_file.open() as f:
                     data = json.load(f)
-                    self.ip6 = data.get("ip6")
-                    recreate = not data.get('hash') == self.registry.ident
+                self.ip6 = data.get("ip6")
+                recreate = data.get('hash') != self.registry.ident
             else:
                 recreate = True
 
@@ -195,7 +192,6 @@ class Re6stNode(object):
 
         self.clean()
 
-
     def __repr__(self):
         return self.name
 
@@ -208,21 +204,21 @@ class Re6stNode(object):
         """create necessary file for node"""
         logging.info("create dir of node %s", self.name)
         cmd = ["--registry", self.registry.url, '--email', self.email]
-        cmd = RE6ST_CONF.split() + cmd
+        cmd[:0] = RE6ST_CONF.split()
         p = self.node.Popen(cmd, stdin=PIPE, stdout=PIPE, stderr=PIPE,
                             cwd=str(self.path))
         # read token
         db = sqlite3.connect(str(self.registry.db), isolation_level=None)
-        count = 0
         token = None
-        while not token:
+        for _ in xrange(100):
             time.sleep(.1)
             token = db.execute("SELECT token FROM token WHERE email=?",
                                (self.email,)).fetchone()
-            count += 1
-            if count > 100:
-                p.destroy()
-                raise Exception("can't connect to the Register")
+            if token:
+                break
+        else:
+            p.destroy()
+            raise Exception("can't connect to the Register")
 
         out, _ = p.communicate(str(token[0]))
         # logging.debug("re6st-conf output: {}".format(out))
@@ -239,12 +235,13 @@ class Re6stNode(object):
                '--dh', DH_FILE, '--ca', self.registry.ca_crt, '--cert', self.crt,
                '--key', self.key, '-v4', '--registry', self.registry.url,
                '--console', self.console]
+        #PY3: same as for Re6stRegistry.run
         cmd = map(str, cmd)
-        cmd = RE6STNET.split() + cmd
+        cmd[:0] = RE6STNET.split()
 
         cmd += args
         logging.debug("run node %s at ns: %s with cmd: %s",
-                     self.name, self.node.pid, " ".join(cmd))
+                      self.name, self.node.pid, " ".join(cmd))
         # if len(args) > 4 :
         #     self.proc = self.node.Popen(cmd)
         # else:
@@ -265,15 +262,14 @@ class Re6stNode(object):
         logging.debug("%s teminate process %s", self.name, self.proc.pid)
         self.proc.destroy()
 
-
     def __del__(self):
         """teminate process and rm temp dir"""
         try:
             self.stop()
         except Exception as e:
-            logging.warn("%s: %s", self.name, e)
+            logging.warning("%s: %s", self.name, e)
 
-        # python2 seems auto clean the tempdir
+        # re6stnet seems auto clean the tempdir
         # try:
         #     shutil.rmtree(self.run_path)
         # except Exception as e:
