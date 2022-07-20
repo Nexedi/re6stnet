@@ -4,12 +4,11 @@ import unittest
 import time
 import psutil
 import logging
-import sqlite3
 import random
-from binascii import b2a_hex
 from pathlib2 import Path
+
+import network_build
 import re6st_wrap
-import  network_build
 
 PING_PATH = str(Path(__file__).parent.resolve() / "ping.py")
 
@@ -53,7 +52,7 @@ def wait_stable(nodes, timeout=240):
     # check all the node network can ping each other, in order reverse
     unfinished = list(nodes)
     while unfinished:
-        for i in range(len(unfinished)-1, -1, -1):
+        for i in xrange(len(unfinished)-1, -1, -1):
             node = unfinished[i]
             if node.ping_proc.poll() is not None:
                 logging.debug("%s 's network is stable", node.name)
@@ -63,12 +62,12 @@ def wait_stable(nodes, timeout=240):
         if time.time() - now > timeout:
             for node in unfinished:
                 node.ping_proc.destroy()
-            logging.warn("%s  can't ping to all the nodes", unfinished)
+            logging.warning("%s  can't ping to all the nodes", unfinished)
             return False
     logging.info("wait time cost: %s", time.time() - now)
     return True
 
-@unittest.skipIf(os.geteuid() != 0, "require root or create user namespace plz")
+@unittest.skipIf(os.geteuid(), "Using root or creating a user namespace")
 class TestNet(unittest.TestCase):
     """ network test case"""
 
@@ -104,11 +103,11 @@ class TestNet(unittest.TestCase):
 
     def test_ping_demo(self):
         """create a network demo, test the connectivity by ping
-        wait at most 50 seconds, and test each node ping to other by ipv6 addr
+        wait at most 100 seconds, and test each node ping to other by ipv6 addr
         """
         nm = network_build.net_demo()
         nodes, _ = deploy_re6st(nm)
-        # wait 60, if the re6stnet stable quit wait
+        # wait 100, if the re6stnet stable quit wait
         wait_stable(nodes, 100)
         time.sleep(20)
 
