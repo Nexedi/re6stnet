@@ -1,8 +1,8 @@
-import time
-import nemu
-import weakref
 import ipaddress
 import logging
+import nemu
+import time
+import weakref
 from subprocess import PIPE
 from pathlib2 import Path
 
@@ -13,12 +13,15 @@ fix_file = DEMO_PATH / "fixnemu.py"
 exec(open(str(fix_file)).read())
 IPTABLES = 'iptables-nft'
 
+class ConnectableError(Exception):
+    pass
+
 class Node(nemu.Node):
     """simple nemu.Node used for registry and nodes"""
     def __init__(self):
         super(Node, self).__init__()
         self.Popen(('sysctl', '-q',
-        'net.ipv4.icmp_echo_ignore_broadcasts=0')).wait()
+                    'net.ipv4.icmp_echo_ignore_broadcasts=0')).wait()
 
     def _add_interface(self, iface):
         self.iface = iface
@@ -57,12 +60,12 @@ class NetManager(object):
         Raise:
             AssertionError
         """
-        for reg, nodes in self.registries.items():
+        for reg, nodes in self.registries.iteritems():
             for node in nodes:
                 app0 = node.Popen(["ping", "-c", "1", reg.ip], stdout=PIPE)
                 ret = app0.wait()
                 if ret:
-                    raise ConnectionError(
+                    raise ConnectableError(
                         "network construct failed {} to {}".format(node.ip, reg.ip))
 
         logging.debug("each node can ping to their registry")
@@ -83,9 +86,9 @@ def net_route():
     machine1 = Node()
     machine2 = Node()
 
-    r1_if_0 = registry.connect_switch(switch1, "192.168.1.1")
-    m1_if_0 = machine1.connect_switch(switch1, "192.168.1.2")
-    m2_if_0 = machine2.connect_switch(switch1, "192.168.1.3")
+    registry.connect_switch(switch1, "192.168.1.1")
+    machine1.connect_switch(switch1, "192.168.1.2")
+    machine2.connect_switch(switch1, "192.168.1.3")
 
     nm.object.append(switch1)
     nm.registries[registry] = [machine1, machine2]
@@ -120,7 +123,7 @@ def net_demo():
     # for node in [g1, m3, m4, m5]:
     #     print "pid: {}".format(node.pid)
 
-    re_if_0, in_if_0 = nemu.P2PInterface.create_pair(registry,internet)
+    re_if_0, in_if_0 = nemu.P2PInterface.create_pair(registry, internet)
     g1_if_0, in_if_1 = nemu.P2PInterface.create_pair(gateway1, internet)
     g2_if_0, in_if_2 = nemu.P2PInterface.create_pair(gateway2, internet)
 
@@ -169,11 +172,11 @@ def net_demo():
 
     MINIUPnP_CONF = Path(__file__).parent / 'miniupnpd.conf'
     gateway1.proc = gateway1.Popen(['miniupnpd', '-d', '-f', MINIUPnP_CONF,
-                                    '-P', 'miniupnpd.pid','-a', gateway1.if_s.name,
+                                    '-P', 'miniupnpd.pid', '-a', gateway1.if_s.name,
                                     '-i', g1_if_0.name],
-                                    stdout=PIPE, stderr=PIPE)
+                                   stdout=PIPE, stderr=PIPE)
 
-    switch1.up = switch2.up = switch3.up =True
+    switch1.up = switch2.up = switch3.up = True
     nm.connectable_test()
     return nm
 
@@ -192,10 +195,7 @@ def network_direct():
     m_if_0.add_v4_address(u"10.1.2.2", prefix_len=24)
     re_if_0.up = m_if_0.up = True
 
-    for node in [m0]:
-        app0 = node.Popen(["ping", "-c", "1", "10.1.2.1"], stdout=PIPE)
-        ret = app0.wait()
-        assert ret == 0, "network construct failed"
+    nm.connectable_test()
     return nm
 
 if __name__ == "__main__":

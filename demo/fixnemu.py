@@ -75,16 +75,15 @@ get_addr_data.func_code = _get_addr_data.func_code
 @staticmethod
 def _gen_if_name():
     n = Interface._gen_next_id()
-    # The maximum size of the interface name is 15(char [IFNAMSIZ(16)])
-    # len(NETNSbr-) = 8, So we need to limit the part "%.4x%.3x" % (os.getpid(), n)
-    # to size 7. That means PID < 0xffff, n < 0xfff
-    # PID often exceeds 0xffff, so use mod 0xffff to limit it length.
+    # Max 15 chars
+    # XXX: We truncate pid to not exceed IFNAMSIZ on systems with 32-bits pids
+    #      but we should find something better to avoid possible collision.
     return "NETNSif-%.4x%.3x" % (os.getpid() % 0xffff, n)
 Interface._gen_if_name = _gen_if_name
 
 @staticmethod
 def _gen_br_name():
     n = Switch._gen_next_id()
-    # Max 15 chars
+     # XXX: same as for _gen_if_name
     return "NETNSbr-%.4x%.3x" % (os.getpid() % 0xffff, n)
 Switch._gen_br_name = _gen_br_name
