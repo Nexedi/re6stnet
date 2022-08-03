@@ -24,6 +24,8 @@ Conflicts:  re6st-node
 
 %build
 make
+# Fix shebangs before Fedora's shebang mangling
+pathfix.py -i %{__python3} -p -n $(grep -l -R -e "#\!.*python$")
 
 %install
 set $RPM_BUILD_ROOT
