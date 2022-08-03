@@ -1,3 +1,6 @@
+# Turn off mangling shebangs as we have many scripts that we don't control
+%undefine __brp_mangle_shebangs
+
 %define _builddir %(pwd)
 %define ver %(python2 re6st/version.py)
 %define units re6stnet.service re6st-registry.service
