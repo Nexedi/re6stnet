@@ -9,6 +9,7 @@ Release:    %(set %ver; echo ${1#*-})
 License:    GPLv2+
 Group:      Applications/Internet
 BuildArch:  noarch
+BuildRequires: python3-devel
 Requires:   babeld = 1.6.2-nxd1
 Requires:   iproute
 Requires:   openssl
