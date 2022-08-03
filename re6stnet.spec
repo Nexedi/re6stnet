@@ -1,29 +1,28 @@
-%define _builddir %(pwd)
-%define ver %(python2 re6st/version.py)
+%global __os_install_post %(echo '%{__os_install_post}' |grep -v brp-python-bytecompile)
+
 %define units re6stnet.service re6st-registry.service
 
 Summary:    resilient, scalable, IPv6 network application
-Name:       re6stnet
-Version:    %(set %ver; echo ${1%%-*})
-Release:    %(set %ver; echo ${1#*-})
+Name:       re6st-node
+Version:    0.581+slapos1.gf9dedb5db
+Release:    1
 License:    GPLv2+
 Group:      Applications/Internet
-BuildArch:  noarch
-Requires:   babeld = 1.6.2-nxd1
+AutoReqProv: no
+BuildRequires: gcc-c++, make, python, iproute, python3-devel
+#!BuildIgnore: rpmlint-Factory
+Source: %{name}_%{version}.tar.gz
 Requires:   iproute
-Requires:   openssl
-Requires:   openvpn >= 2.4
-Requires:   openvpn < 2.5
-Requires:   python >= 2.7
-Requires:   pyOpenSSL >= 0.13
-Requires:   python-setuptools
-Recommends: python-miniupnpc
-Conflicts:  re6st-node
+Conflicts:  re6stnet
 
 %description
+%prep
+%setup -q
 
 %build
 make
+# Fix shebangs before Fedora's shebang mangling
+pathfix.py -i %{__python3} -p -n $(grep -l -R -e "#\!.*python$")
 
 %install
 set $RPM_BUILD_ROOT
@@ -48,6 +47,7 @@ if [ $1 -eq 0 ]; then
     /bin/systemctl --no-reload disable %{units} || :
     /bin/systemctl stop %{units} || :
 fi >/dev/null 2>&1
+find /opt/re6st -type f -name '*.py[co]' -delete
 
 %postun
 /bin/systemctl daemon-reload >/dev/null 2>&1 || :
