@@ -32,7 +32,7 @@ class TestRegistryClientInteract(unittest.TestCase):
         re6st_wrap.initial()
 
         # if running in net ns, set lo up
-        subprocess.Popen(["ip", "link", "set", "lo", "up"], stderr=subprocess.PIPE)
+        subprocess.check_call(("ip", "link", "set", "lo", "up"))
 
     def setUp(self):
         self.port = 18080
