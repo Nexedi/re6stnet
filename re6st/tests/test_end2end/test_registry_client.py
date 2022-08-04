@@ -84,11 +84,10 @@ class TestRegistryClientInteract(unittest.TestCase):
         # creat x509.cert object
         def write_to_temp(text):
             """text: bytes"""
-            fp = tempfile.NamedTemporaryFile()
-            fp.write(text)
-            # when reopen a fp, python seems reuse the fd, so seek is needed
-            fp.seek(0)
-            return fp
+            file = tempfile.NamedTemporaryFile()
+            file.write(text)
+            file.flush()
+            return file
 
         ca, key, cert = map(write_to_temp, (ca, key, cert))
         client.cert = x509.Cert(ca.name, key.name, cert.name)
