@@ -90,8 +90,7 @@ class TestRegistryClientInteract(unittest.TestCase):
             fp.seek(0)
             return fp
 
-        fps = [write_to_temp(text) for text in [ca, key, cert]]
-        ca, key, cert = fps
+        ca, key, cert = map(write_to_temp, (ca, key, cert))
         client.cert = x509.Cert(ca.name, key.name, cert.name)
         ca.close()
         cert.close()
