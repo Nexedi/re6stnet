@@ -93,7 +93,7 @@ class TestRegistryClientInteract(unittest.TestCase):
         client.cert = x509.Cert(ca.name, key.name, cert.name)
         ca.close()
         cert.close()
-        # cert.decrpty use key file, close after entire test
+        # cert.decrypt use key file, close after entire test
         self.addCleanup(key.close)
 
         # verfiy cn and prefix
