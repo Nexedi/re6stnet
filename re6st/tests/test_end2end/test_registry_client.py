@@ -68,7 +68,7 @@ class TestRegistryClientInteract(unittest.TestCase):
             if token:
                 break
         else:
-            raise Exception("Request token failed, no token in database")
+            self.fail("Request token failed, no token in database")
         # token: tuple[unicode,]
         token = str(token[0])
         self.assertEqual(client.isToken(token), "1")
