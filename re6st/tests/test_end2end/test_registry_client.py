@@ -25,7 +25,7 @@ class DummyNode(object):
         self.Popen = subprocess.Popen
         self.pid = os.getpid()
 
-class TestRegistryClentInteract(unittest.TestCase):
+class TestRegistryClientInteract(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
