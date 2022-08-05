@@ -45,12 +45,11 @@ class TestRegistryClientInteract(unittest.TestCase):
 
     def test_1_main(self):
         """ a client interact a server, no re6stnet node test basic function"""
-        try:
-            self.server = re6st_wrap.Re6stRegistry(DummyNode(), "2001:db8:42::",
-                                                   self.max_clients, port=self.port,
-                                                   recreate=True)
-        except:
-            self.skipTest("start registry failed")
+        self.server = re6st_wrap.Re6stRegistry(
+                DummyNode(),
+                "2001:db8:42::",
+                self.max_clients, port=self.port,
+                recreate=True)
 
         client = registry.RegistryClient(self.url)
         email = "m1@miku.com"
