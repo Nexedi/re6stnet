@@ -17,6 +17,9 @@ Requires:   openvpn < 2.5
 Requires:   python >= 2.7
 Requires:   pyOpenSSL >= 0.13
 Requires:   python-setuptools
+%if 0%{?fedora}
+BuildRequires: python3-devel
+%endif
 Recommends: python-miniupnpc
 Conflicts:  re6st-node
 
@@ -24,6 +27,10 @@ Conflicts:  re6st-node
 
 %build
 make
+# Fix shebangs before Fedora's shebang mangling
+%if 0%{?fedora}
+pathfix.py -i %{__python3} -p -n $(grep -l -R -e "#\!.*python$")
+%endif
 
 %install
 set $RPM_BUILD_ROOT
