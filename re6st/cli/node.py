@@ -421,9 +421,8 @@ def main():
 
             config.babel_args += config.iface_list
             cleanup.append(plib.router((my_ip, len(subnet)), ipv4,
-                None if config.gateway else
-                '' if config.default else
-                my_network, cache.hello,
+                my_network if config.gateway or config.default else None,
+                config.gateway, cache.hello,
                 os.path.join(config.log, 'babeld.log'),
                 os.path.join(config.state, 'babeld.state'),
                 os.path.join(config.run, 'babeld.pid'),
