@@ -421,15 +421,14 @@ def main():
 
             config.babel_args += config.iface_list
             cleanup.append(plib.router((my_ip, len(subnet)), ipv4,
-                None if config.gateway else
+                my_network if config.gateway else
                 '' if config.default else
-                my_network, cache.hello,
+                None, cache.hello,
                 os.path.join(config.log, 'babeld.log'),
                 os.path.join(config.state, 'babeld.state'),
                 os.path.join(config.run, 'babeld.pid'),
                 control_socket, cache.babel_default,
-                tuple(getattr(cache, k, None) for k in
-                      ('babel_hmac_sign', 'babel_hmac_accept')),
+                ('', None),
                 *config.babel_args).stop)
             if config.up:
                 exit.release()

@@ -94,13 +94,22 @@ def router(ip, ip4, src, hello_interval, log_path, state_path, pidfile,
                 key(cmd, 'accept', hmac_accept)
             else:
                 default += ' no_hmac_verify true'
+
+
+
+
     cmd += '-C', 'default ' + default
     if ip4:
         cmd += '-C', 'redistribute ip %s/%s eq %s' % (ip4, n4, n4)
     if src:
-        cmd += '-C', 'install ip ::/0 eq 0 src-prefix ' + src
-    elif src is None:
+        cmd += '-C', 'redistribute ip ::/0 eq 0 src-prefix ' + src
         cmd += '-C', 'redistribute ip ::/0 eq 0'
+    elif src is '':
+        cmd += '-C', 'install ip ::/0 eq 0 src-ip ::/0 src-eq 0'
+        cmd += '-C', 'install ip ::/0 eq 0 src-ip ::/0 src-le 1 deny'
+    elif src is None:
+        cmd += '-C', 'install ip ::/0 eq 0 src-ip ::/0 src-le 1'
+        cmd += '-C', 'install ip ::/0 eq 0 src-ip ::/0 src-eq 0 deny'
     cmd += ('-C', 'redistribute deny',
             '-C', 'install pref-src ' + ip)
     if ip4:
