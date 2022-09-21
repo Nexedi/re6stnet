@@ -236,7 +236,7 @@ class BaseTunnelManager(object):
             def geoiplookup(ip):
                 try:
                     return country(ip).country.iso_code.encode()
-                except errors.AddressNotFoundError:
+                except Exception:
                     return
             self._geoiplookup = geoiplookup
         if cache.same_country:
