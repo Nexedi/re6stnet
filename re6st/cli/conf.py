@@ -178,6 +178,7 @@ registry %s
 ca %s
 cert %s
 key %s
+%s
 # increase re6stnet verbosity:
 #verbose 3
 # enable OpenVPN logging:
@@ -185,7 +186,9 @@ key %s
 # uncomment the following 2 lines to increase OpenVPN verbosity:
 #O--verb
 #O3
-""" % (config.registry, ca_path, cert_path, key_path))
+""" % (config.registry, ca_path, cert_path, key_path,
+       ('country ' + config.location.split(',', 1)[0]) \
+           if config.location else ''))
         print "Sample configuration file created."
 
     cn = x509.subnetFromCert(cert)
