@@ -1,0 +1,28 @@
+{
+    "verbose": 1,
+    "port": 9090,
+    "anonymous_prefix_length": null,
+    "smtp_pwd": null,
+    "client_count": 10,
+    "authorized_origin": [
+        "127.0.0.1",
+        "::1"
+    ],
+    "bind6": "::",
+    "ipv4": null,
+    "prefix_length": 16,
+    "min_protocol": 1,
+    "smtp_starttls": false,
+    "run": "run",
+    "bind4": "0.0.0.0",
+    "db": "registry.db",
+    "mailhost": "miku@miku.com",
+    "encrypt": false,
+    "logfile": "registry.log",
+    "max_clients": null,
+    "smtp_user": null,
+    "same_country": null,
+    "tunnel_refresh": 300,
+    "hello": 15,
+    "community": null
+}
