@@ -62,7 +62,7 @@ def client(iface, address_list, encrypt, *args, **kw):
     return openvpn(iface, encrypt, *remote, **kw)
 
 
-def router(ip, ip4, src, gateway, hello_interval, log_path, state_path, pidfile,
+def router(ip, ip4, src, hello_interval, log_path, state_path, pidfile,
            control_socket, default, hmac, *args, **kw):
     ip, n = ip
     hmac_sign, hmac_accept = hmac
@@ -98,10 +98,7 @@ def router(ip, ip4, src, gateway, hello_interval, log_path, state_path, pidfile,
     if ip4:
         cmd += '-C', 'redistribute ip %s/%s eq %s' % (ip4, n4, n4)
     if src:
-        if gateway:
-            cmd += '-C', 'redistribute ip ::/0 eq 0 src-prefix ' + src
-        else:
-            cmd += '-C', 'install ip ::/0 eq 0 src-prefix ' + src + ' pref-src ' + ip
+        cmd += '-C', 'redistribute ip ::/0 eq 0 src-prefix ' + src
     cmd += ('-C', 'redistribute deny',
             '-C', 'install ip ::/0 ge 1 pref-src ' + ip)
     if ip4:

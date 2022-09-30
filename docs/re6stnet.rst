@@ -30,8 +30,6 @@ Use ``re6stnet --help`` to get the complete list of options.
 If you already have IPv6 connectivity by autoconfiguration and still want to
 use it for communications that are unrelated to this network, then:
 
-- your kernel must support source address based routing (because you can't
-  use ``--default`` option).
 - you must set ``net.ipv6.conf.<iface>.accept_ra`` sysctl to value 2 and
   trigger SLAAC with ``rdisc6 <iface>`` to restore the default route if the
   kernel removed while enabling forwarding.
@@ -85,20 +83,22 @@ If the `/etc/re6stnet/re6stnet.conf` configuration file exists, `re6stnet` is
 automatically started as a system daemon, by ``systemd``\ (1). Debian package
 also provides SysV init scripts.
 
-Important note about ``--default`` option
+Important note about re6st's default route
 -----------------------------------------
 
-When re6st is configured to route all your IPv6 traffic (``--default``),
-any other interface providing IPv6 must have no default route. Otherwise,
-re6st either refuses to start or aborts if it detect a default route.
+Re6st installs a default route with a source-based routing filter, your kernel
+must therefore support source address based routing. This route allows your node
+to redirect traffic to non-re6st destinations while preventing any conflict with
+already installed default routes (in case you have native IPv6 connectivity). If
+you don't have any other IPv6 default route the route will still be used to
+route all your IPv6 traffic.
 
 Correct usage of NetworkManager
 -------------------------------
 
 It is required to configure properly every connection defined in NetworkManager
-because default settings are wrong and conflict with re6st. If ``--default`` is
-used, then disable IPv6, else enable the following options in the [ipv6]
-section::
+because default settings are wrong and conflict with re6st. Please enable the
+following options in the [ipv6] section::
 
    ignore-auto-routes=true
    never-default=true
