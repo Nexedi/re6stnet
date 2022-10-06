@@ -81,10 +81,10 @@ def router(ip, ip4, rt6, hello_interval, log_path, state_path, pidfile,
             '-C', 'redistribute ip %s/%s eq %s' % (ip, n, n)]
     if hmac_sign:
         def key(cmd, id, value):
-            cmd += '-C', ('key type blake2s id %s value %s' %
+            cmd += '-C', ('key type blake2s128 id %s value %s' %
                           (id, value.encode('hex')))
         key(cmd, 'sign', hmac_sign)
-        default += ' hmac sign'
+        default += ' key sign'
         if hmac_accept is not None:
             if hmac_accept:
                 key(cmd, 'accept', hmac_accept)
