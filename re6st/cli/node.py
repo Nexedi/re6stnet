@@ -1,6 +1,6 @@
 #!/usr/bin/python2
 import atexit, errno, logging, os, shutil, signal
-import socket, struct, subprocess, sys, time, threading
+import socket, struct, subprocess, sys
 from collections import deque
 from functools import partial
 if 're6st' not in sys.modules:
@@ -75,12 +75,9 @@ def getConfig():
     _('-B', dest='babel_args', metavar='ARG', action='append', default=[],
         help="Extra arguments to forward to Babel.")
     _('-D', '--default', action='store_true',
-        help="Access internet via this network (in this case, make sure you"
-             " don't already have a default route), or if your kernel was"
-             " compiled without support for source address based routing"
-             " (CONFIG_IPV6_SUBTREES). Meaningless with --gateway.")
+        help="This is an obsolete option and ignored.")
     _('--table', type=int, choices=(0,),
-        help="DEPRECATED: Use --default instead of --table=0")
+        help="This is an obsolete option and ignored.")
     _('--gateway', action='store_true',
         help="Act as a gateway for this network (the default route will be"
              " exported). Do never use it if you don't know what it means.")
@@ -159,20 +156,28 @@ def main():
     if config.max_clients is None:
         config.max_clients = cache.max_clients
 
-    if config.table is not None:
-        logging.warning("--table option is deprecated: use --default instead")
-        config.default = True
-    if config.default and config.gateway:
-        sys.exit("error: conflicting options --default and --gateway")
-
     if config.disable_proto is None:
         config.disable_proto = DEFAULT_DISABLED_PROTO
     elif 'none' in config.disable_proto:
         config.disable_proto = ()
-    if config.default:
+
+    x = ['ip', '-6', 'route', 'add', 'unreachable', '::/128', 'from', '::/128']
+    has_ipv6_subtrees = not subprocess.call(x)
+    if has_ipv6_subtrees:
+        x[3] = 'del'
+        subprocess.check_call(x)
+    else:
+        logging.warning(
+            "Source address based routing is not enabled in your kernel"
+            " (CONFIG_IPV6_SUBTREES). %s",
+            "Assuming you don't merge several re6st networks so routes from"
+            " other networks will be ignored." if config.gateway else
+            "This node won't receive traffic to be routed to the internet."
+            " Make sure you don't already have a default route.")
         # Make sure we won't tunnel over re6st.
         config.disable_proto = tuple({'tcp6', 'udp6'}.union(
             config.disable_proto))
+
     def add_tunnels(iface_list):
         for iface in iface_list:
             config.babel_args += '-C', 'interface %s type tunnel' % iface
@@ -376,47 +381,12 @@ def main():
                 subprocess.call(if_rt)
             if_rt[4] = my_subnet
             cleanup.append(lambda: subprocess.call(if_rt))
-            if config.default:
-                def check_no_default_route():
-                    for route in call(('ip', '-6', 'route', 'show',
-                                        'default')).splitlines():
-                        if not (' proto babel ' in route
-                             or ' proto 42 ' in route):
-                            sys.exit("Detected default route (%s)"
-                                " whereas you specified --default."
-                                " Fix your configuration." % route)
-                check_no_default_route()
-                def check_no_default_route_thread():
-                    try:
-                        while True:
-                            time.sleep(60)
-                            try:
-                                check_no_default_route()
-                            except OSError, e:
-                                if e.errno != errno.ENOMEM:
-                                    raise
-                    except:
-                        utils.log_exception()
-                    finally:
-                        exit.kill_main(1)
-                t = threading.Thread(target=check_no_default_route_thread)
-                t.daemon = True
-                t.start()
-            else:
-                x = ['ip', '-6', 'route', 'add',
-                     'unreachable', '::/128', 'from', '::/128']
-                if subprocess.call(x):
-                    sys.exit('error: Source address based routing is not'
-                             ' enabled in your kernel (CONFIG_IPV6_SUBTREES).'
-                             ' Try with the --default option.')
-                x[3] = 'del'
-                subprocess.check_call(x)
             ip('route', 'unreachable', my_network)
 
             config.babel_args += config.iface_list
             cleanup.append(plib.router((my_ip, len(subnet)), ipv4,
-                my_network if config.gateway or config.default else None,
-                config.gateway, cache.hello,
+                (my_network, config.gateway, has_ipv6_subtrees),
+                cache.hello,
                 os.path.join(config.log, 'babeld.log'),
                 os.path.join(config.state, 'babeld.state'),
                 os.path.join(config.run, 'babeld.pid'),

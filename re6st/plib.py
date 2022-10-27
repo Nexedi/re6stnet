@@ -62,8 +62,10 @@ def client(iface, address_list, encrypt, *args, **kw):
     return openvpn(iface, encrypt, *remote, **kw)
 
 
-def router(ip, ip4, src, gateway, hello_interval, log_path, state_path, pidfile,
+def router(ip, ip4, rt6, hello_interval, log_path, state_path, pidfile,
            control_socket, default, hmac, *args, **kw):
+    network, gateway, has_ipv6_subtrees = rt6
+    network_mask = int(network[network.index('/')+1:])
     ip, n = ip
     hmac_sign, hmac_accept = hmac
     if ip4:
@@ -75,12 +77,6 @@ def router(ip, ip4, src, gateway, hello_interval, log_path, state_path, pidfile,
             '-S', state_path,
             '-I', pidfile,
             '-s',
-            # Force use of ipv6 subtrees because:
-            # - even Linux 2.6.32 has them
-            # - the fallback implementation using a separate table
-            #   is not equivalent, at least not the way we use babeld
-            #   (and we don't need RTA_SRC for ipv4).
-            '-C', 'ipv6-subtrees true',
             '-C', 'redistribute local deny',
             '-C', 'redistribute ip %s/%s eq %s' % (ip, n, n)]
     if hmac_sign:
@@ -97,13 +93,37 @@ def router(ip, ip4, src, gateway, hello_interval, log_path, state_path, pidfile,
     cmd += '-C', 'default ' + default
     if ip4:
         cmd += '-C', 'redistribute ip %s/%s eq %s' % (ip4, n4, n4)
-    if src:
-        if gateway:
-            cmd += '-C', 'redistribute ip ::/0 eq 0 src-prefix ' + src
-        else:
-            cmd += '-C', 'install ip ::/0 eq 0 src-prefix ' + src + ' pref-src ' + ip
+    if gateway:
+        cmd += '-C', 'redistribute ip ::/0 eq 0 src-prefix ' + network
+        if not has_ipv6_subtrees:
+            cmd += (
+                '-C', 'in ip %s ge %s' % (network, network_mask),
+                '-C', 'in ip ::/0 deny',
+            )
+    elif has_ipv6_subtrees:
+        # For backward compatibility, if the default route comes from old
+        # version (without source-prefix).
+        cmd += (
+            '-C', 'install ip ::/0 eq 0 src-ip ::/0 src-eq 0 src-prefix ' + network,
+        )
+    else:
+        # We patch babeld:
+        # - ipv6-subtrees is always true by default
+        # - if false, source prefix is cleared when the route is installed
+        cmd += (
+            '-C', 'ipv6-subtrees false',
+            # Accept default route from our network.
+            '-C', 'in ip ::/0 eq 0 src-ip %s src-eq %s' % (network, network_mask),
+            # Ignore default route from other networks. For backward
+            # compatibility we accept default routes from old version
+            # (without source-prefix).
+            '-C', 'in ip ::/0 eq 0 src-ip ::/0 src-ge 1 deny',
+            # Tell neighbours not to route to the internet via us,
+            # because we could be a black hole in case of misconfiguration.
+            '-C', 'out ip ::/0 eq 0 deny',
+        )
     cmd += ('-C', 'redistribute deny',
-            '-C', 'install ip ::/0 ge 1 pref-src ' + ip)
+            '-C', 'install pref-src ' + ip)
     if ip4:
         cmd += '-C', 'install pref-src ' + ip4
     if control_socket:
