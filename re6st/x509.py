@@ -215,8 +215,6 @@ class Peer(object):
     def connected(self):
         return self._last is None or time.time() < self._last + 60
 
-    subject_serial = Cert.subject_serial
-
     def __ne__(self, other):
         raise AssertionError
     __eq__ = __ge__ = __le__ = __ne__
