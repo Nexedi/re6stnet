@@ -113,6 +113,9 @@ def main():
     _('--community',
         help="File containing community configuration. This file cannot be"
              " empty and must contain the default location ('*').")
+    _('--grace-period', default=8640000, type=int,
+        help="Period in seconds during which a client can renew its"
+             " certificate even if expired (default 100 days)")
 
     _ = parser.add_argument_group('routing').add_argument
     _('--hello', type=int, default=15,
