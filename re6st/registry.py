@@ -32,7 +32,6 @@ from . import ctl, tunnel, utils, version, x509
 
 HMAC_HEADER = "Re6stHMAC"
 RENEW_PERIOD = 30 * 86400
-GRACE_PERIOD = 100 * 86400
 BABEL_HMAC = 'babel_hmac0', 'babel_hmac1', 'babel_hmac2'
 
 def rpc(f):
@@ -251,7 +250,7 @@ class RegistryServer(object):
         #      'select' call does not return. Ideally, we should interrupt it.
         logging.info("Checking if there's any old entry in the database ...")
         not_after = None
-        old = time.time() - GRACE_PERIOD
+        old = time.time() - self.config.grace_period
         q =  self.db.execute
         with self.lock, self.db:
             q("BEGIN")
@@ -278,7 +277,7 @@ class RegistryServer(object):
                 elif not_after is None or x < not_after:
                     not_after = x
             self.mergePrefixes()
-            self.timeout = not_after and not_after + GRACE_PERIOD
+            self.timeout = not_after and not_after + self.config.grace_period
 
     def handle_request(self, request, method, kw):
         m = getattr(self, method)
