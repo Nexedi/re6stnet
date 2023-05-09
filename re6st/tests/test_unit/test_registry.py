@@ -112,7 +112,7 @@ class TestRegistryServer(unittest.TestCase):
         token_old, token = "bbbbdddd", "ddddbbbb"
         prefix_old, prefix = "1110", "1111"
         # 20 magic number, make sure we create old enough new cert/token
-        now = int(time.time()) - registry.GRACE_PERIOD + 20
+        now = int(time.time()) - registry.config.grace_period + 20
         # makeup data
         insert_cert(cur, self.server.cert, prefix_old, 1)
         insert_cert(cur, self.server.cert, prefix, now -1)
@@ -130,7 +130,7 @@ class TestRegistryServer(unittest.TestCase):
         self.assertIsNone(get_cert(cur, prefix_old), "old cert not deleted")
         self.assertIsNotNone(get_cert(cur, prefix))
         self.assertEqual(self.server.timeout,
-                         now - 1 + registry.GRACE_PERIOD,
+                         now - 1 + registry.config.grace_period,
                          "time_out set wrongly")
 
         delete_cert(cur, prefix)
