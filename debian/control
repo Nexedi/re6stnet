@@ -8,7 +8,7 @@ X-Python-Version: >= 2.7
 
 Package: re6stnet
 Architecture: all
-Depends: ${misc:Depends}, ${python:Depends}, python-pkg-resources, python-openssl (>= 0.13), openvpn (>= 2.4), openpvn (<< 2.5~), babeld (= 1.9.1+hmac-nxd3), iproute2 | iproute, openssl
+Depends: ${misc:Depends}, ${python:Depends}, python-pkg-resources, python-openssl (>= 0.13), openvpn (>= 2.4), openpvn (<< 2.5~), babeld (= 1.12.1+hmac-nxd4), iproute2 | iproute, openssl
 Recommends: ${python:Recommends}, logrotate
 Suggests: ${python:Suggests}, ndisc6
 Conflicts: re6st-node
