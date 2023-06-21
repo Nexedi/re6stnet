@@ -40,7 +40,7 @@ class Forwarder(object):
         def wrapper(*args, **kw):
             try:
                 return wrapped(*args, **kw)
-            except Exception, e:
+            except Exception as e:
                 raise UPnPException(str(e))
         return wraps(wrapped)(wrapper)
 
@@ -68,14 +68,14 @@ class Forwarder(object):
         else:
             try:
                 return self._refresh()
-            except UPnPException, e:
+            except UPnPException as e:
                 logging.debug("UPnP failure", exc_info=1)
                 self.clear()
         try:
             self.discover()
             self.selectigd()
             return self._refresh()
-        except UPnPException, e:
+        except UPnPException as e:
             self.next_refresh = self._next_retry = time.time() + 60
             logging.info(str(e))
             self.clear()
@@ -109,7 +109,7 @@ class Forwarder(object):
                 try:
                     self.addportmapping(port, *args)
                     break
-                except UPnPException, e:
+                except UPnPException as e:
                     if str(e) != 'ConflictInMappingEntry':
                         raise
                     port = None
