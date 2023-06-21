@@ -1,14 +1,14 @@
 """contain ping-test for re6set net"""
 import os
+import sys
 import unittest
 import time
 import psutil
 import logging
 import random
-from pathlib2 import Path
+from pathlib import Path
 
-import network_build
-import re6st_wrap
+from . import network_build, re6st_wrap
 
 PING_PATH = str(Path(__file__).parent.resolve() / "ping.py")
 
@@ -47,12 +47,12 @@ def wait_stable(nodes, timeout=240):
     for node in nodes:
         sub_ips = set(ips) - {node.ip6}
         node.ping_proc = node.node.Popen(
-            ["python", PING_PATH, '--retry', '-a'] + list(sub_ips))
+            [sys.executable, PING_PATH, '--retry', '-a'] + list(sub_ips), env=os.environ)
 
     # check all the node network can ping each other, in order reverse
     unfinished = list(nodes)
     while unfinished:
-        for i in xrange(len(unfinished)-1, -1, -1):
+        for i in range(len(unfinished)-1, -1, -1):
             node = unfinished[i]
             if node.ping_proc.poll() is not None:
                 logging.debug("%s 's network is stable", node.name)

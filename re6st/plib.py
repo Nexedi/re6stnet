@@ -1,10 +1,12 @@
+import binascii
 import logging, errno, os
+from typing import Optional
 from . import utils
 
 here = os.path.realpath(os.path.dirname(__file__))
 ovpn_server = os.path.join(here, 'ovpn-server')
 ovpn_client = os.path.join(here, 'ovpn-client')
-ovpn_log = None
+ovpn_log: Optional[str] = None
 
 def openvpn(iface, encrypt, *args, **kw):
     args = ['openvpn',
@@ -43,7 +45,7 @@ def server(iface, max_clients, dh_path, fd, port, proto, encrypt, *args, **kw):
         '--max-clients', str(max_clients),
         '--port', str(port),
         '--proto', proto,
-        *args, **kw)
+        *args, pass_fds=[fd], **kw)
 
 
 def client(iface, address_list, encrypt, *args, **kw):
@@ -80,9 +82,9 @@ def router(ip, ip4, rt6, hello_interval, log_path, state_path, pidfile,
             '-C', 'redistribute local deny',
             '-C', 'redistribute ip %s/%s eq %s' % (ip, n, n)]
     if hmac_sign:
-        def key(cmd, id, value):
+        def key(cmd, id: str, value):
             cmd += '-C', ('key type blake2s128 id %s value %s' %
-                          (id, value.encode('hex')))
+                          (id, binascii.hexlify(value).decode()))
         key(cmd, 'sign', hmac_sign)
         default += ' key sign'
         if hmac_accept is not None:
@@ -132,7 +134,7 @@ def router(ip, ip4, rt6, hello_interval, log_path, state_path, pidfile,
     # WKRD: babeld fails to start if pidfile already exists
     try:
         os.remove(pidfile)
-    except OSError, e:
+    except OSError as e:
         if e.errno != errno.ENOENT:
             raise
     logging.info('%r', cmd)
