@@ -27,7 +27,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from email.mime.text import MIMEText
 from operator import itemgetter
 from OpenSSL import crypto
-from urllib.parse import splittype, splithost, unquote, urlencode
+from urllib.parse import urlparse, unquote, urlencode
 from . import ctl, tunnel, utils, version, x509
 
 HMAC_HEADER = "Re6stHMAC"
@@ -69,7 +69,7 @@ class RegistryServer(object):
 
         # Parse community file
         self.community_map = {}
-	if config.community:
+        if config.community:
             with open(config.community) as x:
                 for x in x:
                     x = x.strip()
@@ -91,7 +91,7 @@ class RegistryServer(object):
                 "name TEXT PRIMARY KEY NOT NULL",
                 "value")
         self.prefix = self.getConfig("prefix", None)
-        self.version = str(self.getConfig("version", "\0")) # BBB: blob
+        self.version = str(self.getConfig("version", b'\x00')) # BBB: blob
         utils.sqliteCreateTable(self.db, "token",
                 "token TEXT PRIMARY KEY NOT NULL",
                 "email TEXT NOT NULL",
@@ -184,18 +184,16 @@ class RegistryServer(object):
         config = json.dumps(kw, sort_keys=True)
         if config != self.getConfig('last_config', None):
             self.increaseVersion()
-            # BBB: Use buffer because of http://bugs.python.org/issue13676
-            #      on Python 2.6
-            self.setConfig('version', buffer(self.version))
+            self.setConfig('version', self.version)
             self.setConfig('last_config', config)
             self.sendto(self.prefix, 0)
         # The following entry lists values that are base64-encoded.
         kw[''] = 'version',
-        kw['version'] = self.version.encode('base64')
+        kw['version'] = base64.b64encode(self.version)
         self.network_config = kw
 
     def increaseVersion(self):
-        x = utils.packInteger(1 + utils.unpackInteger(self.version)[0])
+        x = utils.packInteger(1 + utils.unpackInteger(self.version)[0:1])
         self.version = x + self.cert.sign(x)
 
     def sendto(self, prefix, code):
@@ -203,12 +201,12 @@ class RegistryServer(object):
 
     def recv(self, code):
         try:
-            prefix, msg = self.sock.recv(1<<16).split('\0', 1)
+            prefix, msg = self.sock.recv(1<<16).split(b'\x00', 1)
             int(prefix, 2)
         except ValueError:
             pass
         else:
-            if msg and ord(msg[0]) == code:
+            if msg and msg[0:1] == code:
                 return prefix, msg[1:]
         return None, None
 
@@ -293,7 +291,7 @@ class RegistryServer(object):
             with self.lock:
                 session = self.sessions[key]
                 for key, protocol in session:
-                    if h == hmac.HMAC(key, request.path, hashlib.sha1).digest():
+                    if h == hmac.HMAC(key, request.path.encode(), hashlib.sha1).digest():
                         break
                 else:
                     raise Exception("Wrong HMAC")
@@ -349,14 +347,14 @@ class RegistryServer(object):
         assert self.lock.locked()
         return self.db.execute("SELECT cert FROM cert"
                                " WHERE prefix=? AND cert IS NOT NULL",
-                               (client_prefix,)).next()[0]
+                               (client_prefix,)).fetchone()[0]
 
     @rpc_private
     def isToken(self, token):
         with self.lock:
             if self.db.execute("SELECT 1 FROM token WHERE token = ?",
                                (token,)).fetchone():
-                return "1"
+                return b"1"
 
     @rpc_private
     def deleteToken(self, token):
@@ -595,7 +593,7 @@ class RegistryServer(object):
             hmac = [self.getConfig(k, None) for k in BABEL_HMAC]
             for i, v in enumerate(v for v in hmac if v is not None):
                 config[('babel_hmac_sign', 'babel_hmac_accept')[i]] = \
-                    v and x509.encrypt(cert, v).encode('base64')
+                    v and base64.b64encode(x509.encrypt(cert, v))
         return zlib.compress(json.dumps(config))
 
     def _queryAddress(self, peer):
@@ -615,7 +613,7 @@ class RegistryServer(object):
     @rpc
     def getCountry(self, cn, address):
         country = self._geoiplookup(address)[0]
-        return None if country == '*' else country
+        return None if country == '*' else country.encode()
 
     @rpc
     def getBootstrapPeer(self, cn):
@@ -673,7 +671,7 @@ class RegistryServer(object):
 
     def newHMAC(self, i, key=None):
        if key is None:
-          key = buffer(os.urandom(16))
+          key = os.urandom(16)
        self.setConfig(BABEL_HMAC[i], key)
 
     def delHMAC(self, i):
@@ -696,10 +694,10 @@ class RegistryServer(object):
             else:
                 # Initialization of HMAC on the network
                 self.newHMAC(1)
-                self.newHMAC(2, '')
+                self.newHMAC(2, b'')
             self.increaseVersion()
-            self.setConfig('version', buffer(self.version))
-            self.network_config['version']  = self.version.encode('base64')
+            self.setConfig('version', self.version)
+            self.network_config['version']  = base64.b64encode(self.version)
         self.sendto(self.prefix, 0)
 
     @rpc_private
@@ -736,9 +734,9 @@ class RegistryServer(object):
                     return
             logging.info("%s %s", email, peer)
             with self.lock:
-                msg = self._queryAddress(peer)
+                msg = self._queryAddress(peer).decode()
             if msg:
-                return msg.split(',')[0]
+                return msg.split(',')[0].encode()
 
     @rpc_private
     def versions(self):
@@ -805,8 +803,8 @@ class RegistryClient(object):
     def __init__(self, url, cert=None, auto_close=True):
         self.cert = cert
         self.auto_close = auto_close
-        scheme, host = splittype(url)
-        host, path = splithost(host)
+        url_parsed = urlparse(url)
+        scheme, host, path = url_parsed.scheme, url_parsed.netloc, url_parsed.path
         self._conn = dict(http=http.client.HTTPConnection,
                           https=http.client.HTTPSConnection,
                           )[scheme](unquote(host), timeout=60)
@@ -834,7 +832,7 @@ class RegistryClient(object):
                             n = len(h) // 2
                             self.cert.verify(h[n:], h[:n])
                             key = self.cert.decrypt(h[:n])
-                        h = hmac.HMAC(key, query, hashlib.sha1).digest()
+                        h = hmac.HMAC(key, query.encode(), hashlib.sha1).digest()
                         key = hashlib.sha1(key).digest()
                         self._hmac = hashlib.sha1(key).digest()
                     else:
