@@ -7,7 +7,9 @@ from setuptools.command import sdist as _sdist, build_py as _build_py
 from distutils import log
 
 version = {"__file__": "re6st/version.py"}
-execfile(version["__file__"], version)
+with open(version["__file__"]) as f:
+    code = compile(f.read(), version["__file__"], 'exec')
+    exec(code, version)
 
 def copy_file(self, infile, outfile, *args, **kw):
     if infile == version["__file__"]:
