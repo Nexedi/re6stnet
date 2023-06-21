@@ -14,23 +14,23 @@ def subnetFromCert(cert):
     return cert.get_subject().CN
 
 def notBefore(cert):
-    return calendar.timegm(time.strptime(cert.get_notBefore(),'%Y%m%d%H%M%SZ'))
+    return calendar.timegm(time.strptime(cert.get_notBefore().decode(),'%Y%m%d%H%M%SZ'))
 
 def notAfter(cert):
-    return calendar.timegm(time.strptime(cert.get_notAfter(),'%Y%m%d%H%M%SZ'))
+    return calendar.timegm(time.strptime(cert.get_notAfter().decode(),'%Y%m%d%H%M%SZ'))
 
-def openssl(*args):
+def openssl(*args, fds=[]):
     return utils.Popen(('openssl',) + args,
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE)
+        stderr=subprocess.PIPE, pass_fds=fds)
 
 def encrypt(cert, data):
     r, w = os.pipe()
     try:
         threading.Thread(target=os.write, args=(w, cert)).start()
         p = openssl('rsautl', '-encrypt', '-certin',
-                    '-inkey', '/proc/self/fd/%u' % r)
+                    '-inkey', '/proc/self/fd/%u' % r, fds=[r])
         out, err = p.communicate(data)
     finally:
         os.close(r)
@@ -96,7 +96,7 @@ class Cert(object):
             self.key = crypto.load_privatekey(crypto.FILETYPE_PEM, f.read())
         if cert:
             with open(cert) as f:
-                self.cert = self.loadVerify(f.read())
+                self.cert = self.loadVerify(f.read().encode())
 
     @property
     def prefix(self):
@@ -143,6 +143,7 @@ class Cert(object):
                 "error running openssl, assuming cert is invalid")
           # BBB: With old versions of openssl, detailed
           #      error is printed to standard output.
+          out, err = out.decode(), err.decode()
           for err in err, out:
             for x in err.splitlines():
                 if x.startswith('error '):
@@ -166,7 +167,7 @@ class Cert(object):
 
     def verifyVersion(self, version):
         try:
-            n = 1 + (ord(version[0]) >> 5)
+            n = 1 + (version[0] >> 5)
             self.verify(version[n:], version[:n])
         except (IndexError, crypto.Error):
             raise VerifyError(None, None, 'invalid network version')
@@ -206,7 +207,7 @@ class Peer(object):
     _key = newHmacSecret()
     serial = None
     stop_date = float('inf')
-    version = ''
+    version = b''
 
     def __init__(self, prefix):
         self.prefix = prefix
@@ -229,11 +230,11 @@ class Peer(object):
             try:
                 # Always assume peer is not old, in case it has just upgraded,
                 # else we would be stuck with the old protocol.
-                msg = ('\0\0\0\1'
+                msg = (b'\0\0\0\1'
                     + PACKED_PROTOCOL
                     + fingerprint(self.cert).digest())
             except AttributeError:
-                msg = '\0\0\0\0'
+                msg = b'\0\0\0\0'
             return msg + crypto.dump_certificate(crypto.FILETYPE_ASN1, cert)
 
     def hello0Sent(self):
@@ -246,7 +247,7 @@ class Peer(object):
         self._i = self._j = 2
         self._last = 0
         self.protocol = protocol
-        return ''.join(('\0\0\0\2', PACKED_PROTOCOL if protocol else '',
+        return b''.join((b'\0\0\0\2', PACKED_PROTOCOL if protocol else b'',
                         h, cert.sign(h)))
 
     def _hmac(self, msg):
