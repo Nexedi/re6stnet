@@ -72,7 +72,7 @@ if args.duration:
     signal.signal(signal.SIGALRM, handler)
     signal.alarm(args.duration)
 
-execfile("fixnemu.py")
+exec(compile(open("fixnemu.py", "rb").read(), "fixnemu.py", 'exec'))
 
 # create nodes
 for name in """internet=I registry=R
@@ -89,9 +89,9 @@ for name in """internet=I registry=R
         'net.ipv4.icmp_echo_ignore_broadcasts=0')).wait()
     node._screen = node.Popen((SCREEN, '-DmS', name))
     node.screen = (lambda name: lambda *cmd:
-        subprocess.call([SCREEN, '-r', name, '-X', 'eval'] + map(
+        subprocess.call([SCREEN, '-r', name, '-X', 'eval'] + list(map(
             """screen sh -c 'set %s; "\$@"; echo "\$@"; exec $SHELL'"""
-            .__mod__, cmd)))(name)
+            .__mod__, cmd))))(name)
 
 # create switch
 switch1 = nemu.Switch()
@@ -208,10 +208,10 @@ for m in machine6, machine7, machine8:
 null = file(os.devnull, "r+")
 for ip in '10.1.1.2', '10.1.1.3', '10.2.1.2', '10.2.1.3':
     if machine1.Popen(('ping', '-c1', ip), stdout=null).wait():
-        print 'Failed to ping %s' % ip
+        print('Failed to ping %s' % ip)
         break
 else:
-    print "Connectivity IPv4 OK!"
+    print("Connectivity IPv4 OK!")
 
 nodes = []
 gateway1.screen('miniupnpd -d -f miniupnpd.conf -P miniupnpd.pid'
@@ -297,7 +297,7 @@ if args.ping:
             '2001:db8:43:1::1' if i == 10 else
             # Only 1 address for machine2 because prefix_len = 80,+48 = 128
             '2001:db8:42:%s::1' % i
-            for i in xrange(11)
+            for i in range(11)
             if i != j]
         name = machine.name if machine.short[0] == 'R' else 'm' + machine.short
         machine.screen('python ping.py {} {}'.format(name, ' '.join(ips)))
@@ -314,30 +314,30 @@ class testHMAC(Thread):
         reg1_db.text_factory = reg2_db.text_factory = str
         m_net1 = 'registry', 'm1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8'
         m_net2 = 'registry2', 'm10'
-        print 'Testing HMAC, letting the time to machines to create tunnels...'
+        print('Testing HMAC, letting the time to machines to create tunnels...')
         time.sleep(45)
-        print 'Check that the initial HMAC config is deployed on network 1'
+        print('Check that the initial HMAC config is deployed on network 1')
         test_hmac.checkHMAC(reg1_db, m_net1)
-        print 'Test that a HMAC update works with nodes that are up'
+        print('Test that a HMAC update works with nodes that are up')
         registry.backticks_raise(updateHMAC)
-        print 'Updated HMAC (config = hmac0 & hmac1), waiting...'
+        print('Updated HMAC (config = hmac0 & hmac1), waiting...')
         time.sleep(60)
-        print 'Checking HMAC on machines connected to registry 1...'
+        print('Checking HMAC on machines connected to registry 1...')
         test_hmac.checkHMAC(reg1_db, m_net1)
-        print ('Test that machines can update upon reboot ' +
-               'when they were off during a HMAC update.')
+        print(('Test that machines can update upon reboot ' +
+               'when they were off during a HMAC update.'))
         test_hmac.killRe6st(machine1)
-        print 'Re6st on machine 1 is stopped'
+        print('Re6st on machine 1 is stopped')
         time.sleep(5)
         registry.backticks_raise(updateHMAC)
-        print 'Updated HMAC on registry (config = hmac1 & hmac2), waiting...'
+        print('Updated HMAC on registry (config = hmac1 & hmac2), waiting...')
         time.sleep(60)
         machine1.screen(machine1.re6st_cmdline)
-        print 'Started re6st on machine 1, waiting for it to get new conf'
+        print('Started re6st on machine 1, waiting for it to get new conf')
         time.sleep(60)
-        print 'Checking HMAC on machines connected to registry 1...'
+        print('Checking HMAC on machines connected to registry 1...')
         test_hmac.checkHMAC(reg1_db, m_net1)
-        print 'Testing of HMAC done!'
+        print('Testing of HMAC done!')
         # TODO: missing last step
         reg1_db.close()
         reg2_db.close()
@@ -399,7 +399,7 @@ def route_svg(ipv4, z = 4, default = type('', (), {'short': None})):
         gv.append('%s[pos="%s,%s!"];'
             % (n.name, z * math.cos(a * i), z * math.sin(a * i)))
         l = []
-        for p, r in graph[n].iteritems():
+        for p, r in graph[n].items():
             j = abs(nodes.index(p[0]) - i)
             l.append((min(j, N - j), p, r))
         for j, (l, (p, t), r) in enumerate(sorted(l)):
@@ -427,9 +427,9 @@ def route_svg(ipv4, z = 4, default = type('', (), {'short': None})):
         ).communicate('\n'.join(gv))[0]
 
 if args.port:
-    import SimpleHTTPServer, SocketServer
+    import http.server, socketserver
 
-    class Handler(SimpleHTTPServer.SimpleHTTPRequestHandler):
+    class Handler(http.server.SimpleHTTPRequestHandler):
 
         _path_match = re.compile('/(.+)\.(html|svg)$').match
         pages = 'ipv6', 'ipv4', 'tunnels'
@@ -439,7 +439,7 @@ if args.port:
             try:
                 name, ext = self._path_match(self.path).groups()
                 page = self.pages.index(name)
-            except AttributeError, ValueError:
+            except AttributeError as ValueError:
                 if self.path == '/':
                     self.send_response(302)
                     self.send_header('Location', self.pages[0] + '.html')
@@ -513,7 +513,7 @@ if args.port:
             self.end_headers()
             self.wfile.write(body)
 
-    class TCPServer(SocketServer.TCPServer):
+    class TCPServer(socketserver.TCPServer):
         allow_reuse_address = True
 
     TCPServer(('', args.port), Handler).serve_forever()
