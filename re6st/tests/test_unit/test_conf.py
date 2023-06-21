@@ -6,7 +6,7 @@ import os
 import sys
 import unittest
 from shutil import rmtree
-from StringIO import StringIO
+from io import StringIO
 from mock import patch
 from OpenSSL import crypto
 
