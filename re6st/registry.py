@@ -69,7 +69,7 @@ class RegistryServer(object):
 
         # Parse community file
         self.community_map = {}
-	if config.community:
+        if config.community:
             with open(config.community) as x:
                 for x in x:
                     x = x.strip()
