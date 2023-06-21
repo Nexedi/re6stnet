@@ -1,8 +1,8 @@
 #!/usr/bin/python2
-import httplib, logging, os, socket, sys
-from BaseHTTPServer import BaseHTTPRequestHandler
-from SocketServer import ThreadingTCPServer
-from urlparse import parse_qsl
+import http.client, logging, os, socket, sys
+from http.server import BaseHTTPRequestHandler
+from socketserver import ThreadingTCPServer
+from urllib.parse import parse_qsl
 if 're6st' not in sys.modules:
     sys.path[0] = os.path.dirname(os.path.dirname(sys.path[0]))
 from re6st import registry, utils, version
@@ -36,7 +36,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 return self.server.handle_request(self, path, query)
         except Exception:
             logging.info(self.requestline, exc_info=1)
-        self.send_error(httplib.BAD_REQUEST)
+        self.send_error(http.client.BAD_REQUEST)
 
     def log_error(*args):
         pass
