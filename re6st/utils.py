@@ -164,7 +164,7 @@ class Popen(subprocess.Popen):
         self._args = tuple(args[0] if args else kw['args'])
         try:
             super(Popen, self).__init__(*args, **kw)
-        except OSError, e:
+        except OSError as e:
             if e.errno != errno.ENOMEM:
                 raise
             self.returncode = -1
@@ -209,7 +209,7 @@ def select(R, W, T):
 def makedirs(*args):
     try:
         os.makedirs(*args)
-    except OSError, e:
+    except OSError as e:
         if e.errno != errno.EEXIST:
             raise
 
@@ -240,7 +240,7 @@ def parse_address(address_list):
             a = address.split(',')
             int(a[1]) # Check if port is an int
             yield tuple(a[:4])
-        except ValueError, e:
+        except ValueError as e:
             logging.warning("Failed to parse node address %r (%s)",
                             address, e)
 
@@ -262,7 +262,7 @@ newHmacSecret = newHmacSecret()
 # - the 3 first bits code the number of bytes
 
 def packInteger(i):
-    for n in xrange(8):
+    for n in range(8):
         x = 32 << 8 * n
         if i < x:
             return struct.pack("!Q", i + n * x)[7-n:]
@@ -275,7 +275,7 @@ def unpackInteger(x):
         i, = struct.unpack("!Q", '\0' * (7 - n) + x[:n+1])
     except struct.error:
         return
-    return sum((32 << 8 * i for i in xrange(n)),
+    return sum((32 << 8 * i for i in range(n)),
                 i - (n * 32 << 8 * n)), n + 1
 
 ###
