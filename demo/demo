@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/python
 import argparse, math, nemu, os, re, signal
 import socket, sqlite3, subprocess, sys, time, weakref
 from collections import defaultdict
