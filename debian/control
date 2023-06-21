@@ -11,6 +11,6 @@ Architecture: all
 Depends: ${misc:Depends}, ${python:Depends}, python-pkg-resources, python-openssl (>= 0.13), openvpn (>= 2.4), openpvn (<< 2.5~), babeld (= v1.12.1-nxd3), iproute2 | iproute, openssl
 Recommends: ${python:Recommends}, logrotate
 Suggests: ${python:Suggests}, ndisc6
-Conflicts: re6st-node
-Replaces: re6st-node
+Conflicts: re6st-node-py3
+Replaces: re6st-node-py3
 Description: resilient, scalable, IPv6 network application
