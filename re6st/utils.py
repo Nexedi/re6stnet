@@ -1,14 +1,9 @@
 import argparse, errno, fcntl, hashlib, logging, os, select as _select
 import shlex, signal, socket, sqlite3, struct, subprocess
 import sys, textwrap, threading, time, traceback
+from collections.abc import Iterator, Mapping
 
-# PY3: It will be even better to use Popen(pass_fds=...),
-#      and then socket.SOCK_CLOEXEC will be useless.
-#      (We already follow the good practice that consists in not
-#      relying on the GC for the closing of file descriptors.)
-socket.SOCK_CLOEXEC = 0x80000
-
-HMAC_LEN = len(hashlib.sha1('').digest())
+HMAC_LEN = len(hashlib.sha1(b'').digest())
 
 class ReexecException(Exception):
     pass
@@ -37,12 +32,12 @@ class FileHandler(logging.FileHandler):
         finally:
             self.lock.release()
         # In the rare case _reopen is set just before the lock was released
-        if self._reopen and self.lock.acquire(0):
+        if self._reopen and self.lock.acquire(False):
             self.release()
 
     def async_reopen(self, *_):
         self._reopen = True
-        if self.lock.acquire(0):
+        if self.lock.acquire(False):
             self.release()
 
 def setupLog(log_level, filename=None, **kw):
@@ -150,7 +145,7 @@ class exit(object):
         def handler(*args):
             if self.status is None:
                 self.status = status
-            if self.acquire(0):
+            if self.acquire(False):
                 self.release()
         for sig in sigs:
             signal.signal(sig, handler)
@@ -164,7 +159,7 @@ class Popen(subprocess.Popen):
         self._args = tuple(args[0] if args else kw['args'])
         try:
             super(Popen, self).__init__(*args, **kw)
-        except OSError, e:
+        except OSError as e:
             if e.errno != errno.ENOMEM:
                 raise
             self.returncode = -1
@@ -179,9 +174,9 @@ class Popen(subprocess.Popen):
             self.terminate()
             t = threading.Timer(5, self.kill)
             t.start()
-            # PY3: use waitid(WNOWAIT) and call self.poll() after t.cancel()
-            r = self.wait()
+            r = os.waitid(os.P_PID, self.pid, os.WNOWAIT)
             t.cancel()
+            self.poll()
             return r
 
 
@@ -209,7 +204,7 @@ def select(R, W, T):
 def makedirs(*args):
     try:
         os.makedirs(*args)
-    except OSError, e:
+    except OSError as e:
         if e.errno != errno.EEXIST:
             raise
 
@@ -240,7 +235,7 @@ def parse_address(address_list):
             a = address.split(',')
             int(a[1]) # Check if port is an int
             yield tuple(a[:4])
-        except ValueError, e:
+        except ValueError as e:
             logging.warning("Failed to parse node address %r (%s)",
                             address, e)
 
@@ -261,21 +256,21 @@ newHmacSecret = newHmacSecret()
 # - there's always a unique way to encode a value
 # - the 3 first bits code the number of bytes
 
-def packInteger(i):
-    for n in xrange(8):
+def packInteger(i: int) -> bytes:
+    for n in range(8):
         x = 32 << 8 * n
         if i < x:
             return struct.pack("!Q", i + n * x)[7-n:]
         i -= x
     raise OverflowError
 
-def unpackInteger(x):
-    n = ord(x[0]) >> 5
+def unpackInteger(x: bytes) -> tuple[int, int] | None:
+    n = x[0] >> 5
     try:
-        i, = struct.unpack("!Q", '\0' * (7 - n) + x[:n+1])
+        i, = struct.unpack("!Q", b'\0' * (7 - n) + x[:n+1])
     except struct.error:
         return
-    return sum((32 << 8 * i for i in xrange(n)),
+    return sum((32 << 8 * i for i in range(n)),
                 i - (n * 32 << 8 * n)), n + 1
 
 ###

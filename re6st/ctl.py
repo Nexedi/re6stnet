@@ -34,17 +34,17 @@ class Array(object):
     def __init__(self, item):
         self._item = item
 
-    def encode(self, buffer, value):
+    def encode(self, buffer: bytes, value: list):
         buffer += uint16.pack(len(value))
         encode = self._item.encode
         for value in value:
             encode(buffer, value)
 
-    def decode(self, buffer, offset=0):
+    def decode(self, buffer: bytes, offset=0) -> tuple[int, list]:
         r = []
         o = offset + 2
         decode = self._item.decode
-        for i in xrange(*uint16.unpack_from(buffer, offset)):
+        for i in range(*uint16.unpack_from(buffer, offset)):
             o, x = decode(buffer, o)
             r.append(x)
         return o, r
@@ -52,13 +52,13 @@ class Array(object):
 class String(object):
 
     @staticmethod
-    def encode(buffer, value):
-        buffer += value + "\0"
+    def encode(buffer: bytes, value: str):
+        buffer += value.encode("utf-8") + b'\x00'
 
     @staticmethod
-    def decode(buffer, offset=0):
-        i = buffer.index("\0", offset)
-        return i + 1, buffer[offset:i]
+    def decode(buffer: bytes, offset=0) -> tuple[int, str]:
+        i = buffer.index(0, offset)
+        return i + 1, buffer[offset:i].decode("utf-8")
 
 
 class Buffer(object):
@@ -104,21 +104,6 @@ class Buffer(object):
         self._seek(r)
         return value
 
-    try: # BBB: Python < 2.7.4 (http://bugs.python.org/issue10212)
-        uint16.unpack_from(bytearray(uint16.size))
-    except TypeError:
-        def unpack_from(self, struct):
-            r = self._r
-            x = r + struct.size
-            value = struct.unpack(buffer(self._buf)[r:x])
-            self._seek(x)
-            return value
-        def decode(self, decode):
-            r = self._r
-            size, value = decode(buffer(self._buf)[r:])
-            self._seek(r + size)
-            return value
-
     # writing
 
     def send(self, socket, *args):
@@ -149,7 +134,7 @@ class Packet(object):
         logging.trace('send %s%r', self.__class__.__name__,
                                    (self.id,) + self.args)
         offset = len(buffer)
-        buffer += '\0' * header.size
+        buffer += b'\x00' * header.size
         r = self.request
         if isinstance(r, Struct):
             r.encode(buffer, self.args)
@@ -206,11 +191,11 @@ class Babel(object):
         def select(*args):
             try:
                 s.connect(self.socket_path)
-            except socket.error, e:
+            except socket.error as e:
                 logging.debug("Can't connect to %r (%r)", self.socket_path, e)
                 return e
-            s.send("\1")
-            s.setblocking(0)
+            s.send(b'\x01')
+            s.setblocking(False)
             del self.select
             self.socket = s
             return self.select(*args)
@@ -269,7 +254,7 @@ class Babel(object):
         a = len(self.network)
         for route in routes:
             assert route.flags & 1, route # installed
-            if route.prefix.startswith('\0\0\0\0\0\0\0\0\0\0\xff\xff'):
+            if route.prefix.startswith(b'\0\0\0\0\0\0\0\0\0\0\xff\xff'):
                 continue
             assert route.neigh_address == route.nexthop, route
             address = route.neigh_address, route.ifindex
@@ -323,7 +308,7 @@ class iterRoutes(object):
             c.select(*args)
             utils.select(*args)
         return (prefix
-            for neigh_routes in c.neighbours.itervalues()
+            for neigh_routes in c.neighbours.values()
             for prefix in neigh_routes[1]
             if prefix)
 

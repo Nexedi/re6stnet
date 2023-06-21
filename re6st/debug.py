@@ -37,8 +37,8 @@ class Socket(object):
         try:
             self._socket.recv(0)
             return True
-        except socket.error, (err, _):
-            if err != errno.EAGAIN:
+        except socket.error as e:
+            if e.errno != errno.EAGAIN:
                 raise
             self._socket.setblocking(1)
         return False
@@ -52,7 +52,7 @@ class Console(object):
             socket.SOCK_STREAM | socket.SOCK_CLOEXEC)
         try:
             self._removeSocket()
-        except OSError, e:
+        except OSError as e:
             if e.errno != errno.ENOENT:
                 raise
         s.bind(path)
