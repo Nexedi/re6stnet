@@ -53,11 +53,11 @@ class String(object):
 
     @staticmethod
     def encode(buffer, value):
-        buffer += value + "\0"
+        buffer += value + b'\x00'
 
     @staticmethod
     def decode(buffer, offset=0):
-        i = buffer.index("\0", offset)
+        i = buffer.index(0, offset)
         return i + 1, buffer[offset:i]
 
 
@@ -69,7 +69,7 @@ class Buffer(object):
 
 
     def __iadd__(self, value):
-        self._buf += value
+        self._buf.extend(value)
         return self
 
     def __len__(self):
@@ -104,21 +104,6 @@ class Buffer(object):
         self._seek(r)
         return value
 
-    try: # BBB: Python < 2.7.4 (http://bugs.python.org/issue10212)
-        uint16.unpack_from(bytearray(uint16.size))
-    except TypeError:
-        def unpack_from(self, struct):
-            r = self._r
-            x = r + struct.size
-            value = struct.unpack(buffer(self._buf)[r:x])
-            self._seek(x)
-            return value
-        def decode(self, decode):
-            r = self._r
-            size, value = decode(buffer(self._buf)[r:])
-            self._seek(r + size)
-            return value
-
     # writing
 
     def send(self, socket, *args):
@@ -149,7 +134,7 @@ class Packet(object):
         logging.trace('send %s%r', self.__class__.__name__,
                                    (self.id,) + self.args)
         offset = len(buffer)
-        buffer += '\0' * header.size
+        buffer += b'\x00' * header.size
         r = self.request
         if isinstance(r, Struct):
             r.encode(buffer, self.args)
@@ -209,7 +194,7 @@ class Babel(object):
             except socket.error as e:
                 logging.debug("Can't connect to %r (%r)", self.socket_path, e)
                 return e
-            s.send("\1")
+            s.send(b'\x01')
             s.setblocking(0)
             del self.select
             self.socket = s
@@ -268,7 +253,7 @@ class Babel(object):
         a = len(self.network)
         for route in routes:
             assert route.flags & 1, route # installed
-            if route.prefix.startswith('\0\0\0\0\0\0\0\0\0\0\xff\xff'):
+            if route.prefix.startswith(b'\0\0\0\0\0\0\0\0\0\0\xff\xff'):
                 continue
             assert route.neigh_address == route.nexthop, route
             address = route.neigh_address, route.ifindex

@@ -43,7 +43,7 @@ def server(iface, max_clients, dh_path, fd, port, proto, encrypt, *args, **kw):
         '--max-clients', str(max_clients),
         '--port', str(port),
         '--proto', proto,
-        *args, **kw)
+        *args, pass_fds=[fd], **kw)
 
 
 def client(iface, address_list, encrypt, *args, **kw):
