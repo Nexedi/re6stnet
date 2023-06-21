@@ -44,7 +44,7 @@ class Array(object):
         r = []
         o = offset + 2
         decode = self._item.decode
-        for i in xrange(*uint16.unpack_from(buffer, offset)):
+        for i in range(*uint16.unpack_from(buffer, offset)):
             o, x = decode(buffer, o)
             r.append(x)
         return o, r
@@ -206,7 +206,7 @@ class Babel(object):
         def select(*args):
             try:
                 s.connect(self.socket_path)
-            except socket.error, e:
+            except socket.error as e:
                 logging.debug("Can't connect to %r (%r)", self.socket_path, e)
                 return e
             s.send("\1")
@@ -323,7 +323,7 @@ class iterRoutes(object):
             c.select(*args)
             utils.select(*args)
         return (prefix
-            for neigh_routes in c.neighbours.itervalues()
+            for neigh_routes in c.neighbours.values()
             for prefix in neigh_routes[1]
             if prefix)
 
