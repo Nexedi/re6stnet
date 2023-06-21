@@ -57,9 +57,9 @@ class TestRegistryClient(unittest.TestCase):
         h = hmac.HMAC(key, query, hashlib.sha1).digest()
         key = hashlib.sha1(key).digest()
         # response part
-        body = None
+        body = b'this is a body'
         response = fakeResponse(body, http.client.NO_CONTENT)
-        response.msg = dict(Re6stHMAC=hmac.HMAC(key, body, hashlib.sha1).digest())
+        response.msg = dict(Re6stHMAC=base64.b64encode(hmac.HMAC(key, body, hashlib.sha1).digest()))
         self.client._conn.getresponse.return_value = response
 
         res = self.client.getNetworkConfig(cn)
