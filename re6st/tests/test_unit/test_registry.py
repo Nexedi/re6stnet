@@ -146,13 +146,13 @@ class TestRegistryServer(unittest.TestCase):
         params = {"cn" : prefix, "a" : 1, "b" : 2}
         func.getcallargs.return_value = params
         del func._private
-        func.return_value = result = "this_is_a_result"
-        key = "this_is_a_key"
+        func.return_value = result = b"this_is_a_result"
+        key = b"this_is_a_key"
         self.server.sessions[prefix] = [(key, protocol)]
         request = Mock()
         request.path = "/func?a=1&b=2&cn=0000000011111111"
         request.headers = {registry.HMAC_HEADER: base64.b64encode(
-            hmac.HMAC(key, request.path, hashlib.sha1).digest())}
+            hmac.HMAC(key, request.path.encode(), hashlib.sha1).digest())}
 
         self.server.handle_request(request, method, params)
 
@@ -213,7 +213,7 @@ class TestRegistryServer(unittest.TestCase):
         res = self.server.hello(prefix, protocol=protocol)
 
         # decrypt
-        length = len(res)/2
+        length = len(res) // 2
         key, sign = res[:length], res[length:]
         key = decrypt(pkey, key)
         self.assertEqual(self.server.sessions[prefix][-1][0], key,
