@@ -14,7 +14,7 @@ def copy_file(self, infile, outfile, *args, **kw):
         if not self.dry_run:
             log.info("generating %s -> %s", infile, outfile)
             with open(outfile, "wb") as f:
-                for x in sorted(version.iteritems()):
+                for x in sorted(version.items()):
                     if not x[0].startswith("_"):
                         f.write("%s = %r\n" % x)
         return outfile, 1
