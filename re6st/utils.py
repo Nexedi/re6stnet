@@ -8,7 +8,7 @@ import sys, textwrap, threading, time, traceback
 #      relying on the GC for the closing of file descriptors.)
 socket.SOCK_CLOEXEC = 0x80000
 
-HMAC_LEN = len(hashlib.sha1('').digest())
+HMAC_LEN = len(hashlib.sha1(b'').digest())
 
 class ReexecException(Exception):
     pass

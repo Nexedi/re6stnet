@@ -26,6 +26,7 @@ def ap_prefix(name):
     if a == IPCP_NAME:
         return utils.binFromSubnet(b + '/' + c)
 
+apply = lambda f: f()
 @apply
 class ipcm(object):
 
