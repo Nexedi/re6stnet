@@ -6,9 +6,9 @@ import sys, textwrap, threading, time, traceback
 #      and then socket.SOCK_CLOEXEC will be useless.
 #      (We already follow the good practice that consists in not
 #      relying on the GC for the closing of file descriptors.)
-socket.SOCK_CLOEXEC = 0x80000
+#socket.SOCK_CLOEXEC = 0x80000
 
-HMAC_LEN = len(hashlib.sha1('').digest())
+HMAC_LEN = len(hashlib.sha1(b'').digest())
 
 class ReexecException(Exception):
     pass
@@ -180,8 +180,10 @@ class Popen(subprocess.Popen):
             t = threading.Timer(5, self.kill)
             t.start()
             # PY3: use waitid(WNOWAIT) and call self.poll() after t.cancel()
-            r = self.wait()
+            #r = self.wait()
+            r = self.waitid(WNOWAIT) # PY3
             t.cancel()
+            self.poll() # PY3
             return r
 
 
@@ -270,9 +272,9 @@ def packInteger(i):
     raise OverflowError
 
 def unpackInteger(x):
-    n = ord(x[0]) >> 5
+    n = x[0] >> 5
     try:
-        i, = struct.unpack("!Q", '\0' * (7 - n) + x[:n+1])
+        i, = struct.unpack("!Q", b'\0' * (7 - n) + x[:n+1])
     except struct.error:
         return
     return sum((32 << 8 * i for i in range(n)),
