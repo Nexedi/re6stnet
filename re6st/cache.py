@@ -1,11 +1,11 @@
-import json, logging, os, sqlite3, socket, subprocess, sys, time, zlib
+import base64, json, logging, os, sqlite3, socket, subprocess, sys, time, zlib
 from itertools import chain
 from .registry import RegistryClient
 from . import utils, version, x509
 
-class Cache(object):
+class Cache:
 
-    def __init__(self, db_path, registry, cert, db_size=200):
+    def __init__(self, db_path, registry, cert: x509.Cert, db_size=200):
         self._prefix = cert.prefix
         self._db_size = db_size
         self._decrypt = cert.decrypt
@@ -65,7 +65,7 @@ class Cache(object):
 
     @staticmethod
     def _selectConfig(execute): # BBB: blob
-        return ((k, str(v) if type(v) is buffer else v)
+        return ((k, str(v) if type(v) is memoryview else v)
             for k, v in execute("SELECT * FROM config"))
 
     def _loadConfig(self, config):
@@ -89,24 +89,24 @@ class Cache(object):
         logging.info("Getting new network parameters from registry...")
         try:
             # TODO: When possible, the registry should be queried via the re6st.
+            network_config = self._registry.getNetworkConfig(self._prefix)
+            logging.debug('getNetworkConfig result: %r', network_config)
             x = json.loads(zlib.decompress(
-                self._registry.getNetworkConfig(self._prefix)))
-            base64 = x.pop('', ())
+                network_config))
+            base64_list = x.pop('', ())
             config = {}
-            for k, v in x.iteritems():
+            for k, v in x.items():
                 k = str(k)
                 if k.startswith('babel_hmac'):
                     if v:
-                        v = self._decrypt(v.decode('base64'))
-                elif k in base64:
-                    v = v.decode('base64')
-                elif type(v) is unicode:
-                    v = str(v)
+                        v = self._decrypt(base64.b64decode(v))
+                elif k in base64_list:
+                    v = base64.b64decode(v)
                 elif isinstance(v, (list, dict)):
                     k += ':json'
                     v = json.dumps(v)
                 config[k] = v
-        except socket.error, e:
+        except socket.error as e:
             logging.warning(e)
             return
         except Exception:
@@ -133,13 +133,13 @@ class Cache(object):
             # BBB: Use buffer because of http://bugs.python.org/issue13676
             #      on Python 2.6
             db.executemany("INSERT OR REPLACE INTO config VALUES(?,?)",
-                           ((k, buffer(v) if k in base64 or
+                           ((k, memoryview(v) if k in base64_list or
                              k.startswith('babel_hmac') else v)
-                            for k, v in config.iteritems()))
-        self._loadConfig(config.iteritems())
+                            for k, v in config.items()))
+        self._loadConfig(config.items())
         return [k[:-5] if k.endswith(':json') else k
                 for k in chain(remove, (k
-                    for k, v in config.iteritems()
+                    for k, v in config.items()
                     if k not in old or old[k] != v))]
 
     def warnProtocol(self):
@@ -232,15 +232,16 @@ class Cache(object):
     def getPeerList(self, failed=0, __sql=_get_peer_sql % "prefix, address"
                                                         + " ORDER BY RANDOM()"):
         return self._db.execute(__sql, (self._prefix, failed))
-    def getPeerCount(self, failed=0, __sql=_get_peer_sql % "COUNT(*)"):
+
+    def getPeerCount(self, failed=0, __sql=_get_peer_sql % "COUNT(*)") -> int:
         return self._db.execute(__sql, (self._prefix, failed)).next()[0]
 
     def getBootstrapPeer(self):
         logging.info('Getting Boot peer...')
         try:
             bootpeer = self._registry.getBootstrapPeer(self._prefix)
-            prefix, address = self._decrypt(bootpeer).split()
-        except (socket.error, subprocess.CalledProcessError, ValueError), e:
+            prefix, address = self._decrypt(bootpeer).decode().split()
+        except (socket.error, subprocess.CalledProcessError, ValueError) as e:
             logging.warning('Failed to bootstrap (%s)',
                             e if bootpeer else 'no peer returned')
         else:
@@ -275,6 +276,6 @@ class Cache(object):
 
     def getCountry(self, ip):
         try:
-            return self._registry.getCountry(self._prefix, ip)
-        except socket.error, e:
+            return self._registry.getCountry(self._prefix, ip).decode()
+        except socket.error as e:
             logging.warning('Failed to get country (%s)', ip)
