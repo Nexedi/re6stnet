@@ -2,7 +2,7 @@ import sys
 import os
 import unittest
 import hmac
-import httplib
+import http.client
 import base64
 import hashlib
 from mock import Mock, patch
@@ -26,15 +26,15 @@ class TestRegistryClient(unittest.TestCase):
 
         self.assertEqual(client1._path, "/example")
         self.assertEqual(client1._conn.host, "localhost")
-        self.assertIsInstance(client1._conn, httplib.HTTPSConnection)
-        self.assertIsInstance(client2._conn, httplib.HTTPConnection)
+        self.assertIsInstance(client1._conn, http.client.HTTPSConnection)
+        self.assertIsInstance(client2._conn, http.client.HTTPConnection)
 
     def test_rpc_hello(self):
         prefix = "0000000011111111"
         protocol = "7"
         body = "a_hmac_key"
         query = "/hello?client_prefix=0000000011111111&protocol=7"
-        response = fakeResponse(body, httplib.OK)
+        response = fakeResponse(body, http.client.OK)
         self.client._conn.getresponse.return_value = response
 
         res = self.client.hello(prefix, protocol)
@@ -58,7 +58,7 @@ class TestRegistryClient(unittest.TestCase):
         key = hashlib.sha1(key).digest()
         # response part
         body = None
-        response = fakeResponse(body, httplib.NO_CONTENT)
+        response = fakeResponse(body, http.client.NO_CONTENT)
         response.msg = dict(Re6stHMAC=hmac.HMAC(key, body, hashlib.sha1).digest())
         self.client._conn.getresponse.return_value = response
 

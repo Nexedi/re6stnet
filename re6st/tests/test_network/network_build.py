@@ -60,7 +60,7 @@ class NetManager(object):
         Raise:
             AssertionError
         """
-        for reg, nodes in self.registries.iteritems():
+        for reg, nodes in self.registries.items():
             for node in nodes:
                 app0 = node.Popen(["ping", "-c", "1", reg.ip], stdout=PIPE)
                 ret = app0.wait()
@@ -138,7 +138,7 @@ def net_demo():
         nm.object.append(iface)
         iface.up = True
 
-    ip = ipaddress.ip_address(u"10.1.1.1")
+    ip = ipaddress.ip_address("10.1.1.1")
     for i, node in enumerate([gateway1, m1, m2]):
         iface = node.connect_switch(switch1, str(ip + i))
         nm.object.append(iface)
@@ -151,14 +151,14 @@ def net_demo():
     gateway1.Popen((IPTABLES, '-N', 'MINIUPNPD')).wait()
 
 
-    ip = ipaddress.ip_address(u"10.2.1.1")
+    ip = ipaddress.ip_address("10.2.1.1")
     for i, node in enumerate([gateway2, m3, m4, m5]):
         iface = node.connect_switch(switch1, str(ip + i))
         nm.object.append(iface)
         if i: # except the first
             node.add_route(prefix='10.0.0.0', prefix_len=8, nexthop=ip)
 
-    ip = ipaddress.ip_address(u"10.0.1.1")
+    ip = ipaddress.ip_address("10.0.1.1")
     for i, node in enumerate([internet, m6, m7, m8]):
         iface = node.connect_switch(switch2, str(ip + i))
         nm.object.append(iface)
@@ -189,10 +189,10 @@ def network_direct():
 
     re_if_0, m_if_0 = nemu.P2PInterface.create_pair(registry, m0)
 
-    registry._ip = u"10.1.2.1"
-    re_if_0.add_v4_address(u"10.1.2.1", prefix_len=24)
+    registry._ip = "10.1.2.1"
+    re_if_0.add_v4_address("10.1.2.1", prefix_len=24)
 
-    m_if_0.add_v4_address(u"10.1.2.2", prefix_len=24)
+    m_if_0.add_v4_address("10.1.2.2", prefix_len=24)
     re_if_0.up = m_if_0.up = True
 
     nm.connectable_test()

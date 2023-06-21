@@ -31,7 +31,7 @@ def initial():
 
 def ip_to_serial(ip6):
     """convert ipv6 address to serial"""
-    ip6 = ipaddress.IPv6Address(u"{}".format(ip6))
+    ip6 = ipaddress.IPv6Address("{}".format(ip6))
     ip6 = "1{:x}".format(int(ip6)).rstrip('0')
     return int(ip6, 16)
 
@@ -115,7 +115,7 @@ class Re6stRegistry(object):
                '--client-count', (self.client_number+1)//2, '--port', self.port]
 
         #PY3: convert PosixPath to str, can be remove in Python 3
-        cmd = map(str, cmd)
+        cmd = list(map(str, cmd))
 
         cmd[:0] = RE6ST_REGISTRY.split()
 
@@ -210,7 +210,7 @@ class Re6stNode(object):
         # read token
         db = sqlite3.connect(str(self.registry.db), isolation_level=None)
         token = None
-        for _ in xrange(100):
+        for _ in range(100):
             time.sleep(.1)
             token = db.execute("SELECT token FROM token WHERE email=?",
                                (self.email,)).fetchone()
@@ -236,7 +236,7 @@ class Re6stNode(object):
                '--key', self.key, '-v4', '--registry', self.registry.url,
                '--console', self.console]
         #PY3: same as for Re6stRegistry.run
-        cmd = map(str, cmd)
+        cmd = list(map(str, cmd))
         cmd[:0] = RE6STNET.split()
 
         cmd += args

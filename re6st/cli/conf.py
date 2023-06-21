@@ -101,7 +101,7 @@ def main():
     if config.req:
         components.update(config.req)
     subj = req.get_subject()
-    for k, v in components.items():
+    for k, v in list(components.items()):
         if k in reserved:
             sys.exit(k + " field is reserved.")
         if v:
@@ -116,11 +116,11 @@ def main():
             token = ''
         elif not token:
             if not config.email:
-                config.email = input('Please enter your email address: ')
+                config.email = eval(input('Please enter your email address: '))
             s.requestToken(config.email)
             token_advice = "Use --token to retry without asking a new token\n"
             while not token:
-                token = input('Please enter your token: ')
+                token = eval(input('Please enter your token: '))
 
         try:
             with open(key_path) as f:
@@ -131,7 +131,7 @@ def main():
             if e.errno != errno.ENOENT:
                 raise
             bits = ca.get_pubkey().bits()
-            print("Generating %s-bit key ..." % bits)
+            print(("Generating %s-bit key ..." % bits))
             pkey = crypto.PKey()
             pkey.generate_key(crypto.TYPE_RSA, bits)
             key = crypto.dump_privatekey(crypto.FILETYPE_PEM, pkey)
@@ -164,13 +164,13 @@ def main():
 
     cert = loadCert(cert)
     not_after = x509.notAfter(cert)
-    print("Setup complete. Certificate is valid until %s UTC"
+    print(("Setup complete. Certificate is valid until %s UTC"
           " and will be automatically renewed after %s UTC.\n"
           "Do not forget to backup to your private key (%s) or"
           " you will lose your assigned subnet." % (
         time.asctime(time.gmtime(not_after)),
         time.asctime(time.gmtime(not_after - registry.RENEW_PERIOD)),
-        key_path))
+        key_path)))
 
     if not os.path.lexists(conf_path):
         create(conf_path, """\
@@ -193,8 +193,8 @@ key %s
 
     cn = x509.subnetFromCert(cert)
     subnet = network + utils.binFromSubnet(cn)
-    print("Your subnet: %s/%u (CN=%s)" \
-        % (utils.ipFromBin(subnet), len(subnet), cn))
+    print(("Your subnet: %s/%u (CN=%s)" \
+        % (utils.ipFromBin(subnet), len(subnet), cn)))
 
 if __name__ == "__main__":
     main()

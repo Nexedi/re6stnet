@@ -60,7 +60,7 @@ class TestRegistryClientInteract(unittest.TestCase):
         # read token from db
         db = sqlite3.connect(str(self.server.db), isolation_level=None)
         token = None
-        for _ in xrange(100):
+        for _ in range(100):
             time.sleep(.1)
             token = db.execute("SELECT token FROM token WHERE email=?",
                                (email,)).fetchone()
@@ -88,7 +88,7 @@ class TestRegistryClientInteract(unittest.TestCase):
             file.flush()
             return file
 
-        ca, key, cert = map(write_to_temp, (ca, key, cert))
+        ca, key, cert = list(map(write_to_temp, (ca, key, cert)))
         client.cert = x509.Cert(ca.name, key.name, cert.name)
         ca.close()
         cert.close()
@@ -104,7 +104,7 @@ class TestRegistryClientInteract(unittest.TestCase):
         # just prove works
         net_config = client.getNetworkConfig(prefix)
         net_config = json.loads(zlib.decompress(net_config))
-        self.assertEqual(net_config[u'max_clients'], self.max_clients)
+        self.assertEqual(net_config['max_clients'], self.max_clients)
 
         # no re6stnet, empty result
         bootpeer = client.getBootstrapPeer(prefix)

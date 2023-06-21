@@ -54,7 +54,7 @@ class ipcm(object):
                     for x in r:
                         logging.debug("%s", x)
                     return r
-        except socket.error, e:
+        except socket.error as e:
             logging.info("RINA: %s", e)
         del self._socket
 
@@ -62,14 +62,14 @@ class ipcm(object):
         i = iter(self("list-ipcps") or ())
         for line in i:
             if line.startswith("Current IPC processes"):
-                l = lambda x: () if x == '-' else map(str.strip, x.split(','))
+                l = lambda x: () if x == '-' else list(map(str.strip, x.split(',')))
                 for line in i:
                     if not line:
                         return
-                    id, name, type, state, reg_apps, ports = map(
-                        str.strip, line.split('|'))
+                    id, name, type, state, reg_apps, ports = list(map(
+                        str.strip, line.split('|')))
                     yield (int(id), name.replace(':', '-'), type, state,
-                           l(reg_apps), map(int, l(ports)))
+                           l(reg_apps), list(map(int, l(ports))))
 
     def queryRib(self, *args):
         r = self("query-rib", *args)
@@ -96,7 +96,7 @@ class ipcm(object):
     def iterNeigh(self, ipcp_id):
         for x in self.queryRib(ipcp_id, "Neighbor",
                                "/difManagement/enrollment/neighbors/"):
-            x = dict(map(str.strip, x.split(':')) for x in x[3].split(';'))
+            x = dict(list(map(str.strip, x.split(':'))) for x in x[3].split(';'))
             yield (x['Name'],
                 int(x['Address']),
                 int(x['Enrolled']),
@@ -117,7 +117,7 @@ class Shim(object):
     def _kernel(self, **kw):
         fd = os.open("/sys/rina/ipcps/%s/config" % self.ipcp_id, os.O_WRONLY)
         try:
-            os.write(fd, ''.join("%s\0%s\0" % x for x in kw.iteritems()))
+            os.write(fd, ''.join("%s\0%s\0" % x for x in kw.items()))
         finally:
             os.close(fd)
 
@@ -189,7 +189,7 @@ class Shim(object):
         enrolled = set(ap_prefix(neigh[0].split('-', 1)[0])
             for neigh in ipcm.iterNeigh(normal_id))
         now = time.time()
-        for neigh_routes in tm.ctl.neighbours.itervalues():
+        for neigh_routes in tm.ctl.neighbours.values():
             for prefix in neigh_routes[1]:
                 if not prefix or prefix in enrolled:
                     continue
@@ -255,7 +255,7 @@ class Shim(object):
                             logging.debug("RINA: resolve(%r) -> %r", d, address)
                             s.send(struct.pack('=I', address))
                             continue
-                    except Exception, e:
+                    except Exception as e:
                         logging.info("RINA: %s", e)
                     clients.remove(s)
                     s.close()
@@ -296,7 +296,7 @@ if os.path.isdir("/sys/rina"):
                         shim.update(tunnel_manager)
                     return True
             shim = None
-        except Exception, e:
+        except Exception as e:
             logging.info("RINA: %s", e)
         return False
 
@@ -304,5 +304,5 @@ def enabled(*args):
     if shim:
         try:
             shim.enabled(*args)
-        except Exception, e:
+        except Exception as e:
             logging.info("RINA: %s", e)
