@@ -93,20 +93,18 @@ class Cache(object):
                 self._registry.getNetworkConfig(self._prefix)))
             base64 = x.pop('', ())
             config = {}
-            for k, v in x.iteritems():
+            for k, v in x.items():
                 k = str(k)
                 if k.startswith('babel_hmac'):
                     if v:
                         v = self._decrypt(v.decode('base64'))
                 elif k in base64:
                     v = v.decode('base64')
-                elif type(v) is unicode:
-                    v = str(v)
                 elif isinstance(v, (list, dict)):
                     k += ':json'
                     v = json.dumps(v)
                 config[k] = v
-        except socket.error, e:
+        except socket.error as e:
             logging.warning(e)
             return
         except Exception:
@@ -135,11 +133,11 @@ class Cache(object):
             db.executemany("INSERT OR REPLACE INTO config VALUES(?,?)",
                            ((k, buffer(v) if k in base64 or
                              k.startswith('babel_hmac') else v)
-                            for k, v in config.iteritems()))
-        self._loadConfig(config.iteritems())
+                            for k, v in config.items()))
+        self._loadConfig(iter(config.items()))
         return [k[:-5] if k.endswith(':json') else k
                 for k in chain(remove, (k
-                    for k, v in config.iteritems()
+                    for k, v in config.items()
                     if k not in old or old[k] != v))]
 
     def warnProtocol(self):
@@ -240,7 +238,7 @@ class Cache(object):
         try:
             bootpeer = self._registry.getBootstrapPeer(self._prefix)
             prefix, address = self._decrypt(bootpeer).split()
-        except (socket.error, subprocess.CalledProcessError, ValueError), e:
+        except (socket.error, subprocess.CalledProcessError, ValueError) as e:
             logging.warning('Failed to bootstrap (%s)',
                             e if bootpeer else 'no peer returned')
         else:
@@ -276,5 +274,5 @@ class Cache(object):
     def getCountry(self, ip):
         try:
             return self._registry.getCountry(self._prefix, ip)
-        except socket.error, e:
+        except socket.error as e:
             logging.warning('Failed to get country (%s)', ip)

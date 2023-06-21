@@ -132,7 +132,7 @@ def router(ip, ip4, rt6, hello_interval, log_path, state_path, pidfile,
     # WKRD: babeld fails to start if pidfile already exists
     try:
         os.remove(pidfile)
-    except OSError, e:
+    except OSError as e:
         if e.errno != errno.ENOENT:
             raise
     logging.info('%r', cmd)
