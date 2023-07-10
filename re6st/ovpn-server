@@ -1,4 +1,4 @@
-#!/usr/bin/python2 -S
+#!/srv/slapgrid/slappart72/srv/runner/shared/python3/ab2ff6c97fc584a7bb23f567f814e0ca/bin/python3.9 -S
 import os, sys
 
 script_type = os.environ['script_type']

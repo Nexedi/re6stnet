@@ -27,7 +27,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from email.mime.text import MIMEText
 from operator import itemgetter
 from OpenSSL import crypto
-from urllib.parse import splittype, splithost, unquote, urlencode
+from urllib.parse import urlparse, unquote, urlencode
 from . import ctl, tunnel, utils, version, x509
 
 HMAC_HEADER = "Re6stHMAC"
@@ -69,7 +69,7 @@ class RegistryServer(object):
 
         # Parse community file
         self.community_map = {}
-	if config.community:
+        if config.community:
             with open(config.community) as x:
                 for x in x:
                     x = x.strip()
@@ -805,8 +805,8 @@ class RegistryClient(object):
     def __init__(self, url, cert=None, auto_close=True):
         self.cert = cert
         self.auto_close = auto_close
-        scheme, host = splittype(url)
-        host, path = splithost(host)
+        url_parsed = urlparse(url)
+        scheme, host, path = url_parsed.scheme, url_parsed.netloc, url_parsed.path
         self._conn = dict(http=http.client.HTTPConnection,
                           https=http.client.HTTPSConnection,
                           )[scheme](unquote(host), timeout=60)

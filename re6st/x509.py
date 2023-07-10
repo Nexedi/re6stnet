@@ -14,10 +14,10 @@ def subnetFromCert(cert):
     return cert.get_subject().CN
 
 def notBefore(cert):
-    return calendar.timegm(time.strptime(cert.get_notBefore(),'%Y%m%d%H%M%SZ'))
+    return calendar.timegm(time.strptime(cert.get_notBefore().decode(),'%Y%m%d%H%M%SZ'))
 
 def notAfter(cert):
-    return calendar.timegm(time.strptime(cert.get_notAfter(),'%Y%m%d%H%M%SZ'))
+    return calendar.timegm(time.strptime(cert.get_notAfter().decode(),'%Y%m%d%H%M%SZ'))
 
 def openssl(*args):
     return utils.Popen(('openssl',) + args,

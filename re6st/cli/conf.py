@@ -173,7 +173,7 @@ def main():
         key_path)))
 
     if not os.path.lexists(conf_path):
-        create(conf_path, """\
+        create(conf_path, ("""\
 registry %s
 ca %s
 cert %s
@@ -188,7 +188,7 @@ key %s
 #O3
 """ % (config.registry, ca_path, cert_path, key_path,
        ('country ' + config.location.split(',', 1)[0]) \
-           if config.location else ''))
+           if config.location else '')).encode())
         print("Sample configuration file created.")
 
     cn = x509.subnetFromCert(cert)
