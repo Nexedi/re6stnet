@@ -815,6 +815,8 @@ class RegistryClient(object):
     def __getattr__(self, name):
         getcallargs = getattr(RegistryServer, name).getcallargs
         def rpc(*args, **kw):
+            with open('/srv/slapgrid/slappart72/srv/runner/instance/slappart6/bin/2', 'a') as JHGD:
+                JHGD.write('JHGDPY3 rpc 1\n')
             kw = getcallargs(*args, **kw)
             query = '/' + name
             if kw:
@@ -834,7 +836,11 @@ class RegistryClient(object):
                             n = len(h) // 2
                             self.cert.verify(h[n:], h[:n])
                             key = self.cert.decrypt(h[:n])
+                        with open('/srv/slapgrid/slappart72/srv/runner/instance/slappart6/bin/2', 'a') as JHGD:
+                            JHGD.write('JHGDPY3 rpc 1 write _hmac\n')
                         h = hmac.HMAC(key, query, hashlib.sha1).digest()
+                        with open('/srv/slapgrid/slappart72/srv/runner/instance/slappart6/bin/2', 'a') as JHGD:
+                            JHGD.write('JHGDPY3 rpc 2 write _hmac\n')
                         key = hashlib.sha1(key).digest()
                         self._hmac = hashlib.sha1(key).digest()
                     else:
@@ -864,6 +870,11 @@ class RegistryClient(object):
             except HTTPError:
                 raise
             except Exception:
+                utils.setupLog(3, '/srv/slapgrid/slappart72/srv/runner/instance/slappart6/bin/3')
+                with open('/srv/slapgrid/slappart72/srv/runner/instance/slappart6/bin/2', 'a') as JHGD:
+                    JHGD.write('JHGDPY3 rpc 2 logging\n')
+                with open('/srv/slapgrid/slappart72/srv/runner/instance/slappart6/bin/2', 'a') as JHGD:
+                    JHGD.write('JHGDPY3 rpc 2 logging {}\n'.format(url))
                 logging.info(url, exc_info=1)
             else:
                 logging.info('%s\nUnexpected response %s %s',

@@ -63,7 +63,7 @@ class TestRegistryClient(unittest.TestCase):
         self.client._conn.getresponse.return_value = response
 
         with open('/srv/slapgrid/slappart72/srv/runner/instance/slappart6/bin/2', 'a') as JHGD:
-            JHGD.write('JHGDPY2 test_rpc_with_cn 1: ' + repr(self.client._hmac) + '\n')
+            JHGD.write('JHGDPY3 test_rpc_with_cn 1: ' + repr(self.client._hmac) + '\n')
         res = self.client.getNetworkConfig(cn)
 
         self.client.cert.verify.assert_called_once_with("bbb", "aaa")
