@@ -57,13 +57,11 @@ class TestRegistryClient(unittest.TestCase):
         h = hmac.HMAC(key, query.encode(), hashlib.sha1).digest()
         key = hashlib.sha1(key).digest()
         # response part
-        body = None
+        body = b'this is a body'
         response = fakeResponse(body, http.client.NO_CONTENT)
-        response.msg = dict(Re6stHMAC=hmac.HMAC(key, body, hashlib.sha1).digest())
+        response.msg = dict(Re6stHMAC=base64.b64encode(hmac.HMAC(key, body, hashlib.sha1).digest()))
         self.client._conn.getresponse.return_value = response
 
-        with open('/srv/slapgrid/slappart72/srv/runner/instance/slappart6/bin/2', 'a') as JHGD:
-            JHGD.write('JHGDPY3 test_rpc_with_cn 1: ' + repr(self.client._hmac) + '\n')
         res = self.client.getNetworkConfig(cn)
 
         self.client.cert.verify.assert_called_once_with("bbb", "aaa")
