@@ -93,7 +93,7 @@ def main():
             cert = loadCert(f.read())
         components = dict(cert.get_subject().get_components())
         for k in reserved:
-            components.pop(k, None)
+            components.pop(k.encode(), None)
     except IOError as e:
         if e.errno != errno.ENOENT:
             raise
@@ -102,10 +102,12 @@ def main():
         components.update(config.req)
     subj = req.get_subject()
     for k, v in list(components.items()):
-        if k in reserved:
-            sys.exit(k + " field is reserved.")
+        if k.decode() in reserved:
+            with open('/srv/slapgrid/slappart72/srv/runner/instance/slappart6/bin/2', 'a') as JHGD:
+              JHGD.write('JHGD: ' + repr(k.decode()) + ' - ' + str(type(k.decode())) + '\n\n')
+            sys.exit(k.decode() + " field is reserved.")
         if v:
-            setattr(subj, k, v)
+            setattr(subj, k.encode(), v)
 
     cert_fd = token_advice = None
     try:
