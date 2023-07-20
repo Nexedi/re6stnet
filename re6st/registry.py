@@ -862,7 +862,6 @@ class RegistryClient(object):
             except HTTPError:
                 raise
             except Exception:
-                utils.setupLog(3, '/srv/slapgrid/slappart72/srv/runner/instance/slappart6/bin/3')
                 logging.info(url, exc_info=1)
             else:
                 logging.info('%s\nUnexpected response %s %s',
