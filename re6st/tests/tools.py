@@ -40,7 +40,7 @@ def generate_cert(ca, ca_key, csr, prefix, serial, not_after=None):
     cert.gmtime_adj_notBefore(0)
     if not_after:
         cert.set_notAfter(
-            time.strftime("%Y%m%d%H%M%SZ", time.gmtime(not_after)))
+            time.strftime("%Y%m%d%H%M%SZ", time.gmtime(not_after)).encode())
     else:
         cert.gmtime_adj_notAfter(registry.RegistryServer.cert_duration)
     subject = req.get_subject()
@@ -57,9 +57,9 @@ def create_cert_file(pkey_file, cert_file, ca, ca_key, prefix, serial):
     pkey, csr = generate_csr()
     cert = generate_cert(ca, ca_key, csr, prefix, serial)
     with open(pkey_file, 'w') as f:
-        f.write(pkey)
+        f.write(pkey.decode())
     with open(cert_file, 'w') as f:
-        f.write(cert)
+        f.write(cert.decode())
 
     return pkey, cert
 
@@ -101,7 +101,7 @@ def serial2prefix(serial):
 # pkey: private key
 def decrypt(pkey, incontent):
     with open("node.key", 'w') as f:
-        f.write(pkey)
+        f.write(pkey.decode())
     args = "openssl rsautl -decrypt -inkey node.key".split()
     p = subprocess.Popen(
         args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)

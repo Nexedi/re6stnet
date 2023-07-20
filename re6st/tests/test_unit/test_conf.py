@@ -72,7 +72,7 @@ class TestConf(unittest.TestCase):
         # go back to original dir
         os.chdir(self.origin_dir)
 
-    @patch("__builtin__.raw_input")
+    @patch("builtins.input")
     def test_basic(self, mock_raw_input):
         """ go through all the step
             getCa, requestToken, requestCertificate

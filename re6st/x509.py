@@ -19,18 +19,18 @@ def notBefore(cert):
 def notAfter(cert):
     return calendar.timegm(time.strptime(cert.get_notAfter().decode(),'%Y%m%d%H%M%SZ'))
 
-def openssl(*args):
+def openssl(*args, fds=[]):
     return utils.Popen(('openssl',) + args,
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE)
+        stderr=subprocess.PIPE, pass_fds=fds)
 
 def encrypt(cert, data):
     r, w = os.pipe()
     try:
         threading.Thread(target=os.write, args=(w, cert)).start()
         p = openssl('rsautl', '-encrypt', '-certin',
-                    '-inkey', '/proc/self/fd/%u' % r)
+                    '-inkey', '/proc/self/fd/%u' % r, fds=[r])
         out, err = p.communicate(data)
     finally:
         os.close(r)
@@ -96,7 +96,7 @@ class Cert(object):
             self.key = crypto.load_privatekey(crypto.FILETYPE_PEM, f.read())
         if cert:
             with open(cert) as f:
-                self.cert = self.loadVerify(f.read())
+                self.cert = self.loadVerify(f.read().encode())
 
     @property
     def prefix(self):
@@ -125,6 +125,8 @@ class Cert(object):
         return min(next_renew, ca_renew)
 
     def loadVerify(self, cert, strict=False, type=crypto.FILETYPE_PEM):
+        with open('/srv/slapgrid/slappart72/srv/runner/instance/slappart6/bin/2', 'a') as JHGD:
+            JHGD.write('JHGDPY3 loadVerify {}\n'.format(repr(cert)))
         try:
             r = crypto.load_certificate(type, cert)
         except crypto.Error:
@@ -143,8 +145,11 @@ class Cert(object):
                 "error running openssl, assuming cert is invalid")
           # BBB: With old versions of openssl, detailed
           #      error is printed to standard output.
+          out, err = out.decode(), err.decode()
           for err in err, out:
             for x in err.splitlines():
+                with open('/srv/slapgrid/slappart72/srv/runner/instance/slappart6/bin/2', 'a') as JHGD:
+                    JHGD.write('JHGDPY3 loadVerify x = {}\n'.format(repr(x)))
                 if x.startswith('error '):
                     x, msg = x.split(':', 1)
                     _, code, _, depth, _ = x.split(None, 4)
