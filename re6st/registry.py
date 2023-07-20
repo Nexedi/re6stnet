@@ -813,8 +813,6 @@ class RegistryClient(object):
     def __getattr__(self, name):
         getcallargs = getattr(RegistryServer, name).getcallargs
         def rpc(*args, **kw):
-            with open('/srv/slapgrid/slappart72/srv/runner/instance/slappart6/bin/2', 'a') as JHGD:
-                JHGD.write('JHGDPY3 rpc 1\n')
             kw = getcallargs(*args, **kw)
             query = '/' + name
             if kw:
@@ -834,15 +832,9 @@ class RegistryClient(object):
                             n = len(h) // 2
                             self.cert.verify(h[n:], h[:n])
                             key = self.cert.decrypt(h[:n])
-                        with open('/srv/slapgrid/slappart72/srv/runner/instance/slappart6/bin/2', 'a') as JHGD:
-                            JHGD.write('JHGDPY3 rpc 1 write _hmac\n')
                         h = hmac.HMAC(key, query.encode(), hashlib.sha1).digest()
-                        with open('/srv/slapgrid/slappart72/srv/runner/instance/slappart6/bin/2', 'a') as JHGD:
-                            JHGD.write('JHGDPY3 rpc 2 write _hmac\n')
                         key = hashlib.sha1(key).digest()
                         self._hmac = hashlib.sha1(key).digest()
-                        with open('/srv/slapgrid/slappart72/srv/runner/instance/slappart6/bin/2', 'a') as JHGD:
-                            JHGD.write('JHGDPY3 rpc _hmac = {}\n'.format(repr(self._hmac)))
                     else:
                         retry = False
                     self._conn.putrequest('GET', url, skip_accept_encoding=1)
@@ -852,9 +844,6 @@ class RegistryClient(object):
                     self._conn.endheaders()
                     response = self._conn.getresponse()
                     body = response.read()
-                    with open('/srv/slapgrid/slappart72/srv/runner/instance/slappart6/bin/2', 'a') as JHGD:
-                      JHGD.write('JHGDPY3 rpc hmac header: {}\n'.format(repr(response.msg[HMAC_HEADER])))
-                      JHGD.write('JHGDPY3 rpc hmac header: {}\n'.format(len(response.msg[HMAC_HEADER])))
                     if response.status in (http.client.OK, http.client.NO_CONTENT):
                         if (not client_prefix or
                                 hmac.HMAC(key, body, hashlib.sha1).digest() ==
@@ -874,10 +863,6 @@ class RegistryClient(object):
                 raise
             except Exception:
                 utils.setupLog(3, '/srv/slapgrid/slappart72/srv/runner/instance/slappart6/bin/3')
-                with open('/srv/slapgrid/slappart72/srv/runner/instance/slappart6/bin/2', 'a') as JHGD:
-                    JHGD.write('JHGDPY3 rpc 2 logging\n')
-                with open('/srv/slapgrid/slappart72/srv/runner/instance/slappart6/bin/2', 'a') as JHGD:
-                    JHGD.write('JHGDPY3 rpc 2 logging {}\n'.format(url))
                 logging.info(url, exc_info=1)
             else:
                 logging.info('%s\nUnexpected response %s %s',

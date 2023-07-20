@@ -125,8 +125,6 @@ class Cert(object):
         return min(next_renew, ca_renew)
 
     def loadVerify(self, cert, strict=False, type=crypto.FILETYPE_PEM):
-        with open('/srv/slapgrid/slappart72/srv/runner/instance/slappart6/bin/2', 'a') as JHGD:
-            JHGD.write('JHGDPY3 loadVerify {}\n'.format(repr(cert)))
         try:
             r = crypto.load_certificate(type, cert)
         except crypto.Error:
@@ -148,8 +146,6 @@ class Cert(object):
           out, err = out.decode(), err.decode()
           for err in err, out:
             for x in err.splitlines():
-                with open('/srv/slapgrid/slappart72/srv/runner/instance/slappart6/bin/2', 'a') as JHGD:
-                    JHGD.write('JHGDPY3 loadVerify x = {}\n'.format(repr(x)))
                 if x.startswith('error '):
                     x, msg = x.split(':', 1)
                     _, code, _, depth, _ = x.split(None, 4)
