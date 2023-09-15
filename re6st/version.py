@@ -1,12 +1,12 @@
 import subprocess as _S
-from os.path import dirname as _d
-_d = _d(__file__)
+import os
+_d = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 
 def _git_call(*args):
-    return _S.call(("git",) + args, cwd=_d)
+    return _S.call(("git", "-c", "safe.directory={}".format(_d)) + args, cwd=_d)
 
 def _git_output(*args):
-    p = _S.Popen(("git",) + args, cwd=_d, stdout=_S.PIPE, stderr=_S.PIPE)
+    p = _S.Popen(("git", "-c", "safe.directory={}".format(_d)) + args, cwd=_d, stdout=_S.PIPE, stderr=_S.PIPE)
     out, err = p.communicate()
     if p.returncode:
         raise _S.CalledProcessError(p.returncode, "git", err)
