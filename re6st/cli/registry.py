@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/opt/re6st/parts/python3/bin/python3
 import http.client, logging, os, socket, sys
 from http.server import BaseHTTPRequestHandler
 from socketserver import ThreadingTCPServer

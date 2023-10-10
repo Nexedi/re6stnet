@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/opt/re6st/parts/python3/bin/python3
 import atexit, errno, logging, os, shutil, signal
 import socket, struct, subprocess, sys
 from collections import deque

@@ -1,4 +1,4 @@
-#!/usr/bin/python -S
+#!/opt/re6st/parts/python3/bin/python3b' -S'
 import os, sys
 
 script_type = os.environ['script_type']

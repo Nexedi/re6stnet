@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/opt/re6st/parts/python3/bin/python3
 import argparse, atexit, binascii, errno, hashlib
 import os, subprocess, sqlite3, sys, time
 from OpenSSL import crypto
