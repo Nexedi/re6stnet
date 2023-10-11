@@ -67,6 +67,8 @@ def setupLog(log_level, filename=None, **kw):
 
 def log_exception():
     f = traceback.format_exception(*sys.exc_info())
+    import pdb; pdb.set_trace()
+    logging.info('JHGD: log_exception')
     logging.error('%s%s', f.pop(), ''.join(f))
 
 
@@ -235,14 +237,21 @@ def dump_address(address):
 
 # Yield ip, port, protocol, and country if it is in the address
 def parse_address(address_list):
-    for address in address_list.split(';'):
-        try:
-            a = address.split(',')
-            int(a[1]) # Check if port is an int
-            yield tuple(a[:4])
-        except ValueError as e:
-            logging.warning("Failed to parse node address %r (%s)",
-                            address, e)
+    logging.info('JHGD: parse_address1')
+    try:
+        for address in address_list.split(';'):
+            logging.info('JHGD: parse_address2')
+            try:
+                logging.info('JHGD: split1')
+                a = address.split(',')
+                logging.info('JHGD: split2')
+                int(a[1]) # Check if port is an int
+                yield tuple(a[:4])
+            except ValueError as e:
+                logging.warning("Failed to parse node address %r (%s)",
+                                address, e)
+    except TypeError as e:
+        import pdb; pdb.set_trace()
 
 def binFromSubnet(subnet):
     p, l = subnet.split('/')

@@ -167,7 +167,7 @@ class Cert(object):
 
     def verifyVersion(self, version):
         try:
-            n = 1 + (ord(version[0]) >> 5)
+            n = 1 + (version[0] >> 5)
             self.verify(version[n:], version[:n])
         except (IndexError, crypto.Error):
             raise VerifyError(None, None, 'invalid network version')

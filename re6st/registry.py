@@ -91,7 +91,7 @@ class RegistryServer(object):
                 "name TEXT PRIMARY KEY NOT NULL",
                 "value")
         self.prefix = self.getConfig("prefix", None)
-        self.version = str(self.getConfig("version", "\0")) # BBB: blob
+        self.version = str(self.getConfig("version", b'\x00')) # BBB: blob
         utils.sqliteCreateTable(self.db, "token",
                 "token TEXT PRIMARY KEY NOT NULL",
                 "email TEXT NOT NULL",
@@ -201,7 +201,7 @@ class RegistryServer(object):
 
     def recv(self, code):
         try:
-            prefix, msg = self.sock.recv(1<<16).split('\0', 1)
+            prefix, msg = self.sock.recv(1<<16).split(b'\x00', 1)
             int(prefix, 2)
         except ValueError:
             pass
