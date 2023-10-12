@@ -6,7 +6,7 @@ import sys, textwrap, threading, time, traceback
 #      and then socket.SOCK_CLOEXEC will be useless.
 #      (We already follow the good practice that consists in not
 #      relying on the GC for the closing of file descriptors.)
-socket.SOCK_CLOEXEC = 0x80000
+#socket.SOCK_CLOEXEC = 0x80000
 
 HMAC_LEN = len(hashlib.sha1(b'').digest())
 
@@ -182,8 +182,10 @@ class Popen(subprocess.Popen):
             t = threading.Timer(5, self.kill)
             t.start()
             # PY3: use waitid(WNOWAIT) and call self.poll() after t.cancel()
-            r = self.wait()
+            #r = self.wait()
+            r = self.waitid(WNOWAIT) # PY3
             t.cancel()
+            self.poll() # PY3
             return r
 
 

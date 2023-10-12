@@ -94,7 +94,7 @@ class Connection(object):
             '--remap-usr1', 'SIGTERM',
             '--ping-exit', str(tm.timeout),
             '--route-up', '%s %u' % (plib.ovpn_client, tm.write_sock.fileno()),
-            *tm.ovpn_args)
+            *tm.ovpn_args, pass_fds=tm.write_sock.fileno())
         tm.resetTunnelRefresh()
         self._retry += 1
 
