@@ -67,8 +67,6 @@ def setupLog(log_level, filename=None, **kw):
 
 def log_exception():
     f = traceback.format_exception(*sys.exc_info())
-    import pdb; pdb.set_trace()
-    logging.info('JHGD: log_exception')
     logging.error('%s%s', f.pop(), ''.join(f))
 
 
@@ -281,9 +279,9 @@ def packInteger(i):
     raise OverflowError
 
 def unpackInteger(x):
-    n = ord(x[0]) >> 5
+    n = x[0] >> 5
     try:
-        i, = struct.unpack("!Q", b'\0' * (7 - n) + x[:n+1].encode())
+        i, = struct.unpack("!Q", b'\0' * (7 - n) + x[:n+1])
     except struct.error:
         return
     return sum((32 << 8 * i for i in range(n)),

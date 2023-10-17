@@ -94,7 +94,7 @@ class Connection(object):
             '--remap-usr1', 'SIGTERM',
             '--ping-exit', str(tm.timeout),
             '--route-up', '%s %u' % (plib.ovpn_client, tm.write_sock.fileno()),
-            *tm.ovpn_args, pass_fds=tm.write_sock.fileno())
+            *tm.ovpn_args, pass_fds=[tm.write_sock.fileno()])
         tm.resetTunnelRefresh()
         self._retry += 1
 
@@ -169,7 +169,7 @@ class TunnelKiller(object):
         if (self.address, self.ifindex) in tm.ctl.locked:
             self.state = 'locked'
             self.timeout = time.time() + 2 * tm.timeout
-            tm.sendto(self.peer, '\2' if self.client else '\3')
+            tm.sendto(self.peer, b'\2' if self.client else b'\3')
         else:
             self.timeout = 0
 
@@ -359,13 +359,13 @@ class BaseTunnelManager(object):
         to = address[:2]
         if address[0] == '::1':
             try:
-                prefix, msg = msg.split('\0', 1)
+                prefix, msg = msg.split(b'\0', 1)
                 int(prefix, 2)
             except ValueError:
                 return
             if msg:
                 self._forward = to
-                code = ord(msg[0])
+                code = msg[0]
                 if prefix == self._prefix:
                     msg = self._processPacket(msg)
                     if msg:
@@ -397,7 +397,7 @@ class BaseTunnelManager(object):
                                   address, exc_info=1)
                     return
                 peer.version = self._version \
-                    if self._sendto(to, '\0' + self._version, peer) else ''
+                    if self._sendto(to, b'\0' + self._version, peer) else b''
                 return
             if seqno:
                 h = x509.fingerprint(self.cert.cert).digest()
@@ -444,10 +444,15 @@ class BaseTunnelManager(object):
             # We got a valid and non-empty message. Always reply
             # something so that the sender knows we're still connected.
             answer = self._processPacket(msg, peer.prefix)
-            self._sendto(to, msg[0] + answer if answer else "", peer)
+            try: # JGHD
+                self._sendto(to, msg[0:1] + answer.encode() if answer else b'', peer)
+            except Exception as e:
+                import pdb; pdb.set_trace()
+                raise e
+
 
     def _processPacket(self, msg, peer=None):
-        c = ord(msg[0])
+        c = msg[0]
         msg = msg[1:]
         code = c & 0x7f
         if c > 0x7f and msg:
@@ -456,6 +461,7 @@ class BaseTunnelManager(object):
         elif code == 1: # address
             if msg:
                 if peer:
+                    msg = msg.decode()
                     self.cache.addPeer(peer, msg)
                     try:
                         self._connecting.remove(peer)
@@ -526,7 +532,7 @@ class BaseTunnelManager(object):
                 if peer.prefix != prefix:
                     self.sendto(prefix, None)
                 elif (peer.version < self._version and
-                      self.sendto(prefix, '\0' + self._version)):
+                      self.sendto(prefix, b'\0' + self._version)):
                     peer.version = self._version
 
     def broadcastNewVersion(self):
@@ -635,10 +641,11 @@ class BaseTunnelManager(object):
                 logging.error("%s. Flushing...", msg)
                 subprocess.call(("ip", "-6", "route", "flush", "cached"))
                 self.sendto(self.cache.registry_prefix,
-                    '\7%s (%s)' % (msg, os.uname()[2]))
+                    b'\7%s (%s)' % (msg, os.uname()[2]))
                 break
 
     def _updateCountry(self, address):
+        logging.info("JHGD _updateCountry1 address = {}".format(repr(address)))
         def update():
             for a in address:
                 family, ip = resolve(*a[:3])
@@ -965,7 +972,7 @@ class TunnelManager(BaseTunnelManager):
                 address = self.cache.getAddress(peer)
                 if address:
                     count -= self._makeTunnel(peer, address)
-                elif self.sendto(peer, '\1'):
+                elif self.sendto(peer, b'\1'):
                     self._connecting.add(peer)
                     count -= 1
         elif distant_peers is None:
@@ -1019,9 +1026,12 @@ class TunnelManager(BaseTunnelManager):
                          common_name, tuple(self._connection_dict))
         if self._ip_changed:
             family, address = self._ip_changed(ip)
+            logging.info("JHGD: handleClientEvent address = {}".format(repr(address)))
             if address:
+                logging.info("JHGD: handleClientEvent3 address = {}".format(repr(address)))
                 if self.cache.same_country:
                     address = self._updateCountry(address)
+                logging.info("JHGD: handleClientEvent4 address = {}".format(repr(address)))
                 self._address[family] = utils.dump_address(address)
                 self.cache.my_address = ';'.join(iter(self._address.values()))
 

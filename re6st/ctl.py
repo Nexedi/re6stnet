@@ -253,7 +253,7 @@ class Babel(object):
         a = len(self.network)
         for route in routes:
             assert route.flags & 1, route # installed
-            if route.prefix.startswith('\0\0\0\0\0\0\0\0\0\0\xff\xff'):
+            if route.prefix.startswith(b'\0\0\0\0\0\0\0\0\0\0\xff\xff'):
                 continue
             assert route.neigh_address == route.nexthop, route
             address = route.neigh_address, route.ifindex

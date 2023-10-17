@@ -277,6 +277,6 @@ class Cache(object):
 
     def getCountry(self, ip):
         try:
-            return self._registry.getCountry(self._prefix, ip)
+            return self._registry.getCountry(self._prefix, ip).decode()
         except socket.error as e:
             logging.warning('Failed to get country (%s)', ip)

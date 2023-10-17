@@ -193,7 +193,7 @@ class RegistryServer(object):
         self.network_config = kw
 
     def increaseVersion(self):
-        x = utils.packInteger(1 + utils.unpackInteger(self.version)[0])
+        x = utils.packInteger(1 + utils.unpackInteger(self.version)[0:1])
         self.version = x + self.cert.sign(x)
 
     def sendto(self, prefix, code):
@@ -206,7 +206,7 @@ class RegistryServer(object):
         except ValueError:
             pass
         else:
-            if msg and ord(msg[0]) == code:
+            if msg and msg[0:1] == code:
                 return prefix, msg[1:]
         return None, None
 
@@ -694,7 +694,7 @@ class RegistryServer(object):
             else:
                 # Initialization of HMAC on the network
                 self.newHMAC(1)
-                self.newHMAC(2, '')
+                self.newHMAC(2, b'')
             self.increaseVersion()
             self.setConfig('version', self.version)
             self.network_config['version']  = base64.b64encode(self.version)

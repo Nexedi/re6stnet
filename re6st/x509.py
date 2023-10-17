@@ -207,7 +207,7 @@ class Peer(object):
     _key = newHmacSecret()
     serial = None
     stop_date = float('inf')
-    version = ''
+    version = b''
 
     def __init__(self, prefix):
         self.prefix = prefix
@@ -230,11 +230,11 @@ class Peer(object):
             try:
                 # Always assume peer is not old, in case it has just upgraded,
                 # else we would be stuck with the old protocol.
-                msg = ('\0\0\0\1'
+                msg = (b'\0\0\0\1'
                     + PACKED_PROTOCOL
                     + fingerprint(self.cert).digest())
             except AttributeError:
-                msg = '\0\0\0\0'
+                msg = b'\0\0\0\0'
             return msg + crypto.dump_certificate(crypto.FILETYPE_ASN1, cert)
 
     def hello0Sent(self):
@@ -247,7 +247,7 @@ class Peer(object):
         self._i = self._j = 2
         self._last = 0
         self.protocol = protocol
-        return ''.join(('\0\0\0\2', PACKED_PROTOCOL if protocol else '',
+        return b''.join((b'\0\0\0\2', PACKED_PROTOCOL if protocol else b'',
                         h, cert.sign(h)))
 
     def _hmac(self, msg):
@@ -284,8 +284,11 @@ class Peer(object):
 
     def encode(self, msg, _pack=seqno_struct.pack):
         self._j += 1
-        msg = _pack(self._j) + msg
-        return msg + self._hmac(msg)
+        try:
+            msg = _pack(self._j) + msg
+            return msg + self._hmac(msg)
+        except Exception as e:
+            import pdb; pdb.set_trace()
 
     del seqno_struct
 
