@@ -91,7 +91,6 @@ class Cache(object):
             # TODO: When possible, the registry should be queried via the re6st.
             x = json.loads(zlib.decompress(
                 self._registry.getNetworkConfig(self._prefix)))
-            logging.info("JHGD: x = {}".format(repr(x)))
             base64_list = x.pop('', ())
             config = {}
             for k, v in x.items():
@@ -232,7 +231,6 @@ class Cache(object):
                                                         + " ORDER BY RANDOM()"):
         #return self._db.execute(__sql, (self._prefix, failed))
         r =  self._db.execute(__sql, (self._prefix, failed))
-        logging.info('JHGD: getPeerList {}, {}, {}'.format(type(r), repr(r), [repr(x) for x in r]))
         return r
     def getPeerCount(self, failed=0, __sql=_get_peer_sql % "COUNT(*)"):
         return self._db.execute(__sql, (self._prefix, failed)).next()[0]

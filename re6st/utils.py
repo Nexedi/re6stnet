@@ -237,14 +237,10 @@ def dump_address(address):
 
 # Yield ip, port, protocol, and country if it is in the address
 def parse_address(address_list):
-    logging.info('JHGD: parse_address1')
     try:
         for address in address_list.split(';'):
-            logging.info('JHGD: parse_address2')
             try:
-                logging.info('JHGD: split1')
                 a = address.split(',')
-                logging.info('JHGD: split2')
                 int(a[1]) # Check if port is an int
                 yield tuple(a[:4])
             except ValueError as e:

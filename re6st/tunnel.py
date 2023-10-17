@@ -645,7 +645,6 @@ class BaseTunnelManager(object):
                 break
 
     def _updateCountry(self, address):
-        logging.info("JHGD _updateCountry1 address = {}".format(repr(address)))
         def update():
             for a in address:
                 family, ip = resolve(*a[:3])
@@ -860,9 +859,7 @@ class TunnelManager(BaseTunnelManager):
         assert prefix != self._prefix, self.__dict__
         address_list = []
         same_country  = self.cache.same_country
-        logging.info('JHGD: _makeTunnel1')
         for x in utils.parse_address(address):
-            logging.info('JHGD: _makeTunnel2')
             if x[2] in self._disable_proto:
                 continue
             if same_country:
@@ -881,7 +878,6 @@ class TunnelManager(BaseTunnelManager):
                             address_list.append((ip, x[1], x[2]))
                     continue
             address_list.append(x[:3])
-        logging.info('JHGD: _makeTunnel3')
         self.cache.connecting(prefix, 1)
         if not address_list:
             return False
@@ -898,7 +894,6 @@ class TunnelManager(BaseTunnelManager):
         return True
 
     def _makeNewTunnels(self, route_dumped):
-        logging.info('JHGD: _makeNewTunnels')
         count = self._client_count - len(self._connection_dict)
         if not count:
             return
@@ -940,9 +935,7 @@ class TunnelManager(BaseTunnelManager):
                 self._disconnected = time.time() + self.timeout * (
                     1 + random.randint(0, len(peers)))
                 distant_peers = None
-                logging.info('JHGD: _makeNewTunnels2')
                 if peers:
-                    logging.info('JHGD: _makeNewTunnels2.5')
                     # We aren't the only disconnected node
                     # so force rebootstrapping.
                     peer = self.cache.getBootstrapPeer()
@@ -956,10 +949,8 @@ class TunnelManager(BaseTunnelManager):
                         if not count:
                             return
         elif len(distant_peers) < count or 0 < self._disconnected < time.time():
-            logging.info('JHGD: _makeNewTunnels3')
             return True
         if distant_peers:
-            logging.info('JHGD: _makeNewTunnels4')
             if count and not self._served:
                 # Limit number of client tunnels if server is not reachable
                 # from outside.
@@ -976,28 +967,23 @@ class TunnelManager(BaseTunnelManager):
                     self._connecting.add(peer)
                     count -= 1
         elif distant_peers is None:
-            logging.info('JHGD: _makeNewTunnels6')
             # No route/tunnel to registry, which usually happens when starting
             # up. Select peers from cache for which we have no route.
             new = 0
             bootstrap = True
             for peer, address in self.cache.getPeerList():
-                logging.info('JHGD: _makeNewTunnels7')
                 if peer not in peers:
                     bootstrap = False
-                    logging.info('JHGD: _makeNewTunnels10 {}, {}'.format(type(address), repr(address)))
                     if self._makeTunnel(peer, address):
                         new += 1
                         if new == count:
                             return
             # The following condition on 'peers' is the same as above,
             # when we asked the registry for a node to bootstrap.
-            logging.info('JHGD: _makeNewTunnels8')
             if not (new or peers):
                 if bootstrap and registry != self._prefix:
                     # Startup without any good address in the cache.
                     peer = self.cache.getBootstrapPeer()
-                    logging.info('JHGD: _makeNewTunnels9')
                     if peer and self._makeTunnel(*peer):
                         return
                 # Failed to bootstrap ! Last chance to connect is to
@@ -1026,12 +1012,9 @@ class TunnelManager(BaseTunnelManager):
                          common_name, tuple(self._connection_dict))
         if self._ip_changed:
             family, address = self._ip_changed(ip)
-            logging.info("JHGD: handleClientEvent address = {}".format(repr(address)))
             if address:
-                logging.info("JHGD: handleClientEvent3 address = {}".format(repr(address)))
                 if self.cache.same_country:
                     address = self._updateCountry(address)
-                logging.info("JHGD: handleClientEvent4 address = {}".format(repr(address)))
                 self._address[family] = utils.dump_address(address)
                 self.cache.my_address = ';'.join(iter(self._address.values()))
 
