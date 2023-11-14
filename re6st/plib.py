@@ -89,7 +89,7 @@ def router(ip, ip4, rt6, hello_interval, log_path, state_path, pidfile,
             if hmac_accept:
                 key(cmd, 'accept', hmac_accept)
             else:
-                default += ' no_hmac_verify true'
+                default += ' accept-bad-signatures true'
     cmd += '-C', 'default ' + default
     if ip4:
         cmd += '-C', 'redistribute ip %s/%s eq %s' % (ip4, n4, n4)
