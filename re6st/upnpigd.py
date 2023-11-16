@@ -69,7 +69,7 @@ class Forwarder(object):
             try:
                 return self._refresh()
             except UPnPException as e:
-                logging.debug("UPnP failure", exc_info=1)
+                logging.debug("UPnP failure", exc_info=True)
                 self.clear()
         try:
             self.discover()

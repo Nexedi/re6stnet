@@ -329,7 +329,7 @@ class BaseTunnelManager(object):
     def _getPeer(self, prefix):
         return self._peers[bisect(self._peers, prefix) - 1]
 
-    def sendto(self, prefix, msg):
+    def sendto(self, prefix: str, msg):
         to = utils.ipFromBin(self._network + prefix), PORT
         peer = self._getPeer(prefix)
         if peer.prefix != prefix:
@@ -360,6 +360,7 @@ class BaseTunnelManager(object):
         if address[0] == '::1':
             try:
                 prefix, msg = msg.split(b'\0', 1)
+                prefix = prefix.decode()
                 int(prefix, 2)
             except ValueError:
                 return
@@ -371,7 +372,7 @@ class BaseTunnelManager(object):
                     if msg:
                         self._sendto(to, '%s\0%c%s' % (prefix, code, msg))
                 else:
-                    self.sendto(prefix, chr(code | 0x80) + msg[1:])
+                    self.sendto(prefix, bytes([code | 0x80]) + msg[1:])
             return
         try:
             sender = utils.binFromIp(address[0])
@@ -384,7 +385,7 @@ class BaseTunnelManager(object):
         msg = peer.decode(msg)
         if type(msg) is tuple:
           seqno, msg, protocol = msg
-          def handleHello(peer, seqno, msg, retry):
+          def handleHello(peer, seqno, msg: bytes, retry):
             if seqno == 2:
                 i = len(msg) // 2
                 h = msg[:i]
@@ -394,7 +395,7 @@ class BaseTunnelManager(object):
                 except (AttributeError, crypto.Error, x509.NewSessionError,
                         subprocess.CalledProcessError):
                     logging.debug('ignored new session key from %r',
-                                  address, exc_info=1)
+                                  address, exc_info=True)
                     return
                 peer.version = self._version \
                     if self._sendto(to, b'\0' + self._version, peer) else b''
