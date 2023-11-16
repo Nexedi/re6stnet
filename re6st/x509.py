@@ -266,7 +266,7 @@ class Peer(object):
 
     seqno_struct = struct.Struct("!L")
 
-    def decode(self, msg, _unpack=seqno_struct.unpack):
+    def decode(self, msg: bytes, _unpack=seqno_struct.unpack) -> str:
         seqno, = _unpack(msg[:4])
         if seqno <= 2:
             msg = msg[4:]
@@ -280,10 +280,12 @@ class Peer(object):
         if self._hmac(msg[:i]) == msg[i:] and self._i < seqno:
             self._last = None
             self._i = seqno
-            return msg[4:i]
+            return msg[4:i].decode()
 
-    def encode(self, msg, _pack=seqno_struct.pack):
+    def encode(self, msg: str | bytes, _pack=seqno_struct.pack) -> bytes:
         self._j += 1
+        if type(msg) is str:
+            msg = msg.encode()
         msg = _pack(self._j) + msg
         return msg + self._hmac(msg)
 
