@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/env python3
 import atexit, errno, logging, os, shutil, signal
 import socket, struct, subprocess, sys
 from collections import deque
