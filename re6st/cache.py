@@ -5,7 +5,7 @@ from . import utils, version, x509
 
 class Cache(object):
 
-    def __init__(self, db_path, registry, cert, db_size=200):
+    def __init__(self, db_path, registry, cert: x509.Cert, db_size=200):
         self._prefix = cert.prefix
         self._db_size = db_size
         self._decrypt = cert.decrypt
@@ -89,8 +89,10 @@ class Cache(object):
         logging.info("Getting new network parameters from registry...")
         try:
             # TODO: When possible, the registry should be queried via the re6st.
+            network_config = self._registry.getNetworkConfig(self._prefix)
+            logging.debug('config %r' % network_config)  # todo
             x = json.loads(zlib.decompress(
-                self._registry.getNetworkConfig(self._prefix)))
+                network_config))
             base64_list = x.pop('', ())
             config = {}
             for k, v in x.items():

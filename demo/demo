@@ -14,9 +14,8 @@ REGISTRY2_SERIAL = '0x120010db80043'
 CA_DAYS = 1000
 
 # Quick check to avoid wasting time if there is an error.
-with open(os.devnull, "wb") as f:
-    for x in 're6stnet', 're6st-conf', 're6st-registry':
-        subprocess.check_call(('./py', x, '--help'), stdout=f)
+for x in 're6stnet', 're6st-conf', 're6st-registry':
+    subprocess.check_call(('./py', x, '--help'), stdout=subprocess.DEVNULL)
 #
 # Underlying network:
 #
@@ -205,10 +204,9 @@ for m in machine6, machine7, machine8:
 
 # Test connectivity first. Run process, hide output and check
 # return code
-null = file(os.devnull, "r+")
 for ip in '10.1.1.2', '10.1.1.3', '10.2.1.2', '10.2.1.3':
-    if machine1.Popen(('ping', '-c1', ip), stdout=null).wait():
-        print('Failed to ping %s' % ip)
+    if machine1.Popen(('ping', '-c1', ip), stdout=subprocess.DEVNULL).wait():
+        print(('Failed to ping %s' % ip))
         break
 else:
     print("Connectivity IPv4 OK!")
@@ -225,7 +223,7 @@ def new_network(registry, reg_addr, serial, ca):
         " -subj /CN=re6st.example.com/emailAddress=re6st@example.com"
         " -set_serial %s -days %u"
         % (registry.name, ca, serial, CA_DAYS), shell=True)
-    with open(ca) as f:
+    with open(ca, "rb") as f:
         cert = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
     fingerprint = "sha256:" + hashlib.sha256(
         crypto.dump_certificate(crypto.FILETYPE_ASN1, cert)).hexdigest()
@@ -368,12 +366,12 @@ def node_by_ll(addr):
                         if a.startswith('10.42.'):
                             assert not p % 8
                             _ll[socket.inet_ntoa(socket.inet_aton(
-                                a)[:p/8].ljust(4, '\0'))] = n, t
+                                a)[:p//8].ljust(4, b'\0'))] = n, t
                     elif a.startswith('2001:db8:'):
                         assert not p % 8
                         a = socket.inet_ntop(socket.AF_INET6,
                             socket.inet_pton(socket.AF_INET6,
-                            a)[:p/8].ljust(16, '\0'))
+                            a)[:p//8].ljust(16, b'\0'))
                     elif not a.startswith('fe80::'):
                         continue
                     _ll[a] = n, t
@@ -424,7 +422,7 @@ def route_svg(ipv4, z = 4, default = type('', (), {'short': None})):
     gv.append('}\n')
     return subprocess.Popen(('neato', '-Tsvg'),
         stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-        ).communicate('\n'.join(gv))[0]
+        ).communicate('\n'.join(gv).encode("utf-8"))[0].decode("utf-8")
 
 if args.port:
     import http.server, socketserver
@@ -450,34 +448,34 @@ if args.port:
             if page < 2:
                 body = route_svg(page)
             else:
-                body = registry.Popen(('python', '-c', r"""if 1:
+                body = registry.Popen(('python3', '-c', r"""if 1:
                     import math, json
                     from re6st.registry import RegistryClient
                     g = json.loads(RegistryClient(
                         'http://localhost/').topology())
                     r = set(g.pop('', ()))
                     a = set()
-                    for v in g.itervalues():
+                    for v in g.values():
                         a.update(v)
                     g.update(dict.fromkeys(a.difference(g), ()))
-                    print 'digraph {'
+                    print('digraph {')
                     a = 2 * math.pi / len(g)
                     z = 4
                     m2 = '%u/80' % (2 << 64)
                     title = lambda n: '2|80' if n == m2 else n
-                    g = sorted((title(k), k in r, v) for k, v in g.iteritems())
+                    g = sorted((title(k), k in r, v) for k, v in g.items())
                     for i, (n, r, v) in enumerate(g):
-                        print '"%s"[pos="%s,%s!"%s];' % (title(n),
+                        print('"%s"[pos="%s,%s!"%s];' % (title(n),
                             z * math.cos(a * i), z * math.sin(a * i),
-                            '' if r else ', style=dashed')
+                            '' if r else ', style=dashed'))
                         for v in v:
-                            print '"%s" -> "%s";' % (n, title(v))
-                    print '}'
-                """), stdout=subprocess.PIPE, cwd="..").communicate()[0]
+                            print('"%s" -> "%s";' % (n, title(v)))
+                    print('}')
+                """), stdout=subprocess.PIPE, cwd="..").communicate()[0].decode("utf-8")
                 if body:
                     body = subprocess.Popen(('neato', '-Tsvg'),
                         stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                        ).communicate(body)[0]
+                        ).communicate(body.encode("utf-8"))[0].decode("utf-8")
                 if not body:
                     self.send_error(500)
                     return
@@ -508,7 +506,8 @@ if args.port:
                        for i, x in enumerate(self.pages)),
                   body[body.find('<svg'):])
             self.send_response(200)
-            self.send_header('Content-Length', len(body))
+            body = body.encode("utf-8")
+            self.send_header('Content-Length', str(len(body)))
             self.send_header('Content-type', mt + '; charset=utf-8')
             self.end_headers()
             self.wfile.write(body)
