@@ -60,7 +60,7 @@ class TestRegistryClientInteract(unittest.TestCase):
         # read token from db
         db = sqlite3.connect(str(self.server.db), isolation_level=None)
         token = None
-        for _ in xrange(100):
+        for _ in range(100):
             time.sleep(.1)
             token = db.execute("SELECT token FROM token WHERE email=?",
                                (email,)).fetchone()

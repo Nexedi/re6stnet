@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/env python3
 import argparse, atexit, binascii, errno, hashlib
 import os, subprocess, sqlite3, sys, time
 from OpenSSL import crypto
@@ -13,7 +13,8 @@ def create(path, text=None, mode=0o666):
     finally:
         os.close(fd)
 
-def loadCert(pem):
+def loadCert(pem: bytes):
+    assert pem
     return crypto.load_certificate(crypto.FILETYPE_PEM, pem)
 
 def main():
@@ -140,7 +141,7 @@ def main():
 
         req.set_pubkey(pkey)
         req.sign(pkey, 'sha512')
-        req = crypto.dump_certificate_request(crypto.FILETYPE_PEM, req)
+        req = crypto.dump_certificate_request(crypto.FILETYPE_PEM, req).decode("ascii")
 
         # First make sure we can open certificate file for writing,
         # to avoid using our token for nothing.
