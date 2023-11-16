@@ -344,6 +344,8 @@ class BaseTunnelManager(object):
             peer.hello0Sent()
 
     def _sendto(self, to, msg, peer=None):
+        if type(msg) is str:
+            msg = msg.encode()
         try:
             r = self.sock.sendto(peer.encode(msg) if peer else msg, to)
         except socket.error as e:

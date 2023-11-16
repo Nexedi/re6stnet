@@ -814,12 +814,12 @@ class RegistryClient(object):
 
     def __getattr__(self, name):
         getcallargs = getattr(RegistryServer, name).getcallargs
-        def rpc(*args, **kw):
+        def rpc(*args, **kw) -> bytes:
             kw = getcallargs(*args, **kw)
             query = '/' + name
             if kw:
                 if any(type(v) is not str for v in kw.values()):
-                    raise TypeError
+                    raise TypeError(kw)
                 query += '?' + urlencode(kw)
             url = self._path + query
             client_prefix = kw.get('cn')
