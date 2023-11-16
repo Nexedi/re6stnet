@@ -52,7 +52,7 @@ def maybe_renew(path, cert, info, renew, force=False):
             if time.time() < next_renew:
                 return cert, next_renew
         try:
-            pem = renew()
+            pem: bytes = renew()
             if not pem or pem == crypto.dump_certificate(
                   crypto.FILETYPE_PEM, cert):
                 exc_info = 0
@@ -62,7 +62,7 @@ def maybe_renew(path, cert, info, renew, force=False):
             exc_info = 1
             break
         new_path = path + '.new'
-        with open(new_path, 'w') as f:
+        with open(new_path, 'wb') as f:
             f.write(pem)
         try:
             s = os.stat(path)
@@ -90,9 +90,9 @@ class Cert(object):
         self.ca_path = ca
         self.cert_path = cert
         self.key_path = key
-        with open(ca) as f:
+        with open(ca, "rb") as f:
             self.ca = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
-        with open(key) as f:
+        with open(key, "rb") as f:
             self.key = crypto.load_privatekey(crypto.FILETYPE_PEM, f.read())
         if cert:
             with open(cert) as f:
@@ -152,13 +152,13 @@ class Cert(object):
                     raise VerifyError(int(code), int(depth), msg.strip())
         return r
 
-    def verify(self, sign, data):
+    def verify(self, sign: bytes, data):
         crypto.verify(self.ca, sign, data, 'sha512')
 
-    def sign(self, data):
+    def sign(self, data) -> bytes:
         return crypto.sign(self.key, data, 'sha512')
 
-    def decrypt(self, data):
+    def decrypt(self, data: bytes) -> bytes:
         p = openssl('rsautl', '-decrypt', '-inkey', self.key_path)
         out, err = p.communicate(data)
         if p.returncode:
@@ -209,7 +209,7 @@ class Peer(object):
     stop_date = float('inf')
     version = b''
 
-    def __init__(self, prefix):
+    def __init__(self, prefix: str):
         self.prefix = prefix
 
     @property
@@ -253,7 +253,7 @@ class Peer(object):
     def _hmac(self, msg):
         return hmac.HMAC(self._key, msg, hashlib.sha1).digest()
 
-    def newSession(self, key, protocol):
+    def newSession(self, key: bytes, protocol):
         if key <= self._key:
             raise NewSessionError(self._key, key)
         self._key = key
@@ -266,7 +266,7 @@ class Peer(object):
 
     seqno_struct = struct.Struct("!L")
 
-    def decode(self, msg, _unpack=seqno_struct.unpack):
+    def decode(self, msg: bytes, _unpack=seqno_struct.unpack) -> str:
         seqno, = _unpack(msg[:4])
         if seqno <= 2:
             msg = msg[4:]
@@ -280,10 +280,12 @@ class Peer(object):
         if self._hmac(msg[:i]) == msg[i:] and self._i < seqno:
             self._last = None
             self._i = seqno
-            return msg[4:i]
+            return msg[4:i].decode()
 
-    def encode(self, msg, _pack=seqno_struct.pack):
+    def encode(self, msg: str | bytes, _pack=seqno_struct.pack) -> bytes:
         self._j += 1
+        if type(msg) is str:
+            msg = msg.encode()
         msg = _pack(self._j) + msg
         return msg + self._hmac(msg)
 
