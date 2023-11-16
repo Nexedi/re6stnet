@@ -4,7 +4,7 @@ import nemu
 import time
 import weakref
 from subprocess import PIPE
-from pathlib2 import Path
+from pathlib import Path
 
 from re6st.tests import DEMO_PATH
 
@@ -60,7 +60,7 @@ class NetManager(object):
         Raise:
             AssertionError
         """
-        for reg, nodes in self.registries.iteritems():
+        for reg, nodes in self.registries.items():
             for node in nodes:
                 app0 = node.Popen(["ping", "-c", "1", reg.ip], stdout=PIPE)
                 ret = app0.wait()
