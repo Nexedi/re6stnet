@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/env python3
 """ unit test for re6st-conf
 """
 
@@ -36,7 +36,7 @@ class TestConf(unittest.TestCase):
 
         # mocked server cert and pkey
         cls.pkey, cls.cert = create_ca_file(os.devnull, os.devnull)
-        cls.fingerprint = "".join( cls.cert.digest("sha1").split(":"))
+        cls.fingerprint = "".join( cls.cert.digest("sha1").decode("ascii").split(":"))
         # client.getCa should return a string form cert
         cls.cert = crypto.dump_certificate(crypto.FILETYPE_PEM, cls.cert)
 
