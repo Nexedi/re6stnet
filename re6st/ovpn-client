@@ -1,4 +1,4 @@
-#!/usr/bin/python -S
+#!/usr/bin/env -S python3 -S
 import os, sys
 
 script_type = os.environ['script_type']
