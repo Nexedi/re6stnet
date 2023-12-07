@@ -18,7 +18,7 @@ def copy_file(self, infile, outfile, *args, **kw):
             with open(outfile, "w", encoding="utf-8") as f:
                 for x in sorted(version.items()):
                     if not x[0].startswith("_"):
-                        f.write("%s = %r\n" % x)
+                        f.write(("%s = %r\n" % x).encode())
         return outfile, 1
     elif isinstance(self, build_py) and \
          os.stat(infile).st_mode & stat.S_IEXEC:
@@ -27,14 +27,17 @@ def copy_file(self, infile, outfile, *args, **kw):
         # Adjust interpreter of OpenVPN hooks.
         with open(infile) as src:
             first_line = src.readline()
-            m = first_line_re.match(first_line)
+            m = first_line_re.match(first_line.encode())
             if m and not self.dry_run:
                 log.info("copying and adjusting %s -> %s", infile, outfile)
                 executable = self.distribution.command_obj['build'].executable
                 patched = "#!%s%s\n" % (executable, m.group(1) or '')
                 patched += src.read()
-                with open(outfile, "w") as dst:
-                    dst.write(patched)
+                dst = os.open(outfile, os.O_CREAT | os.O_WRONLY | os.O_TRUNC)
+                try:
+                    os.write(dst, patched.encode())
+                finally:
+                    os.close(dst)
                 return outfile, 1
     cls, = self.__class__.__bases__
     return cls.copy_file(self, infile, outfile, *args, **kw)
