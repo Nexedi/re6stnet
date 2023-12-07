@@ -15,7 +15,7 @@ def copy_file(self, infile, outfile, *args, **kw):
     if infile == version["__file__"]:
         if not self.dry_run:
             log.info("generating %s -> %s", infile, outfile)
-            with open(outfile, "w", encoding="utf-8") as f:
+            with open(outfile, "wb") as f:
                 for x in sorted(version.items()):
                     if not x[0].startswith("_"):
                         f.write(("%s = %r\n" % x).encode())
@@ -97,7 +97,7 @@ setup(
     extras_require = {
         'geoip': ['geoip2'],
         'multicast': ['PyYAML'],
-        'test': ['mock', 'nemu3', 'unshare', 'multiping']
+        'test': ['mock', 'pathlib2', 'nemu', 'python-unshare', 'python-passfd', 'multiping']
     },
     #dependency_links = [
     #    "http://miniupnp.free.fr/files/download.php?file=miniupnpc-1.7.20120714.tar.gz#egg=miniupnpc-1.7",
