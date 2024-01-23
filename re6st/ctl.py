@@ -261,6 +261,7 @@ class Babel(object):
         self.write_buffer.send(self.socket)
 
     def handle_dump(self, interfaces, neighbours, xroutes, routes):
+        self.interfaces = {i.index: name for i, name in interfaces}
         # neighbours = {neigh_prefix: (neighbour, {dst_prefix: route})}
         n = {(n.address, n.ifindex): (n, {}) for n in neighbours}
         unidentified = set(n)
@@ -278,20 +279,16 @@ class Babel(object):
                 prefix = ip[a:route.plen]
                 if prefix and not route.refmetric:
                     neighbours[prefix] = neigh_routes
-                    # XXX: Temporary logging to understand when a KeyError
-                    #      happens. Then, we'll problably replace 'remove' by
-                    #      'discard'.
                     try:
                         unidentified.remove(address)
-                    except KeyError as e:
-                        logging.warning("address: %s; prefix: %s",
-                                        address, prefix)
-                        logging.warning("neighbours: %r", neighbours)
-                        logging.warning("routes: %r", routes)
-                        try:
-                            tm.sendto(tm.cache.registry_prefix, '\7%s' % e)
-                        except AttributeError:
-                            pass
+                    except KeyError:
+                        logging.debug("Buggy neighbour %s%%%s with multiple"
+                            " subnets within the same re6st network"
+                            " (one of them is %s/%s).",
+                            socket.inet_ntop(socket.AF_INET6, address[0]),
+                            self.interfaces[address[1]],
+                            socket.inet_ntop(socket.AF_INET6, route.prefix),
+                            route.plen)
             else:
                 prefix = None
             neigh_routes[1][prefix] = route
@@ -307,7 +304,6 @@ class Babel(object):
                 neighbours[None] = None, routes
                 logging.trace("Routes via unidentified neighbours. %r",
                               neighbours)
-        self.interfaces = {i.index: name for i, name in interfaces}
         self.handler.babel_dump()
 
     def handle_set_cost_multiplier(self, flags):
