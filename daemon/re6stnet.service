@@ -1,11 +1,13 @@
 [Unit]
 Description=Resilient, Scalable, IPv6 Network application
 ConditionPathExists=/etc/re6stnet/re6stnet.conf
+StartLimitIntervalSec=0
 
 [Service]
 WorkingDirectory=/etc/re6stnet
 ExecStart=/bin/sh -c 'GEOIP2_MMDB=/etc/re6stnet/GeoLite2-Country.mmdb; [ -r $GEOIP2_MMDB ] && export GEOIP2_MMDB; exec re6stnet @re6stnet.conf'
 Restart=on-failure
+RestartSec=30
 StandardOutput=null
 
 [Install]
