@@ -35,13 +35,11 @@ RENEW_PERIOD = 30 * 86400
 BABEL_HMAC = 'babel_hmac0', 'babel_hmac1', 'babel_hmac2'
 
 def rpc(f):
-    args, varargs, varkw, defaults = inspect.getargspec(f)
-    assert not (varargs or varkw), f
-    if not defaults:
-        defaults = ()
-    i = len(args) - len(defaults)
-    f.getcallargs = eval("lambda %s: locals()" % ','.join(args[1:i]
-        + list(map("%s=%r".__mod__, list(zip(args[i:], defaults))))))
+    argspec = inspect.getfullargspec(f)
+    assert not (argspec.varargs or argspec.varkw), f
+    sig = inspect.signature(f)
+    sig = sig.replace(parameters=[*sig.parameters.values()][1:])
+    f.getcallargs = eval("lambda %s: locals()" % str(sig)[1:-1])
     return f
 
 def rpc_private(f):
