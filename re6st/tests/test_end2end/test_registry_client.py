@@ -70,7 +70,7 @@ class TestRegistryClientInteract(unittest.TestCase):
             self.fail("Request token failed, no token in database")
         # token: tuple[unicode,]
         token = str(token[0])
-        self.assertEqual(client.isToken(token), "1")
+        self.assertEqual(client.isToken(token), b"1")
 
         # request ca
         ca = client.getCa()
