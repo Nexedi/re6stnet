@@ -103,6 +103,7 @@ class TestRegistryClientInteract(unittest.TestCase):
         # simulate the process in cache
         # just prove works
         net_config = client.getNetworkConfig(prefix)
+        self.assertIsNotNone(net_config)
         net_config = json.loads(zlib.decompress(net_config))
         self.assertEqual(net_config[u'max_clients'], self.max_clients)
 
