@@ -70,7 +70,7 @@ class TestRegistryClientInteract(unittest.TestCase):
             self.fail("Request token failed, no token in database")
         # token: tuple[unicode,]
         token = str(token[0])
-        self.assertEqual(client.isToken(token), b"1")
+        self.assertEqual(client.isToken(token).decode(), "1")
 
         # request ca
         ca = client.getCa()
@@ -78,7 +78,7 @@ class TestRegistryClientInteract(unittest.TestCase):
         # request a cert and get cn
         key, csr = tools.generate_csr()
         cert = client.requestCertificate(token, csr)
-        self.assertEqual(client.isToken(token), b'', "token should be deleted")
+        self.assertEqual(client.isToken(token).decode(), '', "token should be deleted")
 
         # creat x509.cert object
         def write_to_temp(text):
@@ -97,7 +97,7 @@ class TestRegistryClientInteract(unittest.TestCase):
 
         # verfiy cn and prefix
         prefix = client.cert.prefix
-        cn = client.getNodePrefix(email)
+        cn = client.getNodePrefix(email).decode()
         self.assertEqual(tools.prefix2cn(prefix), cn)
 
         # simulate the process in cache
@@ -108,7 +108,7 @@ class TestRegistryClientInteract(unittest.TestCase):
 
         # no re6stnet, empty result
         bootpeer = client.getBootstrapPeer(prefix)
-        self.assertEqual(bootpeer, "")
+        self.assertEqual(bootpeer.decode(), "")
 
         # server should not die
         self.assertIsNone(self.server.proc.poll())
