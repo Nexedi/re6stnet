@@ -78,7 +78,7 @@ class TestRegistryClientInteract(unittest.TestCase):
         # request a cert and get cn
         key, csr = tools.generate_csr()
         cert = client.requestCertificate(token, csr)
-        self.assertEqual(client.isToken(token), '', "token should be deleted")
+        self.assertEqual(client.isToken(token), b'', "token should be deleted")
 
         # creat x509.cert object
         def write_to_temp(text):
