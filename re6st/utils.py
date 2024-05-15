@@ -244,6 +244,7 @@ def binFromSubnet(subnet):
     return bin(int(p))[2:].rjust(int(l), '0')
 
 def newHmacSecret():
+    """returns bytes"""
     from random import getrandbits as g
     pack = struct.Struct(">QQI").pack
     assert len(pack(0,0,0)) == HMAC_LEN
