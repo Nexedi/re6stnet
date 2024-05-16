@@ -52,9 +52,9 @@ easily scalable to tens of thousand of nodes.
 Requirements
 ============
 
-- Python 2.7
+- Python 3.11
 - OpenSSL binary and development libraries
-- OpenVPN 2.4.*
+- OpenVPN 2.6.*
 - Babel_ (with Nexedi patches)
 - geoip2: `python library`_ and `country lite database`_ (optional)
 - python-miniupnpc for UPnP support (optional)
