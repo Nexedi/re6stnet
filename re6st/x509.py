@@ -4,6 +4,7 @@ from OpenSSL import crypto
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
+from cryptography.x509 import load_pem_x509_certificate
 
 from . import utils
 from .version import protocol
@@ -95,7 +96,9 @@ class Cert:
         self.cert_path = cert
         self.key_path = key
         with open(ca, "rb") as f:
-            self.ca = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
+            ca_pem = f.read()
+            self.ca = crypto.load_certificate(crypto.FILETYPE_PEM, ca_pem)
+            self.ca_crypto = load_pem_x509_certificate(ca_pem)
         with open(key, "rb") as f:
             key_pem = f.read()
             self.key = crypto.load_privatekey(crypto.FILETYPE_PEM, key_pem)
@@ -158,8 +161,16 @@ class Cert:
                     raise VerifyError(int(code), int(depth), msg.strip())
         return r
 
-    def verify(self, sign: bytes, data):
-        crypto.verify(self.ca, sign, data, 'sha512')
+    def verify(self, sign: bytes, data: bytes):
+        assert isinstance(data, bytes)
+        #crypto.verify(self.ca, sign, data, 'sha512')  DEPRECATED
+        pub_key = self.ca_crypto.public_key()
+        pub_key.verify(
+            sign,
+            data,
+            padding.PKCS1v15(),
+            hashes.SHA512()
+        )
 
     def sign(self, data: bytes) -> bytes:
         assert isinstance(data, bytes)
