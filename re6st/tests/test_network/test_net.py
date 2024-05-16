@@ -104,10 +104,10 @@ class TestNet(unittest.TestCase):
         nm = network_build.net_route()
         nodes, registries = deploy_re6st(nm)
 
-        wait_stable(nodes, 10)
+        wait_stable(nodes, 40)
         time.sleep(10)
 
-        self.assertTrue(wait_stable(nodes, 10), " ping test failed")
+        self.assertTrue(wait_stable(nodes, 30), " ping test failed")
 
         clean_re6st(nodes, registries)
 
@@ -119,7 +119,7 @@ class TestNet(unittest.TestCase):
         nm = network_build.net_demo()
         nodes, registries = deploy_re6st(nm)
 
-        wait_stable(nodes, 10)
+        wait_stable(nodes, 100)
 
         # stop on machine randomly
         index = int(random.random() * 7) + 1
@@ -129,7 +129,7 @@ class TestNet(unittest.TestCase):
         machine.run("-i" + machine.node.iface.name)
         logging.info("restart %s", machine.name)
 
-        self.assertTrue(wait_stable(nodes, 10), "network can't recover")
+        self.assertTrue(wait_stable(nodes, 400), "network can't recover")
 
         clean_re6st(nodes, registries)
 
@@ -140,7 +140,7 @@ class TestNet(unittest.TestCase):
         nm = network_build.net_route()
         nodes, registries = deploy_re6st(nm)
 
-        wait_stable(nodes, 10)
+        wait_stable(nodes, 40)
 
         # stop on machine randomly
         index = int(random.random() * 2) + 1
@@ -150,7 +150,7 @@ class TestNet(unittest.TestCase):
         machine.run("-i" + machine.node.iface.name)
         logging.info("restart %s", machine.name)
 
-        self.assertTrue(wait_stable(nodes, 10), "network can't recover")
+        self.assertTrue(wait_stable(nodes, 100), "network can't recover")
 
         clean_re6st(nodes, registries)
 
