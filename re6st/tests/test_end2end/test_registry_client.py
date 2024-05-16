@@ -15,7 +15,7 @@ from re6st.tests import DEMO_PATH
 
 DH_FILE = DEMO_PATH / "dh2048.pem"
 
-class DummyNode(object):
+class DummyNode:
     """fake node to reuse Re6stRegistry
 
     error: node.Popen has destory method which not in subprocess.Popen
