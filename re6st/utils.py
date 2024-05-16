@@ -120,7 +120,7 @@ class ArgParser(argparse.ArgumentParser):
   ca /etc/re6stnet/ca.crt""", **kw)
 
 
-class exit(object):
+class exit:
 
     status = None
 
