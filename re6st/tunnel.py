@@ -59,7 +59,7 @@ class MultiGatewayManager(dict):
             except:
                 pass
 
-class Connection(object):
+class Connection:
 
     _retry = 0
     serial = None
@@ -132,7 +132,7 @@ class Connection(object):
             self.open()
         return 0
 
-class TunnelKiller(object):
+class TunnelKiller:
 
     state = None
 
@@ -186,7 +186,7 @@ class TunnelKiller(object):
     locked = unlocking = lambda _: None
 
 
-class BaseTunnelManager(object):
+class BaseTunnelManager:
 
     # TODO: To minimize downtime when network parameters change, we should do
     #       our best to not restart any process. Ideally, this list should be
