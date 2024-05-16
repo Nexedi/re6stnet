@@ -42,7 +42,8 @@ class TestRegistryClientInteract(unittest.TestCase):
 
     def tearDown(self):
         self.server.proc.terminate()
-        self.server.proc.__exit__()
+        with self.server.proc:
+            pass
 
     def test_1_main(self):
         """ a client interact a server, no re6stnet node test basic function"""
