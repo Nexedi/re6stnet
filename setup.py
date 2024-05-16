@@ -27,7 +27,7 @@ def copy_file(self, infile, outfile, *args, **kw):
         # Adjust interpreter of OpenVPN hooks.
         with open(infile) as src:
             first_line = src.readline()
-            m = first_line_re.match(first_line.encode())
+            m = first_line_re.match(first_line)
             if m and not self.dry_run:
                 log.info("copying and adjusting %s -> %s", infile, outfile)
                 executable = self.distribution.command_obj['build'].executable
