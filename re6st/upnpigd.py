@@ -7,7 +7,7 @@ class UPnPException(Exception):
     pass
 
 
-class Forwarder(object):
+class Forwarder:
     """
     External port is chosen randomly between 32768 & 49151 included.
     """
