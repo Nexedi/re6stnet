@@ -62,11 +62,11 @@ class NetManager:
         """
         for reg, nodes in self.registries.items():
             for node in nodes:
-                app0 = node.Popen(["ping", "-c", "1", reg.ip], stdout=PIPE)
-                ret = app0.wait()
-                if ret:
-                    raise ConnectableError(
-                        "network construct failed {} to {}".format(node.ip, reg.ip))
+                with node.Popen(["ping", "-c", "1", reg.ip], stdout=PIPE) as app0:
+                    ret = app0.wait()
+                    if ret:
+                        raise ConnectableError(
+                            "network construct failed {} to {}".format(node.ip, reg.ip))
 
         logging.debug("each node can ping to their registry")
 
