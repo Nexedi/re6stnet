@@ -84,7 +84,7 @@ class NewSessionError(Exception):
     pass
 
 
-class Cert(object):
+class Cert:
 
     def __init__(self, ca, key, cert=None):
         self.ca_path = ca
@@ -175,7 +175,7 @@ class Cert(object):
 PACKED_PROTOCOL = utils.packInteger(protocol)
 
 
-class Peer(object):
+class Peer:
     """
     UDP:    A ─────────────────────────────────────────────> B
 
