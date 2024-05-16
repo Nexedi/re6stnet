@@ -77,11 +77,12 @@ def main():
         print("WARNING: it is strongly recommended to use --fingerprint option.")
     network = x509.networkFromCa(ca)
     if config.is_needed:
-        route, err = subprocess.Popen(('ip', '-6', '-o', 'route', 'get',
-                                       utils.ipFromBin(network)),
-                                      stdout=subprocess.PIPE).communicate()
-        sys.exit(err or route and
-            utils.binFromIp(route.split()[8]).startswith(network))
+        with subprocess.Popen(('ip', '-6', '-o', 'route', 'get',
+                               utils.ipFromBin(network)),
+                              stdout=subprocess.PIPE) as proc:
+            route, err = proc.communicate()
+            sys.exit(err or route and
+                utils.binFromIp(route.split()[8]).startswith(network))
 
     create(ca_path, crypto.dump_certificate(crypto.FILETYPE_PEM, ca))
     if config.ca_only:
@@ -90,7 +91,7 @@ def main():
     reserved = 'CN', 'serial'
     req = crypto.X509Req()
     try:
-        with open(cert_path) as f:
+        with open(cert_path, "rb") as f:
             cert = loadCert(f.read())
         components = dict(cert.get_subject().get_components())
         components = {k.decode(): v for k, v in components.items()}
