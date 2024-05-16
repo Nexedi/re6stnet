@@ -328,7 +328,7 @@ class RegistryServer:
             request.send_response(http.client.NO_CONTENT)
         if key:
             request.send_header(HMAC_HEADER, base64.b64encode(
-                hmac.HMAC(key, result, hashlib.sha1).digest()))
+                hmac.HMAC(key, result, hashlib.sha1).digest()).decode("ascii"))
         request.end_headers()
         if result:
             request.wfile.write(result)
@@ -849,6 +849,7 @@ class RegistryClient:
                     self._conn.endheaders()
                     response = self._conn.getresponse()
                     body = response.read()
+                    #print(query, repr(body))
                     if response.status in (http.client.OK, http.client.NO_CONTENT):
                         if (not client_prefix or
                                 hmac.HMAC(key, body, hashlib.sha1).digest() ==
