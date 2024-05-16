@@ -99,7 +99,9 @@ class RegistryServer:
                 "prefix TEXT PRIMARY KEY NOT NULL",
                 "email TEXT",
                 "cert TEXT")
+        logging.debug("Checking for existing certs...")
         if not self.db.execute("SELECT 1 FROM cert LIMIT 1").fetchone():
+            logging.debug("No existing certs found, creating a blank one...")
             self.db.execute("INSERT INTO cert VALUES ('',null,null)")
 
         prev = '-'
@@ -265,7 +267,7 @@ class RegistryServer:
                 if x <= old:
                     if prefix == self.prefix:
                         logging.critical("Refuse to delete certificate"
-                                         " of main node: wrong clock ?")
+                                         " of main node: wrong clock ? Alternatively, try deleting .db")
                         sys.exit(1)
                     logging.info("Delete %s: %s (invalid since %s)",
                         "certificate requested by '%s'" % email
@@ -350,9 +352,11 @@ class RegistryServer:
 
     def getCert(self, client_prefix):
         assert self.lock.locked()
-        return self.db.execute("SELECT cert FROM cert"
-                               " WHERE prefix=? AND cert IS NOT NULL",
-                               (client_prefix,)).fetchone()[0]
+        cert = self.db.execute("SELECT cert FROM cert"
+                                   " WHERE prefix=? AND cert IS NOT NULL", (client_prefix,)).fetchone()
+        assert cert, ("cert query from db is None, should not happen",
+                      self.db.execute("SELECT * FROM cert").fetchall())
+        return cert[0]
 
     @rpc_private
     def isToken(self, token):
@@ -433,6 +437,7 @@ class RegistryServer:
         return default
 
     def mergePrefixes(self):
+        logging.debug("Merging prefixes")
         q = self.db.execute
         prev_prefix = None
         max_len = 128,
@@ -455,6 +460,7 @@ class RegistryServer:
                     prev_prefix = prefix
 
     def newPrefix(self, prefix_len, community):
+        logging.info("Allocating /%u prefix for %s", prefix_len, community)
         community_len = len(community)
         prefix_len += community_len
         max_len = 128 - len(self.network)
@@ -494,6 +500,7 @@ class RegistryServer:
 
     @rpc
     def requestCertificate(self, token, req, location='', ip=''):
+        logging.debug("Requesting certificate with token %s", token)
         req = crypto.load_certificate_request(crypto.FILETYPE_PEM, req)
         with self.lock:
             with self.db:
