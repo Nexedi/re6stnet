@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
 import calendar, hashlib, hmac, logging, os, struct, subprocess, threading, time
 from OpenSSL import crypto
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives.serialization import load_pem_private_key
+
 from . import utils
 from .version import protocol
 
@@ -93,7 +97,9 @@ class Cert:
         with open(ca, "rb") as f:
             self.ca = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
         with open(key, "rb") as f:
-            self.key = crypto.load_privatekey(crypto.FILETYPE_PEM, f.read())
+            key_pem = f.read()
+            self.key = crypto.load_privatekey(crypto.FILETYPE_PEM, key_pem)
+            self.key_crypto = load_pem_private_key(key_pem, password=None)
         if cert:
             with open(cert) as f:
                 self.cert = self.loadVerify(f.read().encode())
@@ -155,8 +161,14 @@ class Cert:
     def verify(self, sign: bytes, data):
         crypto.verify(self.ca, sign, data, 'sha512')
 
-    def sign(self, data) -> bytes:
-        return crypto.sign(self.key, data, 'sha512')
+    def sign(self, data: bytes) -> bytes:
+        assert isinstance(data, bytes)
+        #return crypto.sign(self.key, data, 'sha512')  DEPRECATED
+        return self.key_crypto.sign(
+            data,
+            padding.PKCS1v15(),
+            hashes.SHA512()
+        )
 
     def decrypt(self, data: bytes) -> bytes:
         p = openssl('rsautl', '-decrypt', '-inkey', self.key_path)
