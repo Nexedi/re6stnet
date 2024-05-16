@@ -136,7 +136,8 @@ class Re6stRegistry:
         try:
             logging.debug("teminate process %s", self.proc.pid)
             self.proc.destroy()
-            self.proc.__exit__()
+            with self.proc:
+                pass
         except:
             pass
 
@@ -263,7 +264,8 @@ class Re6stNode:
         """stop running re6stnet process"""
         logging.debug("%s teminate process %s", self.name, self.proc.pid)
         self.proc.destroy()
-        self.proc.__exit__()
+        with self.proc:
+            pass
 
     def __del__(self):
         """teminate process and rm temp dir"""
