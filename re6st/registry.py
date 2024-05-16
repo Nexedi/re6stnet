@@ -51,7 +51,7 @@ class HTTPError(Exception):
     pass
 
 
-class RegistryServer(object):
+class RegistryServer:
 
     peers = 0, ()
     cert_duration = 365 * 86400
@@ -795,7 +795,7 @@ class RegistryServer(object):
         return json.dumps({k: list(v) for k, v in graph.items()})
 
 
-class RegistryClient(object):
+class RegistryClient:
 
     _hmac = None
     user_agent = "re6stnet/%s, %s" % (version.version, platform.platform())
