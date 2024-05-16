@@ -50,7 +50,7 @@ class Node(nemu.Node):
         if_s.add_v4_address(ip, prefix_len=prefix_len)
         return if_s
 
-class NetManager(object):
+class NetManager:
     """contain all the nemu object created, so they can live more time"""
     def __init__(self):
         self.object = []
