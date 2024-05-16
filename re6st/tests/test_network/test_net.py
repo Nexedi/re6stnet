@@ -8,8 +8,7 @@ import logging
 import random
 from pathlib import Path
 
-import network_build
-import re6st_wrap
+from re6st.tests.test_network import network_build, re6st_wrap
 
 PING_PATH = str(Path(__file__).parent.resolve() / "ping.py")
 
