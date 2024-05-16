@@ -3,7 +3,7 @@ from itertools import chain
 from .registry import RegistryClient
 from . import utils, version, x509
 
-class Cache(object):
+class Cache:
 
     def __init__(self, db_path, registry, cert: x509.Cert, db_size=200):
         self._prefix = cert.prefix
