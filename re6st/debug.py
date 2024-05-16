@@ -1,7 +1,7 @@
 import errno, os, socket, stat, threading
 
 
-class Socket(object):
+class Socket:
 
     def __init__(self, socket):
         # In case that the default timeout is not None.
@@ -44,7 +44,7 @@ class Socket(object):
         return False
 
 
-class Console(object):
+class Console:
 
     def __init__(self, path, pdb):
         self.path = path
