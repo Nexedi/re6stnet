@@ -22,7 +22,7 @@ def openvpn(iface, encrypt, *args, **kw):
     if ovpn_log:
         args += '--log-append', os.path.join(ovpn_log, '%s.log' % iface),
     if not encrypt:
-        args += '--cipher', 'none', '--ncp-disable'
+        args += '--cipher', 'none'
     logging.debug('%r', args)
     return utils.Popen(args, **kw)
 
