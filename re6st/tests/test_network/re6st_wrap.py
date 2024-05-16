@@ -39,7 +39,7 @@ def ip_to_serial(ip6):
     return int(ip6, 16)
 
 
-class Re6stRegistry(object):
+class Re6stRegistry:
     """class run a re6st-registry service on a namespace"""
     registry_seq = 0
 
@@ -142,7 +142,7 @@ class Re6stRegistry(object):
             pass
 
 
-class Re6stNode(object):
+class Re6stNode:
     """class run a re6stnet service on a namespace"""
     node_seq = 0
 
