@@ -5,7 +5,7 @@ from . import utils
 uint16 = struct.Struct("!H")
 header = struct.Struct("!HI")
 
-class Struct(object):
+class Struct:
 
     def __init__(self, format, *args):
         if args:
@@ -29,7 +29,7 @@ class Struct(object):
         self.encode = encode
         self.decode = decode
 
-class Array(object):
+class Array:
 
     def __init__(self, item):
         self._item = item
@@ -49,7 +49,7 @@ class Array(object):
             r.append(x)
         return o, r
 
-class String(object):
+class String:
 
     @staticmethod
     def encode(buffer: bytes, value: str):
@@ -61,7 +61,7 @@ class String(object):
         return i + 1, buffer[offset:i].decode("utf-8")
 
 
-class Buffer(object):
+class Buffer:
 
     def __init__(self):
         self._buf = bytearray()
@@ -114,7 +114,7 @@ class Buffer(object):
         struct.pack_into(self._buf, offset, *args)
 
 
-class Packet(object):
+class Packet:
 
     response_dict = {}
 
@@ -167,7 +167,7 @@ class ConnectionClosed(BabelException):
         return "connection to babeld closed (%s)" % self.args
 
 
-class Babel(object):
+class Babel:
 
     _decode = None
 
@@ -299,7 +299,7 @@ class Babel(object):
         pass
 
 
-class iterRoutes(object):
+class iterRoutes:
 
     _waiting = True
 
