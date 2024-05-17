@@ -13,3 +13,4 @@
 *.crt
 *.pem
 demo/mbox
+*.sock
