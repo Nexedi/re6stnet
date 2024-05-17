@@ -564,12 +564,12 @@ class BaseTunnelManager:
             self.selectTimeout(time.time() + 1 + self.cache.delay_restart,
                                self._restart)
 
-    def handleServerEvent(self, sock):
+    def handleServerEvent(self, sock: socket.socket):
         event, args = eval(sock.recv(65536))
         logging.debug("%s%r", event, args)
         r = getattr(self, '_ovpn_' + event.replace('-', '_'))(*args)
         if r is not None:
-            sock.send(chr(r))
+            sock.send(bytes([r]))
 
     def _ovpn_client_connect(self, common_name, iface, serial, trusted_ip):
         if serial in self.cache.crl:
