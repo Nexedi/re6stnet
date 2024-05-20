@@ -171,7 +171,7 @@ class Babel:
 
     _decode = None
 
-    def __init__(self, socket_path, handler, network):
+    def __init__(self, socket_path: str, handler, network: str):
         self.socket_path = socket_path
         self.handler = handler
         self.network = network
@@ -252,15 +252,18 @@ class Babel:
         unidentified = set(n)
         self.neighbours = neighbours = {}
         a = len(self.network)
+        logging.info("Routes: %r", routes)
         for route in routes:
             assert route.flags & 1, route # installed
             if route.prefix.startswith(b'\0\0\0\0\0\0\0\0\0\0\xff\xff'):
+                logging.warning("Ignoring IPv4 route: %r", route)
                 continue
             assert route.neigh_address == route.nexthop, route
             address = route.neigh_address, route.ifindex
             neigh_routes = n[address]
             ip = utils.binFromRawIp(route.prefix)
             if ip[:a] == self.network:
+                logging.debug("Route is on the network: %r", route)
                 prefix = ip[a:route.plen]
                 if prefix and not route.refmetric:
                     neighbours[prefix] = neigh_routes
@@ -275,7 +278,9 @@ class Babel:
                             socket.inet_ntop(socket.AF_INET6, route.prefix),
                             route.plen)
             else:
+                logging.debug("Route is not on the network: %r", route)
                 prefix = None
+            logging.debug("Adding route %r to %r", route, neigh_routes)
             neigh_routes[1][prefix] = route
         self.locked.clear()
         if unidentified:
@@ -299,7 +304,7 @@ class iterRoutes:
 
     _waiting = True
 
-    def __new__(cls, control_socket, network):
+    def __new__(cls, control_socket: str, network: str):
         self = object.__new__(cls)
         c = Babel(control_socket, self, network)
         c.request_dump()
