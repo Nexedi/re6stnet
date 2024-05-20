@@ -302,7 +302,11 @@ class Peer:
         if self._hmac(msg[:i]) == msg[i:] and self._i < seqno:
             self._last = None
             self._i = seqno
-            return msg[4:i].decode()
+            try:
+                return msg[4:i].decode()
+            except UnicodeDecodeError:
+                logging.error("Invalid message from %s: %r", self.prefix, msg)
+                raise
 
     def encode(self, msg: str | bytes, _pack=seqno_struct.pack) -> bytes:
         self._j += 1
