@@ -38,7 +38,7 @@ def rpc(f):
     argspec = inspect.getfullargspec(f)
     assert not (argspec.varargs or argspec.varkw), f
     sig = inspect.signature(f)
-    sig = sig.replace(parameters=[*sig.parameters.values()][1:])
+    sig = sig.replace(parameters=[*sig.parameters.values()][1:], return_annotation=inspect.Signature.empty)
     f.getcallargs = eval("lambda %s: locals()" % str(sig)[1:-1])
     return f
 
