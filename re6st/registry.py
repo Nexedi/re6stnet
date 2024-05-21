@@ -203,7 +203,7 @@ class RegistryServer:
     def sendto(self, prefix: str, code: int):
         self.sock.sendto(prefix.encode() + bytes((0, code)), ('::1', tunnel.PORT))
 
-    def recv(self, code):
+    def recv(self, code: int) -> (str, str):
         try:
             prefix, msg = self.sock.recv(1 << 16).split(b'\x00', 1)
             int(prefix, 2)
@@ -611,7 +611,7 @@ class RegistryServer:
                     v and base64.b64encode(x509.encrypt(cert, v)).decode()
         return zlib.compress(json.dumps(config).encode("utf-8"))
 
-    def _queryAddress(self, peer):
+    def _queryAddress(self, peer) -> str:
         logging.info("Querying address for %s/%s %r", int(peer, 2), len(peer), peer)
         self.sendto(peer, 1)
         s = self.sock,
@@ -622,13 +622,13 @@ class RegistryServer:
             prefix, msg = self.recv(1)
             logging.info("* received: %r - %r", prefix, msg)
             if prefix == peer:
-                return msg.decode()
+                return msg
             timeout = max(0, end - time.time())
         logging.info("Timeout while querying address for %s/%s",
                      int(peer, 2), len(peer))
 
     @rpc
-    def getCountry(self, cn, address):
+    def getCountry(self, cn, address) -> bytes:
         country = self._geoiplookup(address)[0]
         return None if country == '*' else country.encode()
 
