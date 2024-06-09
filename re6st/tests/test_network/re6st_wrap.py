@@ -29,8 +29,9 @@ RE6ST_CONF = PYTHON + " -m re6st.cli.conf"
 
 def initial():
     """create the workplace"""
-    if not WORK_DIR.exists():
-        WORK_DIR.mkdir()
+    if WORK_DIR.exists():
+        shutil.rmtree(str(WORK_DIR))
+    WORK_DIR.mkdir()
 
 def ip_to_serial(ip6):
     """convert ipv6 address to serial"""
