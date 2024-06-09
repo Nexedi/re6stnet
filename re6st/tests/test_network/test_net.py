@@ -57,6 +57,8 @@ class TestNet(unittest.TestCase):
     def setUpClass(cls):
         """create work dir"""
         logging.basicConfig(level=logging.INFO)
+
+    def setUp(self):
         re6st_wrap.initial()
 
     def deploy_re6st(self, nm, recreate=False):

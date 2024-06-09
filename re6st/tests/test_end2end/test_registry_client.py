@@ -29,12 +29,12 @@ class TestRegistryClientInteract(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        re6st_wrap.initial()
-
         # if running in net ns, set lo up
         subprocess.check_call(("ip", "link", "set", "lo", "up"))
 
     def setUp(self):
+        re6st_wrap.initial()
+
         self.port = 18080
         self.url = "http://localhost:{}/".format(self.port)
         # not important, used in network_config check
