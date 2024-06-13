@@ -18,7 +18,7 @@ from pathlib import Path
 from re6st.tests import tools
 from re6st.tests import DEMO_PATH
 
-WORK_DIR = Path(__file__).parent / "temp_net_test"
+WORK_DIR = "temp_net_test"
 DH_FILE = DEMO_PATH / "dh2048.pem"
 
 RE6STNET = f"{sys.executable} -m re6st.cli.node"
