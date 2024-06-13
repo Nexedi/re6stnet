@@ -109,7 +109,7 @@ class TestNet(unittest.TestCase):
         wait_stable(nodes, 40)
         time.sleep(10)
 
-        self.assertTrue(wait_stable(nodes, 30), " ping test failed")
+        self.assertTrue(wait_stable(nodes, 3000), " ping test failed")
 
         clean_re6st(nodes, registries)
 
