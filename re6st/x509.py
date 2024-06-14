@@ -1,6 +1,11 @@
 # -*- coding: utf-8 -*-
 import calendar, hashlib, hmac, logging, os, struct, subprocess, threading, time
 from OpenSSL import crypto
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives.serialization import load_pem_private_key
+from cryptography.x509 import load_pem_x509_certificate
+
 from . import utils
 from .version import protocol
 
@@ -8,6 +13,7 @@ def newHmacSecret():
     return utils.newHmacSecret(int(time.time() * 1000000))
 
 def networkFromCa(ca):
+    # TODO: will be ca.serial_number after migration to cryptography
     return bin(ca.get_serial_number())[3:]
 
 def subnetFromCert(cert):
@@ -90,10 +96,15 @@ class Cert:
         self.ca_path = ca
         self.cert_path = cert
         self.key_path = key
+        # TODO: finish migration from old OpenSSL module to cryptography
         with open(ca, "rb") as f:
-            self.ca = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
+            ca_pem = f.read()
+            self.ca = crypto.load_certificate(crypto.FILETYPE_PEM, ca_pem)
+            self.ca_crypto = load_pem_x509_certificate(ca_pem)
         with open(key, "rb") as f:
-            self.key = crypto.load_privatekey(crypto.FILETYPE_PEM, f.read())
+            key_pem = f.read()
+            self.key = crypto.load_privatekey(crypto.FILETYPE_PEM, key_pem)
+            self.key_crypto = load_pem_private_key(key_pem, password=None)
         if cert:
             with open(cert) as f:
                 self.cert = self.loadVerify(f.read().encode())
@@ -151,11 +162,23 @@ class Cert:
                     raise VerifyError(int(code), int(depth), msg.strip())
         return r
 
-    def verify(self, sign, data):
-        crypto.verify(self.ca, sign, data, 'sha512')
+    def verify(self, sign: bytes, data: bytes):
+        assert isinstance(data, bytes)
+        pub_key = self.ca_crypto.public_key()
+        pub_key.verify(
+            sign,
+            data,
+            padding.PKCS1v15(),
+            hashes.SHA512()
+        )
 
-    def sign(self, data):
-        return crypto.sign(self.key, data, 'sha512')
+    def sign(self, data: bytes) -> bytes:
+        assert isinstance(data, bytes)
+        return self.key_crypto.sign(
+            data,
+            padding.PKCS1v15(),
+            hashes.SHA512()
+        )
 
     def decrypt(self, data):
         p = openssl('rsautl', '-decrypt', '-inkey', self.key_path)
