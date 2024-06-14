@@ -4,7 +4,7 @@ import nemu
 import time
 import weakref
 from subprocess import PIPE
-from pathlib2 import Path
+from pathlib import Path
 
 from re6st.tests import DEMO_PATH
 
@@ -50,7 +50,7 @@ class Node(nemu.Node):
         if_s.add_v4_address(ip, prefix_len=prefix_len)
         return if_s
 
-class NetManager(object):
+class NetManager:
     """contain all the nemu object created, so they can live more time"""
     def __init__(self):
         self.object = []
@@ -60,13 +60,13 @@ class NetManager(object):
         Raise:
             AssertionError
         """
-        for reg, nodes in self.registries.iteritems():
+        for reg, nodes in self.registries.items():
             for node in nodes:
-                app0 = node.Popen(["ping", "-c", "1", reg.ip], stdout=PIPE)
-                ret = app0.wait()
-                if ret:
-                    raise ConnectableError(
-                        "network construct failed {} to {}".format(node.ip, reg.ip))
+                with node.Popen(["ping", "-c", "1", reg.ip], stdout=PIPE) as app0:
+                    ret = app0.wait()
+                    if ret:
+                        raise ConnectableError(
+                            "network construct failed {} to {}".format(node.ip, reg.ip))
 
         logging.debug("each node can ping to their registry")
 

@@ -1,12 +1,15 @@
+import binascii
 import logging, errno, os
+from typing import Optional
+
 from . import utils
 
 here = os.path.realpath(os.path.dirname(__file__))
 ovpn_server = os.path.join(here, 'ovpn-server')
 ovpn_client = os.path.join(here, 'ovpn-client')
-ovpn_log = None
+ovpn_log: Optional[str] = None
 
-def openvpn(iface, encrypt, *args, **kw):
+def openvpn(iface: str, encrypt, *args, **kw) -> utils.Popen:
     args = ['openvpn',
         '--dev-type', 'tap',
         '--dev', iface,
@@ -19,13 +22,13 @@ def openvpn(iface, encrypt, *args, **kw):
     if ovpn_log:
         args += '--log-append', os.path.join(ovpn_log, '%s.log' % iface),
     if not encrypt:
-        args += '--cipher', 'none', '--ncp-disable'
+        args += '--cipher', 'none'
     logging.debug('%r', args)
     return utils.Popen(args, **kw)
 
 ovpn_link_mtu_dict = {'udp4': 1432, 'udp6': 1450}
 
-def server(iface, max_clients, dh_path, fd, port, proto, encrypt, *args, **kw):
+def server(iface: str, max_clients: int, dh_path: str, fd: int, port: int, proto: str, encrypt: bool, *args, **kw) -> utils.Popen:
     if proto == 'udp':
         proto = 'udp4'
     client_script = '%s %s' % (ovpn_server, fd)
@@ -43,10 +46,10 @@ def server(iface, max_clients, dh_path, fd, port, proto, encrypt, *args, **kw):
         '--max-clients', str(max_clients),
         '--port', str(port),
         '--proto', proto,
-        *args, **kw)
+        *args, pass_fds=[fd], **kw)
 
 
-def client(iface, address_list, encrypt, *args, **kw):
+def client(iface: str, address_list: list[tuple[str, int, str]], encrypt: bool, *args, **kw) -> utils.Popen:
     remote = ['--nobind', '--client']
     # XXX: We'd like to pass <connection> sections at command-line.
     link_mtu = set()
@@ -62,8 +65,8 @@ def client(iface, address_list, encrypt, *args, **kw):
     return openvpn(iface, encrypt, *remote, **kw)
 
 
-def router(ip, ip4, rt6, hello_interval, log_path, state_path, pidfile,
-           control_socket, default, hmac, *args, **kw):
+def router(ip: tuple[str, int], ip4, rt6: tuple[str, bool, bool], hello_interval: int, log_path: str, state_path: str, pidfile: str,
+           control_socket: str, default: str, hmac: tuple[bytes | None, bytes | None], *args, **kw) -> utils.Popen:
     network, gateway, has_ipv6_subtrees = rt6
     network_mask = int(network[network.index('/')+1:])
     ip, n = ip
@@ -80,9 +83,9 @@ def router(ip, ip4, rt6, hello_interval, log_path, state_path, pidfile,
             '-C', 'redistribute local deny',
             '-C', 'redistribute ip %s/%s eq %s' % (ip, n, n)]
     if hmac_sign:
-        def key(cmd, id, value):
+        def key(cmd: list[str], id: str, value: bytes):
             cmd += '-C', ('key type blake2s128 id %s value %s' %
-                          (id, value.encode('hex')))
+                          (id, binascii.hexlify(value).decode()))
         key(cmd, 'sign', hmac_sign)
         default += ' key sign'
         if hmac_accept is not None:
@@ -132,7 +135,7 @@ def router(ip, ip4, rt6, hello_interval, log_path, state_path, pidfile,
     # WKRD: babeld fails to start if pidfile already exists
     try:
         os.remove(pidfile)
-    except OSError, e:
+    except OSError as e:
         if e.errno != errno.ENOENT:
             raise
     logging.info('%r', cmd)

@@ -18,10 +18,10 @@
 
 import re
 import os
-from new import function
 from nemu.iproute import backticks, get_if_data, route, \
     get_addr_data, get_all_route_data, interface
 from nemu.interface import Switch, Interface
+from types import FunctionType
 
 def _get_all_route_data():
     ipdata = backticks([IP_PATH, "-o", "route", "list"]) # "table", "all"
@@ -56,7 +56,7 @@ def _get_all_route_data():
             metric))
     return ret
 
-get_all_route_data.func_code = _get_all_route_data.func_code
+get_all_route_data.__code__ = _get_all_route_data.__code__
 
 interface__init__ = interface.__init__
 def __init__(self, *args, **kw):
@@ -65,25 +65,9 @@ def __init__(self, *args, **kw):
         self.name = self.name.split('@',1)[0]
 interface.__init__ = __init__
 
-get_addr_data.orig = function(get_addr_data.func_code,
-                              get_addr_data.func_globals)
+get_addr_data.orig = FunctionType(get_addr_data.__code__,
+                              get_addr_data.__globals__)
 def _get_addr_data():
     byidx, bynam = get_addr_data.orig()
-    return byidx, {name.split('@',1)[0]: a for name, a in bynam.iteritems()}
-get_addr_data.func_code = _get_addr_data.func_code
-
-@staticmethod
-def _gen_if_name():
-    n = Interface._gen_next_id()
-    # Max 15 chars
-    # XXX: We truncate pid to not exceed IFNAMSIZ on systems with 32-bits pids
-    #      but we should find something better to avoid possible collision.
-    return "NETNSif-%.4x%.3x" % (os.getpid() % 0xffff, n)
-Interface._gen_if_name = _gen_if_name
-
-@staticmethod
-def _gen_br_name():
-    n = Switch._gen_next_id()
-     # XXX: same as for _gen_if_name
-    return "NETNSbr-%.4x%.3x" % (os.getpid() % 0xffff, n)
-Switch._gen_br_name = _gen_br_name
+    return byidx, {name.split('@',1)[0]: a for name, a in bynam.items()}
+get_addr_data.__code__ = _get_addr_data.__code__

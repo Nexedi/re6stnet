@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/env python3
 """ unit test for re6st-conf
 """
 
@@ -6,7 +6,7 @@ import os
 import sys
 import unittest
 from shutil import rmtree
-from StringIO import StringIO
+from io import StringIO
 from mock import patch
 from OpenSSL import crypto
 
@@ -36,7 +36,7 @@ class TestConf(unittest.TestCase):
 
         # mocked server cert and pkey
         cls.pkey, cls.cert = create_ca_file(os.devnull, os.devnull)
-        cls.fingerprint = "".join( cls.cert.digest("sha1").split(":"))
+        cls.fingerprint = "".join( cls.cert.digest("sha1").decode("ascii").split(":"))
         # client.getCa should return a string form cert
         cls.cert = crypto.dump_certificate(crypto.FILETYPE_PEM, cls.cert)
 
@@ -72,7 +72,7 @@ class TestConf(unittest.TestCase):
         # go back to original dir
         os.chdir(self.origin_dir)
 
-    @patch("__builtin__.raw_input")
+    @patch("builtins.input")
     def test_basic(self, mock_raw_input):
         """ go through all the step
             getCa, requestToken, requestCertificate

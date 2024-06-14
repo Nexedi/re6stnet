@@ -5,7 +5,7 @@ from . import utils
 uint16 = struct.Struct("!H")
 header = struct.Struct("!HI")
 
-class Struct(object):
+class Struct:
 
     def __init__(self, format, *args):
         if args:
@@ -29,39 +29,39 @@ class Struct(object):
         self.encode = encode
         self.decode = decode
 
-class Array(object):
+class Array:
 
     def __init__(self, item):
         self._item = item
 
-    def encode(self, buffer, value):
+    def encode(self, buffer: bytes, value: list):
         buffer += uint16.pack(len(value))
         encode = self._item.encode
         for value in value:
             encode(buffer, value)
 
-    def decode(self, buffer, offset=0):
+    def decode(self, buffer: bytes, offset=0) -> tuple[int, list]:
         r = []
         o = offset + 2
         decode = self._item.decode
-        for i in xrange(*uint16.unpack_from(buffer, offset)):
+        for i in range(*uint16.unpack_from(buffer, offset)):
             o, x = decode(buffer, o)
             r.append(x)
         return o, r
 
-class String(object):
+class String:
 
     @staticmethod
-    def encode(buffer, value):
-        buffer += value + "\0"
+    def encode(buffer: bytes, value: str):
+        buffer += value.encode("utf-8") + b'\x00'
 
     @staticmethod
-    def decode(buffer, offset=0):
-        i = buffer.index("\0", offset)
-        return i + 1, buffer[offset:i]
+    def decode(buffer: bytes, offset=0) -> tuple[int, str]:
+        i = buffer.index(0, offset)
+        return i + 1, buffer[offset:i].decode("utf-8")
 
 
-class Buffer(object):
+class Buffer:
 
     def __init__(self):
         self._buf = bytearray()
@@ -69,7 +69,7 @@ class Buffer(object):
 
 
     def __iadd__(self, value):
-        self._buf += value
+        self._buf.extend(value)
         return self
 
     def __len__(self):
@@ -104,21 +104,6 @@ class Buffer(object):
         self._seek(r)
         return value
 
-    try: # BBB: Python < 2.7.4 (http://bugs.python.org/issue10212)
-        uint16.unpack_from(bytearray(uint16.size))
-    except TypeError:
-        def unpack_from(self, struct):
-            r = self._r
-            x = r + struct.size
-            value = struct.unpack(buffer(self._buf)[r:x])
-            self._seek(x)
-            return value
-        def decode(self, decode):
-            r = self._r
-            size, value = decode(buffer(self._buf)[r:])
-            self._seek(r + size)
-            return value
-
     # writing
 
     def send(self, socket, *args):
@@ -129,7 +114,7 @@ class Buffer(object):
         struct.pack_into(self._buf, offset, *args)
 
 
-class Packet(object):
+class Packet:
 
     response_dict = {}
 
@@ -149,7 +134,7 @@ class Packet(object):
         logging.trace('send %s%r', self.__class__.__name__,
                                    (self.id,) + self.args)
         offset = len(buffer)
-        buffer += '\0' * header.size
+        buffer += b'\x00' * header.size
         r = self.request
         if isinstance(r, Struct):
             r.encode(buffer, self.args)
@@ -182,11 +167,11 @@ class ConnectionClosed(BabelException):
         return "connection to babeld closed (%s)" % self.args
 
 
-class Babel(object):
+class Babel:
 
     _decode = None
 
-    def __init__(self, socket_path, handler, network):
+    def __init__(self, socket_path: str, handler, network: str):
         self.socket_path = socket_path
         self.handler = handler
         self.network = network
@@ -206,11 +191,11 @@ class Babel(object):
         def select(*args):
             try:
                 s.connect(self.socket_path)
-            except socket.error, e:
+            except socket.error as e:
                 logging.debug("Can't connect to %r (%r)", self.socket_path, e)
                 return e
-            s.send("\1")
-            s.setblocking(0)
+            s.send(b'\x01')
+            s.setblocking(False)
             del self.select
             self.socket = s
             return self.select(*args)
@@ -267,15 +252,18 @@ class Babel(object):
         unidentified = set(n)
         self.neighbours = neighbours = {}
         a = len(self.network)
+        logging.info("Routes: %r", routes)
         for route in routes:
             assert route.flags & 1, route # installed
-            if route.prefix.startswith('\0\0\0\0\0\0\0\0\0\0\xff\xff'):
+            if route.prefix.startswith(b'\0\0\0\0\0\0\0\0\0\0\xff\xff'):
+                logging.warning("Ignoring IPv4 route: %r", route)
                 continue
             assert route.neigh_address == route.nexthop, route
             address = route.neigh_address, route.ifindex
             neigh_routes = n[address]
             ip = utils.binFromRawIp(route.prefix)
             if ip[:a] == self.network:
+                logging.debug("Route is on the network: %r", route)
                 prefix = ip[a:route.plen]
                 if prefix and not route.refmetric:
                     neighbours[prefix] = neigh_routes
@@ -290,7 +278,9 @@ class Babel(object):
                             socket.inet_ntop(socket.AF_INET6, route.prefix),
                             route.plen)
             else:
+                logging.debug("Route is not on the network: %r", route)
                 prefix = None
+            logging.debug("Adding route %r to %r", route, neigh_routes)
             neigh_routes[1][prefix] = route
         self.locked.clear()
         if unidentified:
@@ -310,11 +300,11 @@ class Babel(object):
         pass
 
 
-class iterRoutes(object):
+class iterRoutes:
 
     _waiting = True
 
-    def __new__(cls, control_socket, network):
+    def __new__(cls, control_socket: str, network: str):
         self = object.__new__(cls)
         c = Babel(control_socket, self, network)
         c.request_dump()
@@ -323,7 +313,7 @@ class iterRoutes(object):
             c.select(*args)
             utils.select(*args)
         return (prefix
-            for neigh_routes in c.neighbours.itervalues()
+            for neigh_routes in c.neighbours.values()
             for prefix in neigh_routes[1]
             if prefix)
 

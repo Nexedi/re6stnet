@@ -1,9 +1,11 @@
-#!/usr/bin/python2
+#!/usr/bin/env python3
 import argparse, math, nemu, os, re, signal
 import socket, sqlite3, subprocess, sys, time, weakref
 from collections import defaultdict
 from contextlib import contextmanager
 from threading import Thread
+from typing import Optional
+
 IPTABLES = 'iptables'
 SCREEN = 'screen'
 VERBOSE = 4
@@ -14,9 +16,10 @@ REGISTRY2_SERIAL = '0x120010db80043'
 CA_DAYS = 1000
 
 # Quick check to avoid wasting time if there is an error.
-with open(os.devnull, "wb") as f:
-    for x in 're6stnet', 're6st-conf', 're6st-registry':
-        subprocess.check_call(('./py', x, '--help'), stdout=f)
+for x in 're6stnet', 're6st-conf', 're6st-registry':
+    subprocess.check_call(('./py', x, '--help'), stdout=subprocess.DEVNULL)
+
+
 #
 # Underlying network:
 #
@@ -46,59 +49,87 @@ with open(os.devnull, "wb") as f:
 def disable_signal_on_children(sig):
     pid = os.getpid()
     sigint = signal.signal(sig, lambda *x: os.getpid() == pid and sigint(*x))
+
+
 disable_signal_on_children(signal.SIGINT)
 
 Node__add_interface = nemu.Node._add_interface
+
+
 def _add_interface(node, iface):
     iface.__dict__['node'] = weakref.proxy(node)
     return Node__add_interface(node, iface)
+
+
 nemu.Node._add_interface = _add_interface
 
 parser = argparse.ArgumentParser()
-parser.add_argument('port', type = int,
-    help = 'port used to display tunnels')
-parser.add_argument('-d', '--duration', type = int,
-    help = 'time of the demo execution in seconds')
-parser.add_argument('-p', '--ping', action = 'store_true',
-    help = 'execute ping utility')
-parser.add_argument('-m', '--hmac', action = 'store_true',
-    help = 'execute HMAC test')
+parser.add_argument('port', type=int,
+                    help='port used to display tunnels')
+parser.add_argument('-d', '--duration', type=int,
+                    help='time of the demo execution in seconds')
+parser.add_argument('-p', '--ping', action='store_true',
+                    help='execute ping utility')
+parser.add_argument('-m', '--hmac', action='store_true',
+                    help='execute HMAC test')
 args = parser.parse_args()
+
 
 def handler(signum, frame):
     sys.exit()
+
 
 if args.duration:
     signal.signal(signal.SIGALRM, handler)
     signal.alarm(args.duration)
 
-execfile("fixnemu.py")
+with open('fixnemu.py', 'rb') as f:
+    exec(compile(f.read(), 'fixnemu.py', 'exec'))
+
+
+class Re6stNode(nemu.Node):
+    name: str
+    short: str
+    re6st_cmdline: Optional[str]
+
+    def __init__(self, name, short):
+        super().__init__()
+        print("Re6stNode ctor %r %r" % (name, short))
+        self.name = name
+        self.short = short
+        self.Popen(('sysctl', '-q',
+                    'net.ipv4.icmp_echo_ignore_broadcasts=0')).wait()
+        self._screen = self.Popen((SCREEN, '-DmS', name))
+        self.screen = (lambda name: lambda *cmd:
+            subprocess.call([SCREEN, '-r', name, '-X', 'eval'] + list(map(
+                """screen sh -c 'set %s; "\$@"; echo "\$@"; exec $SHELL'"""
+                .__mod__, cmd))))(name)
+        self.re6st_cmdline = None
+
 
 # create nodes
-for name in """internet=I registry=R
-                          gateway1=g1 machine1=1 machine2=2
-                          gateway2=g2 machine3=3 machine4=4 machine5=5
-                          machine6=6 machine7=7 machine8=8 machine9=9
-                          registry2=R2 machine10=10
-            """.split():
-    name, short = name.split('=')
-    globals()[name] = node = nemu.Node()
-    node.name = name
-    node.short = short
-    node.Popen(('sysctl', '-q',
-        'net.ipv4.icmp_echo_ignore_broadcasts=0')).wait()
-    node._screen = node.Popen((SCREEN, '-DmS', name))
-    node.screen = (lambda name: lambda *cmd:
-        subprocess.call([SCREEN, '-r', name, '-X', 'eval'] + map(
-            """screen sh -c 'set %s; "\$@"; echo "\$@"; exec $SHELL'"""
-            .__mod__, cmd)))(name)
+internet = Re6stNode('internet', 'I')
+registry = Re6stNode('registry', 'R')
+gateway1 = Re6stNode('gateway1', 'g1')
+machine1 = Re6stNode('machine1', '1')
+machine2 = Re6stNode('machine2', '2')
+gateway2 = Re6stNode('gateway2', 'g2')
+machine3 = Re6stNode('machine3', '3')
+machine4 = Re6stNode('machine4', '4')
+machine5 = Re6stNode('machine5', '5')
+machine6 = Re6stNode('machine6', '6')
+machine7 = Re6stNode('machine7', '7')
+machine8 = Re6stNode('machine8', '8')
+machine9 = Re6stNode('machine9', '9')
+registry2 = Re6stNode('registry2', 'R2')
+machine10 = Re6stNode('machine10', '10')
 
 # create switch
 switch1 = nemu.Switch()
 switch2 = nemu.Switch()
 switch3 = nemu.Switch()
 
-#create interfaces
+# create interfaces
 re_if_0, in_if_0 = nemu.P2PInterface.create_pair(registry, internet)
 in_if_1, g1_if_0 = nemu.P2PInterface.create_pair(internet, gateway1)
 in_if_2, g2_if_0 = nemu.P2PInterface.create_pair(internet, gateway2)
@@ -179,12 +210,14 @@ m6_if_0.add_v6_address(address='fc42:6::1', prefix_len=16)
 m7_if_0.add_v6_address(address='fc42:7::1', prefix_len=16)
 m8_if_0.add_v6_address(address='fc42:8::1', prefix_len=16)
 
+
 def add_llrtr(iface, peer, dst='default'):
     for a in peer.get_addresses():
         a = a['address']
         if a.startswith('fe80:'):
             return iface.node.Popen(('ip', 'route', 'add', dst, 'via', a,
-                'proto', 'static', 'dev', iface.name)).wait()
+                                     'proto', 'static', 'dev', iface.name)).wait()
+
 
 # setup routes
 add_llrtr(re_if_0, in_if_0)
@@ -205,19 +238,20 @@ for m in machine6, machine7, machine8:
 
 # Test connectivity first. Run process, hide output and check
 # return code
-null = file(os.devnull, "r+")
 for ip in '10.1.1.2', '10.1.1.3', '10.2.1.2', '10.2.1.3':
-    if machine1.Popen(('ping', '-c1', ip), stdout=null).wait():
-        print 'Failed to ping %s' % ip
+    if machine1.Popen(('ping', '-c1', ip), stdout=subprocess.DEVNULL).wait():
+        print(('Failed to ping %s' % ip))
         break
 else:
-    print "Connectivity IPv4 OK!"
+    print("Connectivity IPv4 OK!")
 
-nodes = []
+nodes: list[Re6stNode] = []
 gateway1.screen('miniupnpd -d -f miniupnpd.conf -P miniupnpd.pid'
                 ' -a %s -i %s' % (g1_if_1.name, g1_if_0_name))
+
+
 @contextmanager
-def new_network(registry, reg_addr, serial, ca):
+def new_network(registry: Re6stNode, reg_addr: str, serial: str, ca: str):
     from OpenSSL import crypto
     import hashlib, sqlite3
     os.path.exists(ca) or subprocess.check_call(
@@ -225,16 +259,16 @@ def new_network(registry, reg_addr, serial, ca):
         " -subj /CN=re6st.example.com/emailAddress=re6st@example.com"
         " -set_serial %s -days %u"
         % (registry.name, ca, serial, CA_DAYS), shell=True)
-    with open(ca) as f:
+    with open(ca, "rb") as f:
         cert = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
     fingerprint = "sha256:" + hashlib.sha256(
         crypto.dump_certificate(crypto.FILETYPE_ASN1, cert)).hexdigest()
     db_path = "%s/registry.db" % registry.name
-    registry.screen("./py re6st-registry @%s/re6st-registry.conf"
-        " --db %s --mailhost %s -v%u"
-        % (registry.name, db_path, os.path.abspath('mbox'), VERBOSE))
+    registry.screen("\"%s\" ./py re6st-registry @%s/re6st-registry.conf"
+                    " --db %s --mailhost %s -v%u"
+                    % (sys.executable, registry.name, db_path, os.path.abspath('mbox'), VERBOSE))
     registry_url = 'http://%s/' % reg_addr
-    registry.Popen(('python', '-c', """if 1:
+    registry.Popen((sys.executable, '-c', """if 1:
         import socket, time
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         while True:
@@ -245,16 +279,17 @@ def new_network(registry, reg_addr, serial, ca):
                 time.sleep(.1)
         """)).wait()
     db = sqlite3.connect(db_path, isolation_level=None)
-    def new_node(node, folder, args='', prefix_len=None, registry=registry_url):
+
+    def new_node(node: Re6stNode, folder: str, args='', prefix_len: Optional[int] = None, registry=registry_url):
         nodes.append(node)
         if not os.path.exists(folder + '/cert.crt'):
             dh_path = folder + '/dh2048.pem'
             if not os.path.exists(dh_path):
                 os.symlink('../dh2048.pem', dh_path)
             email = node.name + '@example.com'
-            p = node.Popen(('../py', 're6st-conf', '--registry', registry,
+            p = node.Popen((sys.executable, '../py', 're6st-conf', '--registry', registry,
                             '--email', email, '--fingerprint', fingerprint),
-                stdin=subprocess.PIPE, cwd=folder)
+                           stdin=subprocess.PIPE, cwd=folder)
             token = None
             while not token:
                 time.sleep(.1)
@@ -267,13 +302,15 @@ def new_network(registry, reg_addr, serial, ca):
             os.remove(dh_path)
             os.remove(folder + '/ca.crt')
         node.re6st_cmdline = (
-            './py re6stnet @%s/re6stnet.conf -v%u --registry %s'
-            ' --console %s/run/console.sock %s'
-            ) % (folder, VERBOSE, registry, folder, args)
+                                 '"%s" ./py re6stnet @%s/re6stnet.conf -v%u --registry %s'
+                                 ' --console %s/run/console.sock %s'
+                             ) % (sys.executable, folder, VERBOSE, registry, folder, args)
         node.screen(node.re6st_cmdline)
+
     new_node(registry, registry.name, '--ip ' + reg_addr, registry='http://localhost/')
     yield new_node
     db.close()
+
 
 with new_network(registry, REGISTRY, REGISTRY_SERIAL, 'ca.crt') as new_node:
     new_node(machine1, 'm1', '-I%s' % m1_if_0.name)
@@ -297,60 +334,65 @@ if args.ping:
             '2001:db8:43:1::1' if i == 10 else
             # Only 1 address for machine2 because prefix_len = 80,+48 = 128
             '2001:db8:42:%s::1' % i
-            for i in xrange(11)
+            for i in range(11)
             if i != j]
         name = machine.name if machine.short[0] == 'R' else 'm' + machine.short
         machine.screen('python ping.py {} {}'.format(name, ' '.join(ips)))
+
 
 class testHMAC(Thread):
 
     def run(self):
         updateHMAC = ('python', '-c', "import urllib, sys; sys.exit("
-            "204 != urllib.urlopen('http://127.0.0.1/updateHMAC').code)")
+                                      "204 != urllib.urlopen('http://127.0.0.1/updateHMAC').code)")
         reg1_db = sqlite3.connect('registry/registry.db', isolation_level=None,
-                                                 check_same_thread=False)
+                                  check_same_thread=False)
         reg2_db = sqlite3.connect('registry2/registry.db', isolation_level=None,
-                                                 check_same_thread=False)
+                                  check_same_thread=False)
         reg1_db.text_factory = reg2_db.text_factory = str
         m_net1 = 'registry', 'm1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8'
         m_net2 = 'registry2', 'm10'
-        print 'Testing HMAC, letting the time to machines to create tunnels...'
+        print('Testing HMAC, letting the time to machines to create tunnels...')
         time.sleep(45)
-        print 'Check that the initial HMAC config is deployed on network 1'
+        print('Check that the initial HMAC config is deployed on network 1')
         test_hmac.checkHMAC(reg1_db, m_net1)
-        print 'Test that a HMAC update works with nodes that are up'
+        print('Test that a HMAC update works with nodes that are up')
         registry.backticks_raise(updateHMAC)
-        print 'Updated HMAC (config = hmac0 & hmac1), waiting...'
+        print('Updated HMAC (config = hmac0 & hmac1), waiting...')
         time.sleep(60)
-        print 'Checking HMAC on machines connected to registry 1...'
+        print('Checking HMAC on machines connected to registry 1...')
         test_hmac.checkHMAC(reg1_db, m_net1)
-        print ('Test that machines can update upon reboot ' +
-               'when they were off during a HMAC update.')
+        print(('Test that machines can update upon reboot ' +
+               'when they were off during a HMAC update.'))
         test_hmac.killRe6st(machine1)
-        print 'Re6st on machine 1 is stopped'
+        print('Re6st on machine 1 is stopped')
         time.sleep(5)
         registry.backticks_raise(updateHMAC)
-        print 'Updated HMAC on registry (config = hmac1 & hmac2), waiting...'
+        print('Updated HMAC on registry (config = hmac1 & hmac2), waiting...')
         time.sleep(60)
         machine1.screen(machine1.re6st_cmdline)
-        print 'Started re6st on machine 1, waiting for it to get new conf'
+        print('Started re6st on machine 1, waiting for it to get new conf')
         time.sleep(60)
-        print 'Checking HMAC on machines connected to registry 1...'
+        print('Checking HMAC on machines connected to registry 1...')
         test_hmac.checkHMAC(reg1_db, m_net1)
-        print 'Testing of HMAC done!'
+        print('Testing of HMAC done!')
         # TODO: missing last step
         reg1_db.close()
         reg2_db.close()
 
+
 if args.hmac:
     import test_hmac
+
     t = testHMAC()
     t.deamon = 1
     t.start()
     del t
 
-_ll = {}
-def node_by_ll(addr):
+_ll: dict[str, tuple[Re6stNode, bool]] = {}
+
+
+def node_by_ll(addr: str) -> tuple[Re6stNode, bool]:
     try:
         return _ll[addr]
     except KeyError:
@@ -368,27 +410,30 @@ def node_by_ll(addr):
                         if a.startswith('10.42.'):
                             assert not p % 8
                             _ll[socket.inet_ntoa(socket.inet_aton(
-                                a)[:p/8].ljust(4, '\0'))] = n, t
+                                a)[:p // 8].ljust(4, b'\0'))] = n, t
                     elif a.startswith('2001:db8:'):
                         assert not p % 8
                         a = socket.inet_ntop(socket.AF_INET6,
-                            socket.inet_pton(socket.AF_INET6,
-                            a)[:p/8].ljust(16, '\0'))
+                                             socket.inet_pton(socket.AF_INET6,
+                                                              a)[:p // 8].ljust(16, b'\0'))
                     elif not a.startswith('fe80::'):
                         continue
                     _ll[a] = n, t
     return _ll[addr]
 
-def route_svg(ipv4, z = 4, default = type('', (), {'short': None})):
-    graph = {}
+
+def route_svg(ipv4, z=4, default=type('', (), {'short': None})):
+    graph: dict[Re6stNode, dict[tuple[Re6stNode, bool], list[Re6stNode]]] = {}
     for n in nodes:
         g = graph[n] = defaultdict(list)
+        g: dict[tuple[Re6stNode, bool], list[Re6stNode]]
         for r in n.get_routes():
+            print("route_svg: %r" % r)
             if (r.prefix and r.prefix.startswith('10.42.') if ipv4 else
-                r.prefix is None or r.prefix.startswith('2001:db8:')):
+            r.prefix is None or r.prefix.startswith('2001:db8:')):
                 try:
-                    g[node_by_ll(r.nexthop)].append(
-                        node_by_ll(r.prefix)[0] if r.prefix else default)
+                    if r.prefix:
+                        g[node_by_ll(r.nexthop)].append(node_by_ll(r.prefix)[0])
                 except KeyError:
                     pass
     gv = ["digraph { splines = true; edge[color=grey, labelangle=0];"]
@@ -396,40 +441,48 @@ def route_svg(ipv4, z = 4, default = type('', (), {'short': None})):
     a = 2 * math.pi / N
     edges = set()
     for i, n in enumerate(nodes):
+        i: int
         gv.append('%s[pos="%s,%s!"];'
-            % (n.name, z * math.cos(a * i), z * math.sin(a * i)))
+                  % (n.name, z * math.cos(a * i), z * math.sin(a * i)))
         l = []
-        for p, r in graph[n].iteritems():
-            j = abs(nodes.index(p[0]) - i)
+        for p, r in graph[n].items():
+            p: tuple[Re6stNode, bool]
+            r: list[Re6stNode]
+            j: int = abs(nodes.index(p[0]) - i)
             l.append((min(j, N - j), p, r))
-        for j, (l, (p, t), r) in enumerate(sorted(l)):
-            l = []
+        for j, (_, (p2, t), r) in enumerate(sorted(l, key=lambda x: x[0])):
+            p2: Re6stNode
+            l2: list[str] = []
             arrowhead = 'none'
-            for r in sorted(r.short for r in r):
-                if r:
-                    if r == p.short:
-                        r = '<font color="grey">%s</font>' % r
-                    l.append(r)
+            print("r=%r" % r)
+            print("processing: " + ", ".join("%r" % ((r2.name, r2.short),) for r2 in r))
+            for r2 in sorted(r2.short if r2.short else "NONE" for r2 in r):
+                if r2:
+                    if r2 == p2.short:
+                        r2 = '<font color="grey">%s</font>' % r2
+                    l2.append(r2)
                 else:
                     arrowhead = 'dot'
-            if (n.name, p.name) in edges:
-                r = 'penwidth=0'
+            if (n.name, p2.name) in edges:
+                r3 = 'penwidth=0'
             else:
-                edges.add((p.name, n.name))
-                r = 'style=solid' if t else 'style=dashed'
+                edges.add((p2.name, n.name))
+                r3 = 'style=solid' if t else 'style=dashed'
             gv.append(
                 '%s -> %s [labeldistance=%u, headlabel=<%s>, arrowhead=%s, %s];'
-                % (p.name, n.name, 1.5 * math.sqrt(j) + 2, ','.join(l),
-                   arrowhead, r))
+                % (p2.name, n.name, 1.5 * math.sqrt(j) + 2, ','.join(l2),
+                   arrowhead, r3))
     gv.append('}\n')
     return subprocess.Popen(('neato', '-Tsvg'),
-        stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-        ).communicate('\n'.join(gv))[0]
+                            stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                            ).communicate('\n'.join(gv).encode("utf-8"))[0].decode("utf-8")
+
 
 if args.port:
-    import SimpleHTTPServer, SocketServer
+    import http.server, socketserver
 
-    class Handler(SimpleHTTPServer.SimpleHTTPRequestHandler):
+
+    class Handler(http.server.SimpleHTTPRequestHandler):
 
         _path_match = re.compile('/(.+)\.(html|svg)$').match
         pages = 'ipv6', 'ipv4', 'tunnels'
@@ -439,7 +492,7 @@ if args.port:
             try:
                 name, ext = self._path_match(self.path).groups()
                 page = self.pages.index(name)
-            except AttributeError, ValueError:
+            except AttributeError as ValueError:
                 if self.path == '/':
                     self.send_response(302)
                     self.send_header('Location', self.pages[0] + '.html')
@@ -450,34 +503,39 @@ if args.port:
             if page < 2:
                 body = route_svg(page)
             else:
-                body = registry.Popen(('python', '-c', r"""if 1:
-                    import math, json
+                out, err = registry.Popen(('python3', '-c', r"""if 1:
+                    import math, json, sys
                     from re6st.registry import RegistryClient
-                    g = json.loads(RegistryClient(
-                        'http://localhost/').topology())
+                    topo = RegistryClient('http://localhost/').topology()
+                    g = json.loads(topo)
+                    assert g, 'Topology is empty'
                     r = set(g.pop('', ()))
                     a = set()
-                    for v in g.itervalues():
+                    for v in g.values():
                         a.update(v)
                     g.update(dict.fromkeys(a.difference(g), ()))
-                    print 'digraph {'
+                    print('digraph {')
                     a = 2 * math.pi / len(g)
                     z = 4
                     m2 = '%u/80' % (2 << 64)
                     title = lambda n: '2|80' if n == m2 else n
-                    g = sorted((title(k), k in r, v) for k, v in g.iteritems())
+                    g = sorted((title(k), k in r, v) for k, v in g.items())
                     for i, (n, r, v) in enumerate(g):
-                        print '"%s"[pos="%s,%s!"%s];' % (title(n),
+                        print('"%s"[pos="%s,%s!"%s];' % (title(n),
                             z * math.cos(a * i), z * math.sin(a * i),
-                            '' if r else ', style=dashed')
+                            '' if r else ', style=dashed'))
                         for v in v:
-                            print '"%s" -> "%s";' % (n, title(v))
-                    print '}'
-                """), stdout=subprocess.PIPE, cwd="..").communicate()[0]
+                            print('"%s" -> "%s";' % (n, title(v)))
+                    print('}')
+                """), stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd="..").communicate()
+                if err:
+                    self.send_error(500, explain=err.decode("utf-8"))
+                    return
+                body = out.decode("utf-8")
                 if body:
                     body = subprocess.Popen(('neato', '-Tsvg'),
-                        stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                        ).communicate(body)[0]
+                                            stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                            ).communicate(body.encode("utf-8"))[0].decode("utf-8")
                 if not body:
                     self.send_error(500)
                     return
@@ -504,18 +562,23 @@ if args.port:
 %s
 </body>
 </html>""" % (name, ' '.join(x if i == page else
-                       '<a href="%s.html">%s</a>' % (x, x)
-                       for i, x in enumerate(self.pages)),
-                  body[body.find('<svg'):])
+                                                    '<a href="%s.html">%s</a>' % (x, x)
+                             for i, x in enumerate(self.pages)),
+              body[body.find('<svg'):])
             self.send_response(200)
-            self.send_header('Content-Length', len(body))
+            body = body.encode("utf-8")
+            self.send_header('Content-Length', str(len(body)))
             self.send_header('Content-type', mt + '; charset=utf-8')
             self.end_headers()
             self.wfile.write(body)
 
-    class TCPServer(SocketServer.TCPServer):
+
+    class TCPServer(socketserver.TCPServer):
         allow_reuse_address = True
+
 
     TCPServer(('', args.port), Handler).serve_forever()
 
-import pdb; pdb.set_trace()
+import pdb
+
+pdb.set_trace()

@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/env python3
 import argparse, atexit, binascii, errno, hashlib
 import os, subprocess, sqlite3, sys, time
 from OpenSSL import crypto
@@ -6,14 +6,15 @@ if 're6st' not in sys.modules:
     sys.path[0] = os.path.dirname(os.path.dirname(sys.path[0]))
 from re6st import registry, utils, x509
 
-def create(path, text=None, mode=0666):
+def create(path, text=None, mode=0o666):
     fd = os.open(path, os.O_CREAT | os.O_WRONLY | os.O_TRUNC, mode)
     try:
         os.write(fd, text)
     finally:
         os.close(fd)
 
-def loadCert(pem):
+def loadCert(pem: bytes):
+    assert pem
     return crypto.load_certificate(crypto.FILETYPE_PEM, pem)
 
 def main():
@@ -68,19 +69,20 @@ def main():
             fingerprint = binascii.a2b_hex(fingerprint)
             if hashlib.new(alg).digest_size != len(fingerprint):
                 raise ValueError("wrong size")
-        except StandardError, e:
+        except Exception as e:
             parser.error("invalid fingerprint: %s" % e)
         if x509.fingerprint(ca, alg).digest() != fingerprint:
             sys.exit("CA fingerprint doesn't match")
     else:
-        print "WARNING: it is strongly recommended to use --fingerprint option."
+        print("WARNING: it is strongly recommended to use --fingerprint option.")
     network = x509.networkFromCa(ca)
     if config.is_needed:
-        route, err = subprocess.Popen(('ip', '-6', '-o', 'route', 'get',
-                                       utils.ipFromBin(network)),
-                                      stdout=subprocess.PIPE).communicate()
-        sys.exit(err or route and
-            utils.binFromIp(route.split()[8]).startswith(network))
+        with subprocess.Popen(('ip', '-6', '-o', 'route', 'get',
+                               utils.ipFromBin(network)),
+                              stdout=subprocess.PIPE) as proc:
+            route, err = proc.communicate()
+            sys.exit(err or route and
+                utils.binFromIp(route.split()[8]).startswith(network))
 
     create(ca_path, crypto.dump_certificate(crypto.FILETYPE_PEM, ca))
     if config.ca_only:
@@ -89,19 +91,20 @@ def main():
     reserved = 'CN', 'serial'
     req = crypto.X509Req()
     try:
-        with open(cert_path) as f:
+        with open(cert_path, "rb") as f:
             cert = loadCert(f.read())
         components = dict(cert.get_subject().get_components())
+        components = {k.decode(): v for k, v in components.items()}
         for k in reserved:
             components.pop(k, None)
-    except IOError, e:
+    except IOError as e:
         if e.errno != errno.ENOENT:
             raise
         components = {}
     if config.req:
         components.update(config.req)
     subj = req.get_subject()
-    for k, v in components.iteritems():
+    for k, v in components.items():
         if k in reserved:
             sys.exit(k + " field is reserved.")
         if v:
@@ -116,35 +119,35 @@ def main():
             token = ''
         elif not token:
             if not config.email:
-                config.email = raw_input('Please enter your email address: ')
+                config.email = input('Please enter your email address: ')
             s.requestToken(config.email)
             token_advice = "Use --token to retry without asking a new token\n"
             while not token:
-                token = raw_input('Please enter your token: ')
+                token = input('Please enter your token: ')
 
         try:
             with open(key_path) as f:
                 pkey = crypto.load_privatekey(crypto.FILETYPE_PEM, f.read())
             key = None
-            print "Reusing existing key."
-        except IOError, e:
+            print("Reusing existing key.")
+        except IOError as e:
             if e.errno != errno.ENOENT:
                 raise
             bits = ca.get_pubkey().bits()
-            print "Generating %s-bit key ..." % bits
+            print("Generating %s-bit key ..." % bits)
             pkey = crypto.PKey()
             pkey.generate_key(crypto.TYPE_RSA, bits)
             key = crypto.dump_privatekey(crypto.FILETYPE_PEM, pkey)
-            create(key_path, key, 0600)
+            create(key_path, key, 0o600)
 
         req.set_pubkey(pkey)
         req.sign(pkey, 'sha512')
-        req = crypto.dump_certificate_request(crypto.FILETYPE_PEM, req)
+        req = crypto.dump_certificate_request(crypto.FILETYPE_PEM, req).decode("ascii")
 
         # First make sure we can open certificate file for writing,
         # to avoid using our token for nothing.
-        cert_fd = os.open(cert_path, os.O_CREAT | os.O_WRONLY, 0666)
-        print "Requesting certificate ..."
+        cert_fd = os.open(cert_path, os.O_CREAT | os.O_WRONLY, 0o666)
+        print("Requesting certificate ...")
         if config.location:
             cert = s.requestCertificate(token, req, location=config.location)
         else:
@@ -164,16 +167,16 @@ def main():
 
     cert = loadCert(cert)
     not_after = x509.notAfter(cert)
-    print("Setup complete. Certificate is valid until %s UTC"
+    print(("Setup complete. Certificate is valid until %s UTC"
           " and will be automatically renewed after %s UTC.\n"
           "Do not forget to backup to your private key (%s) or"
           " you will lose your assigned subnet." % (
         time.asctime(time.gmtime(not_after)),
         time.asctime(time.gmtime(not_after - registry.RENEW_PERIOD)),
-        key_path))
+        key_path)))
 
     if not os.path.lexists(conf_path):
-        create(conf_path, """\
+        create(conf_path, ("""\
 registry %s
 ca %s
 cert %s
@@ -188,13 +191,13 @@ key %s
 #O3
 """ % (config.registry, ca_path, cert_path, key_path,
        ('country ' + config.location.split(',', 1)[0]) \
-           if config.location else ''))
-        print "Sample configuration file created."
+           if config.location else '')).encode())
+        print("Sample configuration file created.")
 
     cn = x509.subnetFromCert(cert)
     subnet = network + utils.binFromSubnet(cn)
-    print "Your subnet: %s/%u (CN=%s)" \
-        % (utils.ipFromBin(subnet), len(subnet), cn)
+    print("Your subnet: %s/%u (CN=%s)" \
+        % (utils.ipFromBin(subnet), len(subnet), cn))
 
 if __name__ == "__main__":
     main()

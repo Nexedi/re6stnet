@@ -1,14 +1,16 @@
 import argparse, errno, fcntl, hashlib, logging, os, select as _select
 import shlex, signal, socket, sqlite3, struct, subprocess
 import sys, textwrap, threading, time, traceback
+from collections.abc import Iterator, Mapping
+from typing import Optional, Callable
 
 # PY3: It will be even better to use Popen(pass_fds=...),
 #      and then socket.SOCK_CLOEXEC will be useless.
 #      (We already follow the good practice that consists in not
 #      relying on the GC for the closing of file descriptors.)
-socket.SOCK_CLOEXEC = 0x80000
+#socket.SOCK_CLOEXEC = 0x80000
 
-HMAC_LEN = len(hashlib.sha1('').digest())
+HMAC_LEN = len(hashlib.sha1(b'').digest())
 
 class ReexecException(Exception):
     pass
@@ -37,15 +39,15 @@ class FileHandler(logging.FileHandler):
         finally:
             self.lock.release()
         # In the rare case _reopen is set just before the lock was released
-        if self._reopen and self.lock.acquire(0):
+        if self._reopen and self.lock.acquire(False):
             self.release()
 
     def async_reopen(self, *_):
         self._reopen = True
-        if self.lock.acquire(0):
+        if self.lock.acquire(False):
             self.release()
 
-def setupLog(log_level, filename=None, **kw):
+def setupLog(log_level: int, filename: str | None=None, **kw):
     if log_level and filename:
         makedirs(os.path.dirname(filename))
         handler = FileHandler(filename)
@@ -119,7 +121,7 @@ class ArgParser(argparse.ArgumentParser):
   ca /etc/re6stnet/ca.crt""", **kw)
 
 
-class exit(object):
+class exit:
 
     status = None
 
@@ -150,7 +152,7 @@ class exit(object):
         def handler(*args):
             if self.status is None:
                 self.status = status
-            if self.acquire(0):
+            if self.acquire(False):
                 self.release()
         for sig in sigs:
             signal.signal(sig, handler)
@@ -164,7 +166,7 @@ class Popen(subprocess.Popen):
         self._args = tuple(args[0] if args else kw['args'])
         try:
             super(Popen, self).__init__(*args, **kw)
-        except OSError, e:
+        except OSError as e:
             if e.errno != errno.ENOMEM:
                 raise
             self.returncode = -1
@@ -180,8 +182,10 @@ class Popen(subprocess.Popen):
             t = threading.Timer(5, self.kill)
             t.start()
             # PY3: use waitid(WNOWAIT) and call self.poll() after t.cancel()
-            r = self.wait()
+            #r = self.wait()
+            r = self.waitid(WNOWAIT) # PY3
             t.cancel()
+            self.poll() # PY3
             return r
 
 
@@ -189,7 +193,7 @@ def setCloexec(fd):
     flags = fcntl.fcntl(fd, fcntl.F_GETFD)
     fcntl.fcntl(fd, fcntl.F_SETFD, flags | fcntl.FD_CLOEXEC)
 
-def select(R, W, T):
+def select(R: Mapping, W: Mapping, T):
     try:
         r, w, _ = _select.select(R, W, (),
             max(0, min(T)[0] - time.time()) if T else None)
@@ -209,19 +213,19 @@ def select(R, W, T):
 def makedirs(*args):
     try:
         os.makedirs(*args)
-    except OSError, e:
+    except OSError as e:
         if e.errno != errno.EEXIST:
             raise
 
-def binFromIp(ip):
+def binFromIp(ip: str) -> str:
     return binFromRawIp(socket.inet_pton(socket.AF_INET6, ip))
 
-def binFromRawIp(ip):
+def binFromRawIp(ip: bytes) -> str:
     ip1, ip2 = struct.unpack('>QQ', ip)
     return bin(ip1)[2:].rjust(64, '0') + bin(ip2)[2:].rjust(64, '0')
 
 
-def ipFromBin(ip, suffix=''):
+def ipFromBin(ip: str, suffix='') -> str:
     suffix_len = 128 - len(ip)
     if suffix_len > 0:
         ip += suffix.rjust(suffix_len, '0')
@@ -230,30 +234,31 @@ def ipFromBin(ip, suffix=''):
     return socket.inet_ntop(socket.AF_INET6,
         struct.pack('>QQ', int(ip[:64], 2), int(ip[64:], 2)))
 
-def dump_address(address):
+def dump_address(address: str) -> str:
     return ';'.join(map(','.join, address))
 
 # Yield ip, port, protocol, and country if it is in the address
-def parse_address(address_list):
+def parse_address(address_list: str) -> Iterator[tuple[str, str, str, str]]:
     for address in address_list.split(';'):
         try:
             a = address.split(',')
             int(a[1]) # Check if port is an int
             yield tuple(a[:4])
-        except ValueError, e:
+        except ValueError as e:
             logging.warning("Failed to parse node address %r (%s)",
                             address, e)
 
-def binFromSubnet(subnet):
+def binFromSubnet(subnet: str) -> str:
     p, l = subnet.split('/')
     return bin(int(p))[2:].rjust(int(l), '0')
 
-def newHmacSecret():
+def _newHmacSecret() -> Callable[[Optional[int]], bytes]:
+    """returns bytes"""
     from random import getrandbits as g
     pack = struct.Struct(">QQI").pack
     assert len(pack(0,0,0)) == HMAC_LEN
     return lambda x=None: pack(g(64) if x is None else x, g(64), g(32))
-newHmacSecret = newHmacSecret()
+newHmacSecret = _newHmacSecret()
 
 ### Integer serialization
 # - supports values from 0 to 0x202020202020201f
@@ -261,21 +266,21 @@ newHmacSecret = newHmacSecret()
 # - there's always a unique way to encode a value
 # - the 3 first bits code the number of bytes
 
-def packInteger(i):
-    for n in xrange(8):
+def packInteger(i: int) -> bytes:
+    for n in range(8):
         x = 32 << 8 * n
         if i < x:
             return struct.pack("!Q", i + n * x)[7-n:]
         i -= x
     raise OverflowError
 
-def unpackInteger(x):
-    n = ord(x[0]) >> 5
+def unpackInteger(x: bytes) -> Optional[tuple[int, int]]:
+    n = x[0] >> 5
     try:
-        i, = struct.unpack("!Q", '\0' * (7 - n) + x[:n+1])
+        i, = struct.unpack("!Q", b'\0' * (7 - n) + x[:n+1])
     except struct.error:
         return
-    return sum((32 << 8 * i for i in xrange(n)),
+    return sum((32 << 8 * i for i in range(n)),
                 i - (n * 32 << 8 * n)), n + 1
 
 ###

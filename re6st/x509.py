@@ -1,36 +1,45 @@
 # -*- coding: utf-8 -*-
 import calendar, hashlib, hmac, logging, os, struct, subprocess, threading, time
+from typing import Callable, Any
+
 from OpenSSL import crypto
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives.serialization import load_pem_private_key
+from cryptography.x509 import load_pem_x509_certificate
+
 from . import utils
 from .version import protocol
 
-def newHmacSecret():
+def newHmacSecret() -> bytes:
     return utils.newHmacSecret(int(time.time() * 1000000))
 
-def networkFromCa(ca):
+def networkFromCa(ca: crypto.X509) -> str:
+    # TODO: will be ca.serial_number after migration to cryptography
     return bin(ca.get_serial_number())[3:]
 
-def subnetFromCert(cert):
+def subnetFromCert(cert: crypto.X509) -> str:
     return cert.get_subject().CN
 
-def notBefore(cert):
-    return calendar.timegm(time.strptime(cert.get_notBefore(),'%Y%m%d%H%M%SZ'))
+def notBefore(cert: crypto.X509) -> int:
+    return calendar.timegm(time.strptime(cert.get_notBefore().decode(),'%Y%m%d%H%M%SZ'))
 
-def notAfter(cert):
-    return calendar.timegm(time.strptime(cert.get_notAfter(),'%Y%m%d%H%M%SZ'))
+def notAfter(cert: crypto.X509) -> int:
+    return calendar.timegm(time.strptime(cert.get_notAfter().decode(),'%Y%m%d%H%M%SZ'))
 
-def openssl(*args):
+def openssl(*args: str, fds=[]) -> utils.Popen:
     return utils.Popen(('openssl',) + args,
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE)
+        stderr=subprocess.PIPE, pass_fds=fds)
 
-def encrypt(cert, data):
+def encrypt(cert: bytes, data: bytes) -> bytes:
+    assert isinstance(data, bytes)
     r, w = os.pipe()
     try:
         threading.Thread(target=os.write, args=(w, cert)).start()
         p = openssl('rsautl', '-encrypt', '-certin',
-                    '-inkey', '/proc/self/fd/%u' % r)
+                    '-inkey', '/proc/self/fd/%u' % r, fds=[r])
         out, err = p.communicate(data)
     finally:
         os.close(r)
@@ -39,10 +48,10 @@ def encrypt(cert, data):
         raise subprocess.CalledProcessError(p.returncode, 'openssl', err)
     return out
 
-def fingerprint(cert, alg='sha1'):
+def fingerprint(cert: crypto.X509, alg='sha1'):
     return hashlib.new(alg, crypto.dump_certificate(crypto.FILETYPE_ASN1, cert))
 
-def maybe_renew(path, cert, info, renew, force=False):
+def maybe_renew(path: str, cert: crypto.X509, info: str, renew: Callable[[], Any], force=False) -> tuple[crypto.X509, int]:
     from .registry import RENEW_PERIOD
     while True:
         if force:
@@ -52,7 +61,7 @@ def maybe_renew(path, cert, info, renew, force=False):
             if time.time() < next_renew:
                 return cert, next_renew
         try:
-            pem = renew()
+            pem: bytes = renew()
             if not pem or pem == crypto.dump_certificate(
                   crypto.FILETYPE_PEM, cert):
                 exc_info = 0
@@ -62,7 +71,7 @@ def maybe_renew(path, cert, info, renew, force=False):
             exc_info = 1
             break
         new_path = path + '.new'
-        with open(new_path, 'w') as f:
+        with open(new_path, 'wb') as f:
             f.write(pem)
         try:
             s = os.stat(path)
@@ -84,39 +93,44 @@ class NewSessionError(Exception):
     pass
 
 
-class Cert(object):
+class Cert:
 
-    def __init__(self, ca, key, cert=None):
+    def __init__(self, ca: str, key: str, cert: str | None=None):
         self.ca_path = ca
         self.cert_path = cert
         self.key_path = key
-        with open(ca) as f:
-            self.ca = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
-        with open(key) as f:
-            self.key = crypto.load_privatekey(crypto.FILETYPE_PEM, f.read())
+        # TODO: finish migration from old OpenSSL module to cryptography
+        with open(ca, "rb") as f:
+            ca_pem = f.read()
+            self.ca = crypto.load_certificate(crypto.FILETYPE_PEM, ca_pem)
+            self.ca_crypto = load_pem_x509_certificate(ca_pem)
+        with open(key, "rb") as f:
+            key_pem = f.read()
+            self.key = crypto.load_privatekey(crypto.FILETYPE_PEM, key_pem)
+            self.key_crypto = load_pem_private_key(key_pem, password=None)
         if cert:
             with open(cert) as f:
-                self.cert = self.loadVerify(f.read())
+                self.cert = self.loadVerify(f.read().encode())
 
     @property
-    def prefix(self):
+    def prefix(self) -> str:
         return utils.binFromSubnet(subnetFromCert(self.cert))
 
     @property
-    def network(self):
+    def network(self) -> str:
         return networkFromCa(self.ca)
 
     @property
-    def subject_serial(self):
+    def subject_serial(self) -> int:
         return int(self.cert.get_subject().serialNumber)
 
     @property
-    def openvpn_args(self):
+    def openvpn_args(self) -> tuple[str, ...]:
         return ('--ca', self.ca_path,
                 '--cert', self.cert_path,
                 '--key', self.key_path)
 
-    def maybeRenew(self, registry, crl):
+    def maybeRenew(self, registry, crl) -> int:
         self.cert, next_renew = maybe_renew(self.cert_path, self.cert,
               "Certificate", lambda: registry.renewCertificate(self.prefix),
               self.cert.get_serial_number() in crl)
@@ -143,6 +157,7 @@ class Cert(object):
                 "error running openssl, assuming cert is invalid")
           # BBB: With old versions of openssl, detailed
           #      error is printed to standard output.
+          out, err = out.decode(), err.decode()
           for err in err, out:
             for x in err.splitlines():
                 if x.startswith('error '):
@@ -151,13 +166,26 @@ class Cert(object):
                     raise VerifyError(int(code), int(depth), msg.strip())
         return r
 
-    def verify(self, sign, data):
-        crypto.verify(self.ca, sign, data, 'sha512')
+    def verify(self, sign: bytes, data: bytes):
+        assert isinstance(data, bytes)
+        pub_key = self.ca_crypto.public_key()
+        pub_key.verify(
+            sign,
+            data,
+            padding.PKCS1v15(),
+            hashes.SHA512()
+        )
 
-    def sign(self, data):
-        return crypto.sign(self.key, data, 'sha512')
+    def sign(self, data: bytes) -> bytes:
+        assert isinstance(data, bytes)
+        return self.key_crypto.sign(
+            data,
+            padding.PKCS1v15(),
+            hashes.SHA512()
+        )
 
-    def decrypt(self, data):
+    def decrypt(self, data: bytes) -> bytes:
+        assert isinstance(data, bytes)
         p = openssl('rsautl', '-decrypt', '-inkey', self.key_path)
         out, err = p.communicate(data)
         if p.returncode:
@@ -166,7 +194,7 @@ class Cert(object):
 
     def verifyVersion(self, version):
         try:
-            n = 1 + (ord(version[0]) >> 5)
+            n = 1 + (version[0] >> 5)
             self.verify(version[n:], version[:n])
         except (IndexError, crypto.Error):
             raise VerifyError(None, None, 'invalid network version')
@@ -175,7 +203,7 @@ class Cert(object):
 PACKED_PROTOCOL = utils.packInteger(protocol)
 
 
-class Peer(object):
+class Peer:
     """
     UDP:    A ─────────────────────────────────────────────> B
 
@@ -206,9 +234,9 @@ class Peer(object):
     _key = newHmacSecret()
     serial = None
     stop_date = float('inf')
-    version = ''
+    version = b''
 
-    def __init__(self, prefix):
+    def __init__(self, prefix: str):
         self.prefix = prefix
 
     @property
@@ -229,11 +257,11 @@ class Peer(object):
             try:
                 # Always assume peer is not old, in case it has just upgraded,
                 # else we would be stuck with the old protocol.
-                msg = ('\0\0\0\1'
+                msg = (b'\0\0\0\1'
                     + PACKED_PROTOCOL
                     + fingerprint(self.cert).digest())
             except AttributeError:
-                msg = '\0\0\0\0'
+                msg = b'\0\0\0\0'
             return msg + crypto.dump_certificate(crypto.FILETYPE_ASN1, cert)
 
     def hello0Sent(self):
@@ -246,13 +274,13 @@ class Peer(object):
         self._i = self._j = 2
         self._last = 0
         self.protocol = protocol
-        return ''.join(('\0\0\0\2', PACKED_PROTOCOL if protocol else '',
+        return b''.join((b'\0\0\0\2', PACKED_PROTOCOL if protocol else b'',
                         h, cert.sign(h)))
 
     def _hmac(self, msg):
         return hmac.HMAC(self._key, msg, hashlib.sha1).digest()
 
-    def newSession(self, key, protocol):
+    def newSession(self, key: bytes, protocol):
         if key <= self._key:
             raise NewSessionError(self._key, key)
         self._key = key
@@ -265,7 +293,8 @@ class Peer(object):
 
     seqno_struct = struct.Struct("!L")
 
-    def decode(self, msg, _unpack=seqno_struct.unpack):
+    def decode(self, msg: bytes, _unpack=seqno_struct.unpack) -> bytes:
+        assert isinstance(msg, bytes)
         seqno, = _unpack(msg[:4])
         if seqno <= 2:
             msg = msg[4:]
@@ -281,8 +310,10 @@ class Peer(object):
             self._i = seqno
             return msg[4:i]
 
-    def encode(self, msg, _pack=seqno_struct.pack):
+    def encode(self, msg: str | bytes, _pack=seqno_struct.pack) -> bytes:
         self._j += 1
+        if type(msg) is str:
+            msg = msg.encode()
         msg = _pack(self._j) + msg
         return msg + self._hmac(msg)
 

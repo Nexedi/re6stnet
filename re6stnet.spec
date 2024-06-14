@@ -21,7 +21,7 @@ Requires:   python-setuptools
 BuildRequires: python3-devel
 %endif
 Recommends: python-miniupnpc
-Conflicts:  re6st-node
+Conflicts:  re6st-node-py3
 
 %description
 
