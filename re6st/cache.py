@@ -5,7 +5,7 @@ from . import utils, version, x509
 
 class Cache:
 
-    def __init__(self, db_path, registry, cert: x509.Cert, db_size=200):
+    def __init__(self, db_path: str, registry, cert: x509.Cert, db_size=200):
         self._prefix = cert.prefix
         self._db_size = db_size
         self._decrypt = cert.decrypt
@@ -50,7 +50,7 @@ class Cache:
         self.warnProtocol()
         logging.info("Cache initialized.")
 
-    def _open(self, path):
+    def _open(self, path: str) -> sqlite3.Connection:
         db = sqlite3.connect(path, isolation_level=None)
         db.text_factory = str
         db.execute("PRAGMA synchronous = OFF")
@@ -147,7 +147,7 @@ class Cache:
             logging.warning("There's a new version of re6stnet:"
                             " you should update.")
 
-    def getDh(self, path):
+    def getDh(self, path: str):
         # We'd like to do a full check here but
         #   from OpenSSL import SSL
         #   SSL.Context(SSL.TLSv1_METHOD).load_tmp_dh(path)
@@ -179,11 +179,11 @@ class Cache:
                 logging.trace("- %s: %s%s", prefix, address,
                               ' (blacklisted)' if _try else '')
 
-    def cacheMinimize(self, size):
+    def cacheMinimize(self, size: int):
         with self._db:
             self._cacheMinimize(size)
 
-    def _cacheMinimize(self, size):
+    def _cacheMinimize(self, size: int):
         a = self._db.execute(
             "SELECT peer FROM volatile.stat ORDER BY try, RANDOM() LIMIT ?,-1",
             (size,)).fetchall()
@@ -192,26 +192,27 @@ class Cache:
             q("DELETE FROM peer WHERE prefix IN (?)", a)
             q("DELETE FROM volatile.stat WHERE peer IN (?)", a)
 
-    def connecting(self, prefix, connecting):
+    def connecting(self, prefix: str, connecting: int):
+        # TODO: is `connecting` a bool?
         self._db.execute("UPDATE volatile.stat SET try=? WHERE peer=?",
                          (connecting, prefix))
 
     def resetConnecting(self):
         self._db.execute("UPDATE volatile.stat SET try=0")
 
-    def getAddress(self, prefix):
+    def getAddress(self, prefix: str) -> bool:
         r = self._db.execute("SELECT address FROM peer, volatile.stat"
                              " WHERE prefix=? AND prefix=peer AND try=0",
                              (prefix,)).fetchone()
         return r and r[0]
 
     @property
-    def my_address(self):
+    def my_address(self) -> str:
         for x, in self._db.execute("SELECT address FROM peer WHERE prefix=''"):
             return x
 
     @my_address.setter
-    def my_address(self, value):
+    def my_address(self, value: str):
         if value:
             with self._db as db:
                 db.execute("INSERT OR REPLACE INTO peer VALUES ('', ?)",
@@ -236,7 +237,7 @@ class Cache:
     def getPeerCount(self, failed=0, __sql=_get_peer_sql % "COUNT(*)") -> int:
         return self._db.execute(__sql, (self._prefix, failed)).next()[0]
 
-    def getBootstrapPeer(self):
+    def getBootstrapPeer(self) -> tuple[str, str]:
         logging.info('Getting Boot peer...')
         try:
             bootpeer = self._registry.getBootstrapPeer(self._prefix)
@@ -250,7 +251,7 @@ class Cache:
                 return prefix, address
             logging.warning('Buggy registry sent us our own address')
 
-    def addPeer(self, prefix, address, set_preferred=False):
+    def addPeer(self, prefix: str, address: str, set_preferred=False):
         logging.debug('Adding peer %s: %s', prefix, address)
         with self._db:
             q = self._db.execute
@@ -274,7 +275,7 @@ class Cache:
                 q("INSERT OR REPLACE INTO peer VALUES (?,?)", (prefix, address))
             q("INSERT OR REPLACE INTO volatile.stat VALUES (?,0)", (prefix,))
 
-    def getCountry(self, ip):
+    def getCountry(self, ip: str) -> str:
         try:
             return self._registry.getCountry(self._prefix, ip).decode()
         except socket.error as e:
