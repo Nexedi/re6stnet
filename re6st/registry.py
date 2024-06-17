@@ -99,7 +99,9 @@ class RegistryServer:
                 "prefix TEXT PRIMARY KEY NOT NULL",
                 "email TEXT",
                 "cert TEXT")
+        logging.debug("Checking for existing certs...")
         if not self.db.execute("SELECT 1 FROM cert LIMIT 1").fetchone():
+            logging.debug("No existing certs found, creating a blank one...")
             self.db.execute("INSERT INTO cert VALUES ('',null,null)")
 
         prev = '-'
@@ -265,7 +267,8 @@ class RegistryServer:
                 if x <= old:
                     if prefix == self.prefix:
                         logging.critical("Refuse to delete certificate"
-                                         " of main node: wrong clock ?")
+                                         " of main node: wrong clock ?"
+                                         " Alternatively, the database might be in an inconsistent state.")
                         sys.exit(1)
                     logging.info("Delete %s: %s (invalid since %s)",
                         "certificate requested by '%s'" % email
@@ -350,9 +353,11 @@ class RegistryServer:
 
     def getCert(self, client_prefix):
         assert self.lock.locked()
-        return self.db.execute("SELECT cert FROM cert"
-                               " WHERE prefix=? AND cert IS NOT NULL",
-                               (client_prefix,)).fetchone()[0]
+        cert = self.db.execute("SELECT cert FROM cert"
+                                   " WHERE prefix=? AND cert IS NOT NULL", (client_prefix,)).fetchone()
+        assert cert, "Certificate query did not return any result; "\
+                     "this indicates inconsistent state and should not happen"
+        return cert[0]
 
     @rpc_private
     def isToken(self, token):
@@ -433,6 +438,7 @@ class RegistryServer:
         return default
 
     def mergePrefixes(self):
+        logging.debug("Merging prefixes")
         q = self.db.execute
         prev_prefix = None
         max_len = 128,
@@ -455,6 +461,7 @@ class RegistryServer:
                     prev_prefix = prefix
 
     def newPrefix(self, prefix_len, community):
+        logging.info("Allocating /%u prefix for %s", prefix_len, community)
         community_len = len(community)
         prefix_len += community_len
         max_len = 128 - len(self.network)
@@ -494,6 +501,7 @@ class RegistryServer:
 
     @rpc
     def requestCertificate(self, token, req, location='', ip=''):
+        logging.debug("Requesting certificate with token %s", token)
         req = crypto.load_certificate_request(crypto.FILETYPE_PEM, req)
         with self.lock:
             with self.db:
@@ -602,6 +610,7 @@ class RegistryServer:
         return zlib.compress(json.dumps(config).encode("utf-8"))
 
     def _queryAddress(self, peer):
+        logging.info("Querying address for %s/%s", int(peer, 2), len(peer))
         self.sendto(peer, 1)
         s = self.sock,
         timeout = 3
@@ -609,6 +618,7 @@ class RegistryServer:
         # Loop because there may be answers from previous requests.
         while select.select(s, (), (), timeout)[0]:
             prefix, msg = self.recv(1)
+            logging.info("* received: %s - %s", prefix, msg)
             if prefix == peer:
                 return msg
             timeout = max(0, end - time.time())
@@ -622,6 +632,7 @@ class RegistryServer:
 
     @rpc
     def getBootstrapPeer(self, cn):
+        logging.info("Answering bootstrap peer for %s", cn)
         with self.peers_lock:
             age, peers = self.peers
             if age < time.time() or not peers:
@@ -633,6 +644,7 @@ class RegistryServer:
                 peers.append(self.prefix)
                 random.shuffle(peers)
                 self.peers = time.time() + 60, peers
+            logging.debug("peers: %r", peers)
             peer = peers.pop()
             if peer == cn:
                 # Very unlikely (e.g. peer restarted with empty cache),
@@ -642,6 +654,7 @@ class RegistryServer:
         with self.lock:
             msg = self._queryAddress(peer)
             if msg is None:
+                logging.info("No address for %s, returning None", peer)
                 return
             # Remove country for old nodes
             if self.getPeerProtocol(cn) < 7:
@@ -771,6 +784,7 @@ class RegistryServer:
 
     @rpc_private
     def topology(self):
+        logging.info("Computing topology")
         p = lambda p: '%s/%s' % (int(p, 2), len(p))
         peers = deque((p(self.prefix),))
         graph = defaultdict(set)
@@ -780,6 +794,7 @@ class RegistryServer:
                 r, w, _ = select.select(s, s if peers else (), (), 3)
                 if r:
                     prefix, x = self.recv(5)
+                    logging.info("Received %s %s", prefix, x)
                     if prefix and x:
                         prefix = p(prefix)
                         x = x.split()
@@ -794,8 +809,11 @@ class RegistryServer:
                                 graph[x].add(prefix)
                             graph[''].add(prefix)
                 if w:
-                    self.sendto(utils.binFromSubnet(peers.popleft()), 5)
+                    first = peers.popleft()
+                    logging.info("Sending %s", first)
+                    self.sendto(utils.binFromSubnet(first), 5)
                 elif not r:
+                    logging.info("No more sockets, stopping")
                     break
         return json.dumps({k: list(v) for k, v in graph.items()})
 
