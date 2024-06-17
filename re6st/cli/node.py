@@ -266,9 +266,9 @@ def main():
 
     def call(cmd):
         logging.debug('%r', cmd)
-        p = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                                  stderr=subprocess.PIPE)
-        stdout, stderr = p.communicate()
+        with subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                                  stderr=subprocess.PIPE) as p:
+            stdout, stderr = p.communicate()
         if p.returncode:
             raise EnvironmentError("%r failed with error %u\n%s"
                                    % (' '.join(cmd), p.returncode, stderr))
