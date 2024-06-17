@@ -20,6 +20,8 @@ def openvpn(iface, encrypt, *args, **kw):
     if ovpn_log:
         args += '--log-append', os.path.join(ovpn_log, '%s.log' % iface),
     if not encrypt:
+        # TODO: --ncp-disable was deprecated in OpenVPN 2.5 and removed in 2.6
+        #       and is no longer necessary in those versions.
         args += '--cipher', 'none', '--ncp-disable'
     logging.debug('%r', args)
     return utils.Popen(args, **kw)
