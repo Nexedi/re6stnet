@@ -1,6 +1,7 @@
 import argparse, errno, fcntl, hashlib, logging, os, select as _select
 import shlex, signal, socket, sqlite3, struct, subprocess
 import sys, textwrap, threading, time, traceback
+from typing import Optional
 
 # PY3: It will be even better to use Popen(pass_fds=...),
 #      and then socket.SOCK_CLOEXEC will be useless.
@@ -37,12 +38,12 @@ class FileHandler(logging.FileHandler):
         finally:
             self.lock.release()
         # In the rare case _reopen is set just before the lock was released
-        if self._reopen and self.lock.acquire(0):
+        if self._reopen and self.lock.acquire(False):
             self.release()
 
     def async_reopen(self, *_):
         self._reopen = True
-        if self.lock.acquire(0):
+        if self.lock.acquire(False):
             self.release()
 
 def setupLog(log_level, filename=None, **kw):
@@ -150,7 +151,7 @@ class exit(object):
         def handler(*args):
             if self.status is None:
                 self.status = status
-            if self.acquire(0):
+            if self.acquire(False):
                 self.release()
         for sig in sigs:
             signal.signal(sig, handler)
@@ -263,7 +264,7 @@ newHmacSecret = newHmacSecret()
 # - there's always a unique way to encode a value
 # - the 3 first bits code the number of bytes
 
-def packInteger(i):
+def packInteger(i: int) -> bytes:
     for n in range(8):
         x = 32 << 8 * n
         if i < x:
@@ -271,7 +272,7 @@ def packInteger(i):
         i -= x
     raise OverflowError
 
-def unpackInteger(x):
+def unpackInteger(x: bytes) -> Optional[tuple[int, int]]:
     n = x[0] >> 5
     try:
         i, = struct.unpack("!Q", b'\0' * (7 - n) + x[:n+1])
