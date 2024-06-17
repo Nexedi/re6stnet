@@ -31,7 +31,8 @@ def openssl(*args, fds=[]):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE, pass_fds=fds)
 
-def encrypt(cert, data):
+def encrypt(cert, data: bytes) -> bytes:
+    assert isinstance(data, bytes)
     r, w = os.pipe()
     try:
         threading.Thread(target=os.write, args=(w, cert)).start()
@@ -181,6 +182,7 @@ class Cert:
         )
 
     def decrypt(self, data: bytes) -> bytes:
+        assert isinstance(data, bytes)
         p = openssl('rsautl', '-decrypt', '-inkey', self.key_path)
         out, err = p.communicate(data)
         if p.returncode:
@@ -288,7 +290,8 @@ class Peer:
 
     seqno_struct = struct.Struct("!L")
 
-    def decode(self, msg: bytes, _unpack=seqno_struct.unpack) -> str:
+    def decode(self, msg: bytes, _unpack=seqno_struct.unpack) -> bytes:
+        assert isinstance(msg, bytes)
         seqno, = _unpack(msg[:4])
         if seqno <= 2:
             msg = msg[4:]
@@ -302,11 +305,7 @@ class Peer:
         if self._hmac(msg[:i]) == msg[i:] and self._i < seqno:
             self._last = None
             self._i = seqno
-            try:
-                return msg[4:i].decode()
-            except UnicodeDecodeError:
-                logging.error("Invalid message from %s: %r", self.prefix, msg)
-                raise
+            return msg[4:i]
 
     def encode(self, msg: str | bytes, _pack=seqno_struct.pack) -> bytes:
         self._j += 1
