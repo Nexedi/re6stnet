@@ -92,7 +92,7 @@ class RegistryServer:
                 "name TEXT PRIMARY KEY NOT NULL",
                 "value")
         self.prefix = self.getConfig("prefix", None)
-        self.version = self.getConfig("version", b'\x00') # BBB: blob
+        self.version = self.getConfig("version", b'\x00')
         utils.sqliteCreateTable(self.db, "token",
                 "token TEXT PRIMARY KEY NOT NULL",
                 "email TEXT NOT NULL",

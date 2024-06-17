@@ -93,8 +93,7 @@ def main():
     try:
         with open(cert_path, "rb") as f:
             cert = loadCert(f.read())
-        components = dict(cert.get_subject().get_components())
-        components = {k.decode(): v for k, v in components.items()}
+        components = {k.decode(): v for k, v in cert.get_subject().get_components()}
         for k in reserved:
             components.pop(k, None)
     except IOError as e:

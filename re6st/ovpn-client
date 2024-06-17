@@ -13,7 +13,5 @@ if script_type == 'up':
 
 if script_type == 'route-up':
     import time
-    with open('/opt/openvpn_route_up.log', 'w+') as f:
-        f.write(repr(sys.argv))
     os.write(int(sys.argv[1]), repr((os.environ['common_name'], time.time(),
         int(os.environ['tls_serial_0']), os.environ['OPENVPN_external_ip'])).encode())

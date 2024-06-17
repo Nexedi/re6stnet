@@ -232,9 +232,8 @@ class Cache:
                     " WHERE prefix=peer AND prefix!=? AND try=?"
     def getPeerList(self, failed=0, __sql=_get_peer_sql % "prefix, address"
                                                         + " ORDER BY RANDOM()"):
-        #return self._db.execute(__sql, (self._prefix, failed))
-        r =  self._db.execute(__sql, (self._prefix, failed))
-        return r
+        return self._db.execute(__sql, (self._prefix, failed))
+
     def getPeerCount(self, failed=0, __sql=_get_peer_sql % "COUNT(*)") -> int:
         return self._db.execute(__sql, (self._prefix, failed)).next()[0]
 
