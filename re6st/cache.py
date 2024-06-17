@@ -5,7 +5,7 @@ from . import utils, version, x509
 
 class Cache(object):
 
-    def __init__(self, db_path, registry, cert, db_size=200):
+    def __init__(self, db_path, registry, cert: x509.Cert, db_size=200):
         self._prefix = cert.prefix
         self._db_size = db_size
         self._decrypt = cert.decrypt
@@ -89,8 +89,10 @@ class Cache(object):
         logging.info("Getting new network parameters from registry...")
         try:
             # TODO: When possible, the registry should be queried via the re6st.
+            network_config = self._registry.getNetworkConfig(self._prefix)
+            logging.debug('config %r' % network_config)  # todo
             x = json.loads(zlib.decompress(
-                self._registry.getNetworkConfig(self._prefix)))
+                network_config))
             base64_list = x.pop('', ())
             config = {}
             for k, v in x.items():
@@ -134,7 +136,7 @@ class Cache(object):
                            ((k, memoryview(v) if k in base64_list or
                              k.startswith('babel_hmac') else v)
                             for k, v in config.items()))
-        self._loadConfig(iter(config.items()))
+        self._loadConfig(config.items())
         return [k[:-5] if k.endswith(':json') else k
                 for k in chain(remove, (k
                     for k, v in config.items()
@@ -229,10 +231,9 @@ class Cache(object):
                     " WHERE prefix=peer AND prefix!=? AND try=?"
     def getPeerList(self, failed=0, __sql=_get_peer_sql % "prefix, address"
                                                         + " ORDER BY RANDOM()"):
-        #return self._db.execute(__sql, (self._prefix, failed))
-        r =  self._db.execute(__sql, (self._prefix, failed))
-        return r
-    def getPeerCount(self, failed=0, __sql=_get_peer_sql % "COUNT(*)"):
+        return self._db.execute(__sql, (self._prefix, failed))
+
+    def getPeerCount(self, failed=0, __sql=_get_peer_sql % "COUNT(*)") -> int:
         return self._db.execute(__sql, (self._prefix, failed)).next()[0]
 
     def getBootstrapPeer(self):
