@@ -155,6 +155,11 @@ class RegistryServer:
         else:
             self.newHMAC(0)
 
+    def close(self):
+        self.sock.close()
+        self.db.close()
+        self.ctl.close()
+
     def getConfig(self, name, *default):
         r, = next(self.db.execute(
             "SELECT value FROM config WHERE name=?", (name,)), default)
