@@ -17,7 +17,7 @@ class Forwarder:
     _lcg_n = 0
 
     @classmethod
-    def _getExternalPort(cls):
+    def _getExternalPort(cls) -> int:
         # Since _refresh() does not test all ports in a row, we prefer to
         # return random ports to maximize the chance to find a free port.
         # A linear congruential generator should be random enough, without
@@ -35,7 +35,7 @@ class Forwarder:
         self._u.discoverdelay = 200
         self._rules = []
 
-    def __getattr__(self, name):
+    def __getattr__(self, name: str):
         wrapped = getattr(self._u, name)
         def wrapper(*args, **kw):
             try:
