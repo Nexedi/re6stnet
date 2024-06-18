@@ -2,8 +2,11 @@ import errno, json, logging, os, platform, random, socket
 import subprocess, struct, sys, time, weakref
 from collections import defaultdict, deque
 from bisect import bisect, insort
+from collections.abc import Iterator, Sequence
+from typing import Callable
+
 from OpenSSL import crypto
-from . import ctl, plib, utils, version, x509
+from . import cache, ctl, plib, utils, version, x509
 
 PORT = 326
 
@@ -21,7 +24,7 @@ proto_dict = {
 proto_dict['tcp'] = proto_dict['tcp4']
 proto_dict['udp'] = proto_dict['udp4']
 
-def resolve(ip, port, proto):
+def resolve(ip, port, proto: str) -> tuple[socket.AddressFamily | None, Iterator[str]]:
     try:
         family, proto = proto_dict[proto]
     except KeyError:
@@ -31,16 +34,16 @@ def resolve(ip, port, proto):
 
 class MultiGatewayManager(dict):
 
-    def __init__(self, gateway):
+    def __init__(self, gateway: Callable[[str], str]):
         self._gw = gateway
 
-    def _route(self, cmd, dest, gw):
+    def _route(self, cmd: str, dest: str, gw: str):
         if gw:
             cmd = 'ip', '-4', 'route', cmd, '%s/32' % dest, 'via', gw
             logging.trace('%r', cmd)
             subprocess.check_call(cmd)
 
-    def add(self, dest, route):
+    def add(self, dest: str, route: bool):
         try:
             self[dest][1] += 1
         except KeyError:
@@ -48,7 +51,7 @@ class MultiGatewayManager(dict):
             self[dest] = [gw, 0]
             self._route('add', dest, gw)
 
-    def remove(self, dest):
+    def remove(self, dest: str):
         gw, count = self[dest]
         if count:
             self[dest][1] = count - 1
@@ -198,7 +201,7 @@ class BaseTunnelManager:
     _geoiplookup = None
     _forward = None
 
-    def __init__(self, control_socket, cache, cert, conf_country, address=()):
+    def __init__(self, control_socket, cache: cache.Cache, cert: x509.Cert, conf_country, address=()):
         self.cert = cert
         self._network = cert.network
         self._prefix = cert.prefix
@@ -665,7 +668,7 @@ class TunnelManager(BaseTunnelManager):
 
     def __init__(self, control_socket, cache, cert, openvpn_args,
                  timeout, client_count, iface_list, conf_country, address,
-                 ip_changed, remote_gateway, disable_proto, neighbour_list=()):
+                 ip_changed, remote_gateway: Callable[[str], str], disable_proto: Sequence[str], neighbour_list=()):
         super(TunnelManager, self).__init__(control_socket,
                                             cache, cert, conf_country, address)
         self.ovpn_args = openvpn_args
