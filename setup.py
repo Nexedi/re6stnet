@@ -15,7 +15,7 @@ def copy_file(self, infile, outfile, *args, **kw):
     if infile == version["__file__"]:
         if not self.dry_run:
             log.info("generating %s -> %s", infile, outfile)
-            with open(outfile, "w", encoding="utf-8") as f:
+            with open(outfile, "w") as f:
                 for x in sorted(version.items()):
                     if not x[0].startswith("_"):
                         f.write("%s = %r\n" % x)
@@ -33,8 +33,11 @@ def copy_file(self, infile, outfile, *args, **kw):
                 executable = self.distribution.command_obj['build'].executable
                 patched = "#!%s%s\n" % (executable, m.group(1) or '')
                 patched += src.read()
-                with open(outfile, "w") as dst:
-                    dst.write(patched)
+                dst = os.open(outfile, os.O_CREAT | os.O_WRONLY | os.O_TRUNC)
+                try:
+                    os.write(dst, patched.encode())
+                finally:
+                    os.close(dst)
                 return outfile, 1
     cls, = self.__class__.__bases__
     return cls.copy_file(self, infile, outfile, *args, **kw)
