@@ -244,12 +244,13 @@ def binFromSubnet(subnet: str) -> str:
     p, l = subnet.split('/')
     return bin(int(p))[2:].rjust(int(l), '0')
 
-def _newHmacSecret() -> Callable[[Optional[int]], bytes]:
-    """returns bytes"""
+def _newHmacSecret() -> Callable[[int | None], bytes]:
     from random import getrandbits as g
     pack = struct.Struct(">QQI").pack
     assert len(pack(0,0,0)) == HMAC_LEN
+    # A closure is built to avoid rebuilding the `pack` function at each call.
     return lambda x=None: pack(g(64) if x is None else x, g(64), g(32))
+
 newHmacSecret = _newHmacSecret()
 
 ### Integer serialization
