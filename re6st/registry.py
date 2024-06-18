@@ -328,7 +328,7 @@ class RegistryServer:
             request.send_response(http.client.NO_CONTENT)
         if key:
             request.send_header(HMAC_HEADER, base64.b64encode(
-                hmac.HMAC(key, result, hashlib.sha1).digest()))
+                hmac.HMAC(key, result, hashlib.sha1).digest()).decode("ascii"))
         request.end_headers()
         if result:
             request.wfile.write(result)
