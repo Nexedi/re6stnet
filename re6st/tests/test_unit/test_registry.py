@@ -177,7 +177,7 @@ class TestRegistryServer(unittest.TestCase):
         request.send_header.assert_any_call("Content-Length", str(len(result)))
         request.send_header.assert_any_call(
             registry.HMAC_HEADER,
-            base64.b64encode(hmac.HMAC(key, result, hashlib.sha1).digest()))
+            base64.b64encode(hmac.HMAC(key, result, hashlib.sha1).digest()).decode("ascii"))
         request.wfile.write.assert_called_once_with(result)
 
         # remove the create session \n
