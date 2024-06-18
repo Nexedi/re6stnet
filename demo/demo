@@ -500,11 +500,14 @@ if args.port:
             if page < 2:
                 body = route_svg(page)
             else:
-                body = registry.Popen(('python3', '-c', r"""if 1:
+                out, err = registry.Popen(('python3', '-c', r"""if 1:
                     import math, json
                     from re6st.registry import RegistryClient
-                    g = json.loads(RegistryClient(
-                        'http://localhost/').topology())
+                    topo = RegistryClient('http://localhost/').topology()
+                    g = json.loads(topo)
+                    if not g:
+                        print('digraph { "empty topology" [shape="none"] }')
+                        exit()
                     r = set(g.pop('', ()))
                     a = set()
                     for v in g.values():
@@ -523,13 +526,16 @@ if args.port:
                         for v in v:
                             print('"%s" -> "%s";' % (n, title(v)))
                     print('}')
-                """), stdout=subprocess.PIPE, cwd="..").communicate()[0].decode("utf-8")
-                if body:
-                    body = subprocess.Popen(('neato', '-Tsvg'),
-                                            stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                            ).communicate(body.encode("utf-8"))[0].decode("utf-8")
-                if not body:
-                    self.send_error(500)
+                """), stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd="..").communicate()
+                if err:
+                    self.send_error(500, explain=f'SVG generation failed: {err.decode()}')
+                    return
+                graph_body = out.decode("utf-8")
+                try:
+                    body = subprocess.run(('neato', '-Tsvg'), check=True, text=True,
+                                          input=graph_body).stdout
+                except subprocess.CalledProcessError as e:
+                    self.send_error(500, explain=f"neato failed: {e.stderr}")
                     return
             if ext == 'svg':
                 mt = 'image/svg+xml'
