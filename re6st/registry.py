@@ -816,7 +816,7 @@ class RegistryClient(object):
             kw = getcallargs(*args, **kw)
             query = '/' + name
             if kw:
-                if any(type(v) is not str for v in kw.values()):
+                if any(not isinstance(v, (str, bytes)) for v in kw.values()):
                     raise TypeError(kw)
                 query += '?' + urlencode(kw)
             url = self._path + query
