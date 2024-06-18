@@ -497,11 +497,12 @@ if args.port:
             if page < 2:
                 body = route_svg(page)
             else:
-                body = registry.Popen(('python3', '-c', r"""if 1:
+                out, err = registry.Popen(('python3', '-c', r"""if 1:
                     import math, json
                     from re6st.registry import RegistryClient
-                    g = json.loads(RegistryClient(
-                        'http://localhost/').topology())
+                    topo = RegistryClient('http://localhost/').topology()
+                    g = json.loads(topo)
+                    assert g, 'Topology is empty'
                     r = set(g.pop('', ()))
                     a = set()
                     for v in g.values():
@@ -520,7 +521,11 @@ if args.port:
                         for v in v:
                             print('"%s" -> "%s";' % (n, title(v)))
                     print('}')
-                """), stdout=subprocess.PIPE, cwd="..").communicate()[0].decode("utf-8")
+                """), stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd="..").communicate()
+                if err:
+                    self.send_error(500, explain=err.decode("utf-8"))
+                    return
+                body = out.decode("utf-8")
                 if body:
                     body = subprocess.Popen(('neato', '-Tsvg'),
                                             stdin=subprocess.PIPE, stdout=subprocess.PIPE,
