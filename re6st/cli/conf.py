@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/env python3
 import argparse, atexit, binascii, errno, hashlib
 import os, subprocess, sqlite3, sys, time
 from OpenSSL import crypto
@@ -13,7 +13,8 @@ def create(path, text=None, mode=0o666):
     finally:
         os.close(fd)
 
-def loadCert(pem):
+def loadCert(pem: bytes):
+    assert pem
     return crypto.load_certificate(crypto.FILETYPE_PEM, pem)
 
 def main():
@@ -91,8 +92,7 @@ def main():
     try:
         with open(cert_path) as f:
             cert = loadCert(f.read())
-        components = dict(cert.get_subject().get_components())
-        components = {k.decode(): v for k, v in components.items()}
+        components = {k.decode(): v for k, v in cert.get_subject().get_components()}
         for k in reserved:
             components.pop(k, None)
     except IOError as e:
@@ -140,7 +140,7 @@ def main():
 
         req.set_pubkey(pkey)
         req.sign(pkey, 'sha512')
-        req = crypto.dump_certificate_request(crypto.FILETYPE_PEM, req)
+        req = crypto.dump_certificate_request(crypto.FILETYPE_PEM, req).decode("ascii")
 
         # First make sure we can open certificate file for writing,
         # to avoid using our token for nothing.
@@ -165,13 +165,13 @@ def main():
 
     cert = loadCert(cert)
     not_after = x509.notAfter(cert)
-    print(("Setup complete. Certificate is valid until %s UTC"
+    print("Setup complete. Certificate is valid until %s UTC"
           " and will be automatically renewed after %s UTC.\n"
           "Do not forget to backup to your private key (%s) or"
           " you will lose your assigned subnet." % (
         time.asctime(time.gmtime(not_after)),
         time.asctime(time.gmtime(not_after - registry.RENEW_PERIOD)),
-        key_path)))
+        key_path))
 
     if not os.path.lexists(conf_path):
         create(conf_path, ("""\
@@ -188,13 +188,13 @@ key %s
 #O--verb
 #O3
 """ % (config.registry, ca_path, cert_path, key_path,
-       ('country ' + config.location.split(',', 1)[0]) \
+       ('country ' + config.location.split(',', 1)[0])
            if config.location else '')).encode())
         print("Sample configuration file created.")
 
     cn = x509.subnetFromCert(cert)
     subnet = network + utils.binFromSubnet(cn)
-    print("Your subnet: %s/%u (CN=%s)" \
+    print("Your subnet: %s/%u (CN=%s)"
         % (utils.ipFromBin(subnet), len(subnet), cn))
 
 if __name__ == "__main__":
