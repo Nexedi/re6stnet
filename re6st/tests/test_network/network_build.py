@@ -3,7 +3,7 @@ import logging
 import nemu
 import time
 import weakref
-from subprocess import PIPE
+from subprocess import DEVNULL, PIPE
 from pathlib import Path
 
 from re6st.tests import DEMO_PATH
@@ -62,8 +62,8 @@ class NetManager:
         """
         for reg, nodes in self.registries.items():
             for node in nodes:
-                app0 = node.Popen(["ping", "-c", "1", reg.ip], stdout=PIPE)
-                ret = app0.wait()
+                with node.Popen(["ping", "-c", "1", reg.ip], stdout=DEVNULL) as app0:
+                    ret = app0.wait()
                 if ret:
                     raise ConnectableError(
                         "network construct failed {} to {}".format(node.ip, reg.ip))
