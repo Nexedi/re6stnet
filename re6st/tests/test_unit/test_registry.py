@@ -13,11 +13,12 @@ import tempfile
 from argparse import Namespace
 from OpenSSL import crypto
 from mock import Mock, patch
-from pathlib2 import Path
+from pathlib import Path
 
 from re6st import registry
 from re6st.tests.tools import *
 from re6st.tests import DEMO_PATH
+
 
 # TODO test for request_dump, requestToken, getNetworkConfig, getBoostrapPeer
 # getIPV4Information, versions
@@ -49,6 +50,7 @@ def insert_cert(cur, ca, prefix, not_after=None, email=None):
     insert_cert.serial += 1
     return key, cert
 
+
 insert_cert.serial = 0
 
 
@@ -77,17 +79,26 @@ class TestRegistryServer(unittest.TestCase):
 
     def setUp(self):
         self.email = ''.join(random.sample(string.ascii_lowercase, 4)) \
-            + "@mail.com"
+                     + "@mail.com"
 
     def test_recv(self):
-        recv = self.server.sock.recv = Mock()
-        recv.side_effect = [
+        side_effect = iter([
             "0001001001001a_msg",
             "0001001001002\0001dqdq",
             "0001001001001\000a_msg",
             "0001001001001\000\4a_msg",
-            "0000000000000\0" # ERROR, IndexError: msg is null
-        ]
+            "0000000000000\0"  # ERROR, IndexError: msg is null
+        ])
+
+        class SocketProxy:
+            def __init__(self, wrappee):
+                self.wrappee = wrappee
+                self.recv = lambda _: next(side_effect)
+
+            def __getattr__(self, attr):
+                return getattr(self.wrappee, attr)
+
+        self.server.sock = SocketProxy(self.server.sock)
 
         try:
             res1 = self.server.recv(4)
@@ -95,9 +106,9 @@ class TestRegistryServer(unittest.TestCase):
             res3 = self.server.recv(4)
             res4 = self.server.recv(4)
 
-            self.assertEqual(res1, (None, None)) # not contain \0
-            self.assertEqual(res2, (None, None)) # binary to digital failed
-            self.assertEqual(res3, (None, None)) # code don't match
+            self.assertEqual(res1, (None, None))  # not contain \0
+            self.assertEqual(res2, (None, None))  # binary to digital failed
+            self.assertEqual(res3, (None, None))  # code don't match
             self.assertEqual(res4, ("0001001001001", "a_msg"))
         except:
             pass
@@ -115,7 +126,7 @@ class TestRegistryServer(unittest.TestCase):
         now = int(time.time()) - self.config.grace_period + 20
         # makeup data
         insert_cert(cur, self.server.cert, prefix_old, 1)
-        insert_cert(cur, self.server.cert, prefix, now -1)
+        insert_cert(cur, self.server.cert, prefix, now - 1)
         cur.execute("INSERT INTO token VALUES (?,?,?,?)",
                     (token_old, self.email, 4, 2))
         cur.execute("INSERT INTO token VALUES (?,?,?,?)",
@@ -143,7 +154,7 @@ class TestRegistryServer(unittest.TestCase):
         prefix = "0000000011111111"
         method = "func"
         protocol = 7
-        params = {"cn" : prefix, "a" : 1, "b" : 2}
+        params = {"cn": prefix, "a": 1, "b": 2}
         func.getcallargs.return_value = params
         del func._private
         func.return_value = result = b"this_is_a_result"
@@ -176,12 +187,12 @@ class TestRegistryServer(unittest.TestCase):
     def test_handle_request_private(self, func):
         """case request with _private attr"""
         method = "func"
-        params = {"a" : 1, "b" : 2}
+        params = {"a": 1, "b": 2}
         func.getcallargs.return_value = params
         func.return_value = None
         request_good = Mock()
         request_good.client_address = self.config.authorized_origin
-        request_good.headers = {'X-Forwarded-For':self.config.authorized_origin[0]}
+        request_good.headers = {'X-Forwarded-For': self.config.authorized_origin[0]}
         request_bad = Mock()
         request_bad.client_address = ["wrong_address"]
 
@@ -282,7 +293,7 @@ class TestRegistryServer(unittest.TestCase):
         nb_less = 0
         for cert in self.server.iterCert():
             s = cert[0].get_subject().serialNumber
-            if(s and int(s) <= serial):
+            if s and int(s) <= serial:
                 nb_less += 1
         self.assertEqual(nb_less, serial)
 
@@ -343,7 +354,7 @@ class TestRegistryServer(unittest.TestCase):
     def test_revoke(self, mock_func):
         # case: no ValueError
         serial = insert_cert.serial
-        prefix = bin(serial)[2:].rjust(16, '0') # length 16 prefix
+        prefix = bin(serial)[2:].rjust(16, '0')  # length 16 prefix
         insert_cert(self.server.db, self.server.cert, prefix)
 
         self.server.revoke(serial)
@@ -355,11 +366,11 @@ class TestRegistryServer(unittest.TestCase):
     def test_revoke_value(self):
         # case: ValueError
         serial = insert_cert.serial
-        prefix = bin(serial)[2:].rjust(16, '0') # length 16 prefix
+        prefix = bin(serial)[2:].rjust(16, '0')  # length 16 prefix
         insert_cert(self.server.db, self.server.cert, prefix, 1)
         self.server.sessions.setdefault(prefix, "something")
 
-        self.server.revoke("%u/16" % serial) # 16 is length
+        self.server.revoke("%u/16" % serial)  # 16 is length
 
         self.assertIsNone(self.server.sessions.get(prefix))
         self.assertIsNone(get_cert(self.server.db, prefix))
@@ -378,7 +389,7 @@ class TestRegistryServer(unittest.TestCase):
 
         hmacs = get_hmac()
         key_1 = hmacs[1]
-        self.assertEqual(hmacs, [None, key_1, ''])
+        self.assertEqual(hmacs, [None, key_1, b''])
 
         # step 2
         self.server.updateHMAC()
@@ -401,7 +412,6 @@ class TestRegistryServer(unittest.TestCase):
         self.server.updateHMAC()
 
         self.assertEqual(get_hmac(), [key_2, None, None])
-
 
     def test_getNodePrefix(self):
         # prefix in short format
@@ -426,19 +436,33 @@ class TestRegistryServer(unittest.TestCase):
             ('0000000000000001', '2 0/16 6/16')
         ]
         recv.side_effect = recv_case
+
         def side_effct(rlist, wlist, elist, timeout):
             # rlist is true until the len(recv_case)th call
             side_effct.i -= side_effct.i > 0
             return [side_effct.i, wlist, None]
+
         side_effct.i = len(recv_case) + 1
         select.side_effect = side_effct
 
         res = self.server.topology()
 
-        expect_res = '{"36893488147419103232/80": ["0/16", "7/16"], ' \
-            '"": ["36893488147419103232/80", "3/16", "1/16", "0/16", "7/16"], ' \
-            '"4/16": ["0/16"], "3/16": ["0/16", "7/16"], "0/16": ["6/16", "7/16"], '\
-            '"1/16": ["6/16", "0/16"], "7/16": ["6/16", "4/16"]}'''
+        class CustomDecoder(json.JSONDecoder):
+            def __init__(self, **kwargs):
+                json.JSONDecoder.__init__(self, **kwargs)
+                self.parse_array = self.JSONArray
+                self.scan_once = json.scanner.py_make_scanner(self)
+
+            def JSONArray(self, s_and_end, scan_once, **kwargs):
+                values, end = json.decoder.JSONArray(s_and_end, scan_once, **kwargs)
+                return set(values), end
+
+        res = json.loads(res, cls=CustomDecoder)
+
+        expect_res = {"36893488147419103232/80": {"0/16", "7/16"},
+                      "": {"36893488147419103232/80", "3/16", "1/16", "0/16", "7/16"}, "4/16": {"0/16"},
+                      "3/16": {"0/16", "7/16"}, "0/16": {"6/16", "7/16"}, "1/16": {"6/16", "0/16"},
+                      "7/16": {"6/16", "4/16"}}
         self.assertEqual(res, expect_res)
 
 
