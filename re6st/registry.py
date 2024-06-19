@@ -205,13 +205,16 @@ class RegistryServer:
 
     def recv(self, code):
         try:
-            prefix, msg = self.sock.recv(1<<16).split(b'\x00', 1)
+            prefix, msg = self.sock.recv(1 << 16).split(b'\x00', 1)
             int(prefix, 2)
         except ValueError:
             pass
         else:
-            if msg and msg[0:1] == code:
-                return prefix, msg[1:]
+            if len(msg) >= 1 and msg[0] == code:
+                return prefix.decode(), msg[1:].decode()
+
+            logging.error("Invalid message or unexpected code: %r", msg)
+
         return None, None
 
     def select(self, r, w, t):
@@ -609,7 +612,7 @@ class RegistryServer:
         return zlib.compress(json.dumps(config).encode("utf-8"))
 
     def _queryAddress(self, peer):
-        logging.info("Querying address for %s/%s", int(peer, 2), len(peer))
+        logging.info("Querying address for %s/%s %r", int(peer, 2), len(peer), peer)
         self.sendto(peer, 1)
         s = self.sock,
         timeout = 3
@@ -617,9 +620,9 @@ class RegistryServer:
         # Loop because there may be answers from previous requests.
         while select.select(s, (), (), timeout)[0]:
             prefix, msg = self.recv(1)
-            logging.info("* received: %s - %s", prefix, msg)
+            logging.info("* received: %r - %r", prefix, msg)
             if prefix == peer:
-                return msg
+                return msg.decode()
             timeout = max(0, end - time.time())
         logging.info("Timeout while querying address for %s/%s",
                      int(peer, 2), len(peer))
@@ -662,7 +665,7 @@ class RegistryServer:
             cert = self.getCert(cn)
         msg = "%s %s" % (peer, msg)
         logging.info("Sending bootstrap peer: %s", msg)
-        return x509.encrypt(cert, msg)
+        return x509.encrypt(cert, msg.encode())
 
     @rpc_private
     def revoke(self, cn_or_serial):
