@@ -272,7 +272,7 @@ def main():
         call(args)
         args[3] = 'del'
         cleanup.append(lambda: subprocess.call(args))
-    def ip(object, *args):
+    def ip(object: str, *args):
         args = ['ip', '-6', object, 'add'] + list(args)
         call(args)
         args[3] = 'del'
