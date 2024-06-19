@@ -171,7 +171,7 @@ class Babel:
 
     _decode = None
 
-    def __init__(self, socket_path, handler, network):
+    def __init__(self, socket_path: str, handler, network: str):
         self.socket_path = socket_path
         self.handler = handler
         self.network = network
@@ -304,7 +304,7 @@ class iterRoutes:
 
     _waiting = True
 
-    def __new__(cls, control_socket, network):
+    def __new__(cls, control_socket: str, network: str):
         self = object.__new__(cls)
         c = Babel(control_socket, self, network)
         c.request_dump()
