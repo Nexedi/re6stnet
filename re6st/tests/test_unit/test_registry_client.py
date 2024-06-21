@@ -52,9 +52,9 @@ class TestRegistryClient(unittest.TestCase):
         self.client._hmac = None
         self.client.hello = Mock(return_value = "aaabbb")
         self.client.cert = Mock()
-        key = "this_is_a_key"
+        key = b"this_is_a_key"
         self.client.cert.decrypt.return_value = key
-        h = hmac.HMAC(key, query, hashlib.sha1).digest()
+        h = hmac.HMAC(key, query.encode(), hashlib.sha1).digest()
         key = hashlib.sha1(key).digest()
         # response part
         body = b'this is a body'
