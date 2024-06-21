@@ -91,7 +91,7 @@ class RegistryServer(object):
                 "name TEXT PRIMARY KEY NOT NULL",
                 "value")
         self.prefix = self.getConfig("prefix", None)
-        self.version = str(self.getConfig("version", b'\x00')) # BBB: blob
+        self.version = self.getConfig("version", b'\x00')
         utils.sqliteCreateTable(self.db, "token",
                 "token TEXT PRIMARY KEY NOT NULL",
                 "email TEXT NOT NULL",
@@ -189,15 +189,15 @@ class RegistryServer(object):
             self.sendto(self.prefix, 0)
         # The following entry lists values that are base64-encoded.
         kw[''] = 'version',
-        kw['version'] = base64.b64encode(self.version)
+        kw['version'] = base64.b64encode(self.version).decode()
         self.network_config = kw
 
     def increaseVersion(self):
-        x = utils.packInteger(1 + utils.unpackInteger(self.version)[0:1])
+        x = utils.packInteger(1 + utils.unpackInteger(self.version)[0])
         self.version = x + self.cert.sign(x)
 
-    def sendto(self, prefix, code):
-        self.sock.sendto("%s\0%c" % (prefix, code), ('::1', tunnel.PORT))
+    def sendto(self, prefix: str, code: int):
+        self.sock.sendto(prefix.encode() + bytes((0, code)), ('::1', tunnel.PORT))
 
     def recv(self, code):
         try:
@@ -314,9 +314,11 @@ class RegistryServer(object):
         except HTTPError as e:
             return request.send_error(*e.args)
         except:
-            logging.warning(request.requestline, exc_info=1)
+            logging.warning(request.requestline, exc_info=True)
             return request.send_error(http.client.INTERNAL_SERVER_ERROR)
         if result:
+            if type(result) is str:
+                result = result.encode("utf-8")
             request.send_response(http.client.OK)
             request.send_header("Content-Length", str(len(result)))
         else:
@@ -432,9 +434,9 @@ class RegistryServer(object):
         prev_prefix = None
         max_len = 128,
         while True:
-            max_len = next(q("SELECT max(length(prefix)) FROM cert"
+            max_len = q("SELECT max(length(prefix)) FROM cert"
                         " WHERE cert is null AND length(prefix) < ?",
-                        max_len))
+                        max_len).fetchone()
             if not max_len[0]:
                 break
             for prefix, in q("SELECT prefix FROM cert"
@@ -593,8 +595,8 @@ class RegistryServer(object):
             hmac = [self.getConfig(k, None) for k in BABEL_HMAC]
             for i, v in enumerate(v for v in hmac if v is not None):
                 config[('babel_hmac_sign', 'babel_hmac_accept')[i]] = \
-                    v and base64.b64encode(x509.encrypt(cert, v))
-        return zlib.compress(json.dumps(config))
+                    v and base64.b64encode(x509.encrypt(cert, v)).decode()
+        return zlib.compress(json.dumps(config).encode("utf-8"))
 
     def _queryAddress(self, peer):
         self.sendto(peer, 1)
@@ -800,7 +802,7 @@ class RegistryClient(object):
     _hmac = None
     user_agent = "re6stnet/%s, %s" % (version.version, platform.platform())
 
-    def __init__(self, url, cert=None, auto_close=True):
+    def __init__(self, url, cert: x509.Cert=None, auto_close=True):
         self.cert = cert
         self.auto_close = auto_close
         url_parsed = urlparse(url)
@@ -812,12 +814,12 @@ class RegistryClient(object):
 
     def __getattr__(self, name):
         getcallargs = getattr(RegistryServer, name).getcallargs
-        def rpc(*args, **kw):
+        def rpc(*args, **kw) -> bytes:
             kw = getcallargs(*args, **kw)
             query = '/' + name
             if kw:
                 if any(type(v) is not str for v in kw.values()):
-                    raise TypeError
+                    raise TypeError(kw)
                 query += '?' + urlencode(kw)
             url = self._path + query
             client_prefix = kw.get('cn')
@@ -862,7 +864,7 @@ class RegistryClient(object):
             except HTTPError:
                 raise
             except Exception:
-                logging.info(url, exc_info=1)
+                logging.info(url, exc_info=True)
             else:
                 logging.info('%s\nUnexpected response %s %s',
                              url, response.status, response.reason)
