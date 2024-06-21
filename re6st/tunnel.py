@@ -249,7 +249,7 @@ class BaseTunnelManager(object):
         self._address = {family: utils.dump_address(address)
                          for family, address in address_dict.items()
                          if address}
-        cache.my_address = ';'.join(iter(self._address.values()))
+        cache.my_address = ';'.join(self._address.values())
 
         self.sock = socket.socket(socket.AF_INET6,
             socket.SOCK_DGRAM | socket.SOCK_CLOEXEC)
@@ -329,7 +329,7 @@ class BaseTunnelManager(object):
     def _getPeer(self, prefix):
         return self._peers[bisect(self._peers, prefix) - 1]
 
-    def sendto(self, prefix, msg):
+    def sendto(self, prefix: str, msg):
         to = utils.ipFromBin(self._network + prefix), PORT
         peer = self._getPeer(prefix)
         if peer.prefix != prefix:
@@ -344,6 +344,8 @@ class BaseTunnelManager(object):
             peer.hello0Sent()
 
     def _sendto(self, to, msg, peer=None):
+        if type(msg) is str:
+            msg = msg.encode()
         try:
             r = self.sock.sendto(peer.encode(msg) if peer else msg, to)
         except socket.error as e:
@@ -360,6 +362,7 @@ class BaseTunnelManager(object):
         if address[0] == '::1':
             try:
                 prefix, msg = msg.split(b'\0', 1)
+                prefix = prefix.decode()
                 int(prefix, 2)
             except ValueError:
                 return
@@ -371,7 +374,7 @@ class BaseTunnelManager(object):
                     if msg:
                         self._sendto(to, '%s\0%c%s' % (prefix, code, msg))
                 else:
-                    self.sendto(prefix, chr(code | 0x80) + msg[1:])
+                    self.sendto(prefix, bytes([code | 0x80]) + msg[1:])
             return
         try:
             sender = utils.binFromIp(address[0])
@@ -384,7 +387,7 @@ class BaseTunnelManager(object):
         msg = peer.decode(msg)
         if type(msg) is tuple:
           seqno, msg, protocol = msg
-          def handleHello(peer, seqno, msg, retry):
+          def handleHello(peer, seqno, msg: bytes, retry):
             if seqno == 2:
                 i = len(msg) // 2
                 h = msg[:i]
@@ -394,7 +397,7 @@ class BaseTunnelManager(object):
                 except (AttributeError, crypto.Error, x509.NewSessionError,
                         subprocess.CalledProcessError):
                     logging.debug('ignored new session key from %r',
-                                  address, exc_info=1)
+                                  address, exc_info=True)
                     return
                 peer.version = self._version \
                     if self._sendto(to, b'\0' + self._version, peer) else b''
@@ -469,8 +472,8 @@ class BaseTunnelManager(object):
                     # Don't send country to old nodes
                     if self._getPeer(peer).protocol < 7:
                         return ';'.join(','.join(a.split(',')[:3]) for a in
-                            ';'.join(iter(self._address.values())).split(';'))
-                return ';'.join(iter(self._address.values()))
+                            ';'.join(self._address.values()).split(';'))
+                return ';'.join(self._address.values())
         elif not code: # network version
             if peer:
                 try:
@@ -555,7 +558,7 @@ class BaseTunnelManager(object):
         if (not self.NEED_RESTART.isdisjoint(changed)
             or version.protocol < self.cache.min_protocol
             # TODO: With --management, we could kill clients without restarting.
-            or not all(crl.isdisjoint(iter(serials.values()))
+            or not all(crl.isdisjoint(serials.values())
                        for serials in self._served.values())):
             # Wait at least 1 second to broadcast new version to neighbours.
             self.selectTimeout(time.time() + 1 + self.cache.delay_restart,
@@ -782,7 +785,7 @@ class TunnelManager(BaseTunnelManager):
 
     def _cleanDeads(self):
         disconnected = False
-        for prefix in list(self._connection_dict.keys()):
+        for prefix in list(self._connection_dict):
             status = self._connection_dict[prefix].refresh()
             if status:
                 disconnected |= status > 0
@@ -989,7 +992,7 @@ class TunnelManager(BaseTunnelManager):
                         break
 
     def killAll(self):
-        for prefix in list(self._connection_dict.keys()):
+        for prefix in list(self._connection_dict):
             self._kill(prefix)
 
     def handleClientEvent(self):
@@ -1012,7 +1015,7 @@ class TunnelManager(BaseTunnelManager):
                 if self.cache.same_country:
                     address = self._updateCountry(address)
                 self._address[family] = utils.dump_address(address)
-                self.cache.my_address = ';'.join(iter(self._address.values()))
+                self.cache.my_address = ';'.join(self._address.values())
 
     def broadcastNewVersion(self):
         self._babel_dump_new_version()

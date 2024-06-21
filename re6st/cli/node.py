@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/env python3
 import atexit, errno, logging, os, shutil, signal
 import socket, struct, subprocess, sys
 from collections import deque
@@ -256,10 +256,10 @@ def main():
                     forwarder.addRule(port, proto)
                 address.append(forwarder.checkExternalIp())
         elif 'any' not in ipv4:
-            address += list(map(ip_changed, ipv4))
+            address += map(ip_changed, ipv4)
             ipv4_any = ()
         if ipv6:
-            address += list(map(ip_changed, ipv6))
+            address += map(ip_changed, ipv6)
             ipv6_any = ()
     else:
         ip_changed = remote_gateway = None
