@@ -64,7 +64,7 @@ class Ping(Thread):
                 os.utime(csv_path, (time.time(), time.time()))
 
         for add in no_responses:
-            print(('No response from %s with seq no %d' % (add, seq)))
+            print('No response from %s with seq no %d' % (add, seq))
 
 parser = argparse.ArgumentParser()
 parser.add_argument('n', help = 'my machine name (m1,m2...)')

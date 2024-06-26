@@ -30,4 +30,5 @@ def __file__():
 
     return os.path.join(sys.path[0], sys.argv[1])
 __file__ = __file__()
-exec(compile(open(__file__, "rb").read(), __file__, 'exec'))
+with open(__file__) as f:
+    exec(compile(f.read(), __file__, 'exec'))
