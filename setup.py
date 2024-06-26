@@ -53,7 +53,8 @@ Environment :: Console
 License :: OSI Approved :: GNU General Public License (GPL)
 Natural Language :: English
 Operating System :: POSIX :: Linux
-Programming Language :: Python :: 2.7
+Programming Language :: Python :: 3
+Programming Language :: Python :: 3.11
 Topic :: Internet
 Topic :: System :: Networking
 """
@@ -75,6 +76,7 @@ setup(
     license = 'GPL 2+',
     platforms = ["any"],
     classifiers=classifiers.splitlines(),
+    python_requires = '>=3.11',
     long_description = ".. contents::\n\n" + open('README.rst').read()
                      + "\n" + open('CHANGES.rst').read() + git_rev,
     packages = find_packages(),
