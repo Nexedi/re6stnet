@@ -30,9 +30,9 @@ def generate_cert(ca, ca_key, csr, prefix, serial, not_after=None):
     return
         crypto.X509Cert in pem format
     """
-    if type(ca) is str:
+    if type(ca) is bytes:
         ca = crypto.load_certificate(crypto.FILETYPE_PEM, ca)
-    if type(ca_key) is str:
+    if type(ca_key) is bytes:
         ca_key = crypto.load_privatekey(crypto.FILETYPE_PEM, ca_key)
     req = crypto.load_certificate_request(crypto.FILETYPE_PEM, csr)
 
@@ -56,10 +56,10 @@ def generate_cert(ca, ca_key, csr, prefix, serial, not_after=None):
 def create_cert_file(pkey_file, cert_file, ca, ca_key, prefix, serial):
     pkey, csr = generate_csr()
     cert = generate_cert(ca, ca_key, csr, prefix, serial)
-    with open(pkey_file, 'w') as f:
-        f.write(pkey.decode())
-    with open(cert_file, 'w') as f:
-        f.write(cert.decode())
+    with open(pkey_file, 'wb') as f:
+        f.write(pkey)
+    with open(cert_file, 'wb') as f:
+        f.write(cert)
 
     return pkey, cert
 
@@ -84,9 +84,9 @@ def create_ca_file(pkey_file, cert_file, serial=0x120010db80042):
     cert.set_pubkey(key)
     cert.sign(key, "sha512")
 
-    with open(pkey_file, 'w') as pkey_file:
+    with open(pkey_file, 'wb') as pkey_file:
         pkey_file.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, key))
-    with open(cert_file, 'w') as cert_file:
+    with open(cert_file, 'wb') as cert_file:
         cert_file.write(crypto.dump_certificate(crypto.FILETYPE_PEM, cert))
 
     return key, cert
