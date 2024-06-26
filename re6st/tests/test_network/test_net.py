@@ -12,25 +12,6 @@ from . import network_build, re6st_wrap
 
 PING_PATH = str(Path(__file__).parent.resolve() / "ping.py")
 
-def deploy_re6st(nm, recreate=False):
-    net = nm.registries
-    nodes = []
-    registries = []
-    re6st_wrap.Re6stRegistry.registry_seq = 0
-    re6st_wrap.Re6stNode.node_seq = 0
-    for registry in net:
-        reg = re6st_wrap.Re6stRegistry(registry, "2001:db8:42::", len(net[registry]),
-                                       recreate=recreate)
-        reg_node = re6st_wrap.Re6stNode(registry, reg, name=reg.name)
-        registries.append(reg)
-        reg_node.run("--gateway", "--disable-proto", "none", "--ip", registry.ip)
-        nodes.append(reg_node)
-        for m in net[registry]:
-            node = re6st_wrap.Re6stNode(m, reg)
-            node.run("-i" + m.iface.name)
-            nodes.append(node)
-    return nodes, registries
-
 def wait_stable(nodes, timeout=240):
     """try use ping6 from each node to the other until ping success to all the
     other nodes
@@ -77,6 +58,37 @@ class TestNet(unittest.TestCase):
         logging.basicConfig(level=logging.INFO)
         re6st_wrap.initial()
 
+    def deploy_re6st(self, nm, recreate=False):
+        net = nm.registries
+        nodes = []
+        registries = []
+        re6st_wrap.Re6stRegistry.registry_seq = 0
+        re6st_wrap.Re6stNode.node_seq = 0
+        for registry in net:
+            reg = re6st_wrap.Re6stRegistry(registry, "2001:db8:42::", len(net[registry]),
+                                           recreate=recreate)
+            reg_node = re6st_wrap.Re6stNode(registry, reg, name=reg.name)
+            registries.append(reg)
+            reg_node.run("--gateway", "--disable-proto", "none", "--ip", registry.ip)
+            nodes.append(reg_node)
+            for m in net[registry]:
+                node = re6st_wrap.Re6stNode(m, reg)
+                node.run("-i" + m.iface.name)
+                nodes.append(node)
+
+        def clean_re6st():
+            for node in nodes:
+                node.node.destroy()
+                node.stop()
+
+            for reg in registries:
+                with reg as r:
+                    r.terminate()
+
+        self.addCleanup(clean_re6st)
+
+        return nodes, registries
+
     @classmethod
     def tearDownClass(cls):
         """watch any process leaked after tests"""
@@ -94,12 +106,14 @@ class TestNet(unittest.TestCase):
         """create a network in a net segment, test the connectivity by ping
         """
         nm = network_build.net_route()
-        nodes, _ = deploy_re6st(nm)
+        nodes, registries = deploy_re6st(nm)
 
         wait_stable(nodes, 40)
         time.sleep(10)
 
         self.assertTrue(wait_stable(nodes, 30), " ping test failed")
+
+        clean_re6st(nodes, registries)
 
     @unittest.skip("usually failed due to UPnP problem")
     def test_reboot_one_machine(self):
@@ -107,7 +121,7 @@ class TestNet(unittest.TestCase):
         then test if network recover, this test seems always failed
         """
         nm = network_build.net_demo()
-        nodes, _ = deploy_re6st(nm)
+        nodes, registries = deploy_re6st(nm)
 
         wait_stable(nodes, 100)
 
@@ -121,12 +135,14 @@ class TestNet(unittest.TestCase):
 
         self.assertTrue(wait_stable(nodes, 400), "network can't recover")
 
+        clean_re6st(nodes, registries)
+
     def test_reboot_one_machine_router(self):
         """create a network router, wait the net stable, reboot on machine,
         then test if network recover,
         """
         nm = network_build.net_route()
-        nodes, _ = deploy_re6st(nm)
+        nodes, registries = deploy_re6st(nm)
 
         wait_stable(nodes, 40)
 
@@ -139,6 +155,8 @@ class TestNet(unittest.TestCase):
         logging.info("restart %s", machine.name)
 
         self.assertTrue(wait_stable(nodes, 100), "network can't recover")
+
+        clean_re6st(nodes, registries)
 
 
 
