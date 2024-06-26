@@ -34,13 +34,13 @@ class Array(object):
     def __init__(self, item):
         self._item = item
 
-    def encode(self, buffer, value):
+    def encode(self, buffer: bytes, value: list):
         buffer += uint16.pack(len(value))
         encode = self._item.encode
         for value in value:
             encode(buffer, value)
 
-    def decode(self, buffer, offset=0):
+    def decode(self, buffer: bytes, offset=0) -> tuple[int, list]:
         r = []
         o = offset + 2
         decode = self._item.decode
@@ -52,13 +52,13 @@ class Array(object):
 class String(object):
 
     @staticmethod
-    def encode(buffer, value):
-        buffer += value + b'\x00'
+    def encode(buffer: bytes, value: str):
+        buffer += value.encode("utf-8") + b'\x00'
 
     @staticmethod
-    def decode(buffer, offset=0):
+    def decode(buffer: bytes, offset=0) -> tuple[int, str]:
         i = buffer.index(0, offset)
-        return i + 1, buffer[offset:i]
+        return i + 1, buffer[offset:i].decode("utf-8")
 
 
 class Buffer(object):
@@ -69,7 +69,7 @@ class Buffer(object):
 
 
     def __iadd__(self, value):
-        self._buf.extend(value)
+        self._buf += value
         return self
 
     def __len__(self):
@@ -195,7 +195,7 @@ class Babel(object):
                 logging.debug("Can't connect to %r (%r)", self.socket_path, e)
                 return e
             s.send(b'\x01')
-            s.setblocking(0)
+            s.setblocking(False)
             del self.select
             self.socket = s
             return self.select(*args)
