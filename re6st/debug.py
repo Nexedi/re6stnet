@@ -38,8 +38,7 @@ class Socket(object):
             self._socket.recv(0)
             return True
         except socket.error as e:
-            (err, _) = e
-            if err != errno.EAGAIN:
+            if e.errno != errno.EAGAIN:
                 raise
             self._socket.setblocking(1)
         return False

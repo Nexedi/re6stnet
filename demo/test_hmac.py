@@ -39,5 +39,5 @@ def checkHMAC(db, machines):
     if rc:
         print('All nodes use Babel with the correct HMAC configuration')
     else:
-        print(('Expected config: %s' % dict(list(zip(BABEL_HMAC, hmac)))))
+        print('Expected config: %s' % dict(zip(BABEL_HMAC, hmac)))
     return rc
