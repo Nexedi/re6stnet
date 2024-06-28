@@ -413,17 +413,17 @@ def node_by_ll(addr: str) -> tuple[Re6stNode, bool]:
                     _ll[a] = n, t
     return _ll[addr]
 
+
 def route_svg(ipv4, z=4):
     graph: dict[Re6stNode, dict[tuple[Re6stNode, bool], list[Re6stNode]]] = {}
     for n in nodes:
         g = graph[n] = defaultdict(list)
-        g: dict[tuple[Re6stNode, bool], list[Re6stNode]]
-        for r in n.get_routes():
-            if (r.prefix and r.prefix.startswith('10.42.') if ipv4 else
-            r.prefix is None or r.prefix.startswith('2001:db8:')):
+        for route in n.get_routes():
+            if (route.prefix and route.prefix.startswith('10.42.') if ipv4 else
+                route.prefix is None or route.prefix.startswith('2001:db8:')):
                 try:
-                    g[node_by_ll(r.nexthop)].append(
-                        node_by_ll(r.prefix)[0] if r.prefix else default)
+                    if route.prefix:
+                        g[node_by_ll(route.nexthop)].append(node_by_ll(route.prefix)[0])
                 except KeyError:
                     pass
     gv = ["digraph { splines = true; edge[color=grey, labelangle=0];"]
@@ -431,20 +431,16 @@ def route_svg(ipv4, z=4):
     a = 2 * math.pi / N
     edges = set()
     for i, n in enumerate(nodes):
-        i: int
         gv.append('%s[pos="%s,%s!"];'
                   % (n.name, z * math.cos(a * i), z * math.sin(a * i)))
         l = []
         for p, r in graph[n].items():
-            p: tuple[Re6stNode, bool]
-            r: list[Re6stNode]
-            j: int = abs(nodes.index(p[0]) - i)
+            j = abs(nodes.index(p[0]) - i)
             l.append((min(j, N - j), p, r))
         for j, (_, (p2, t), r) in enumerate(sorted(l, key=lambda x: x[0])):
-            p2: Re6stNode
-            l2: list[str] = []
+            l2 = []
             arrowhead = 'none'
-            for r2 in sorted(r2.short for r2 in r):
+            for r2 in sorted(r2.short or '' for r2 in r):
                 if r2:
                     if r2 == p2.short:
                         r2 = '<font color="grey">%s</font>' % r2
@@ -487,11 +483,14 @@ if args.port:
             if page < 2:
                 body = route_svg(page)
             else:
-                body = registry.Popen(('python3', '-c', r"""if 1:
+                out, err = registry.Popen(('python3', '-c', r"""if 1:
                     import math, json
                     from re6st.registry import RegistryClient
-                    g = json.loads(RegistryClient(
-                        'http://localhost/').topology())
+                    topo = RegistryClient('http://localhost/').topology()
+                    g = json.loads(topo)
+                    if not g:
+                        print('digraph { "empty topology" [shape="none"] }')
+                        exit()
                     r = set(g.pop('', ()))
                     a = set()
                     for v in g.values():
@@ -510,13 +509,16 @@ if args.port:
                         for v in v:
                             print('"%s" -> "%s";' % (n, title(v)))
                     print('}')
-                """), stdout=subprocess.PIPE, cwd="..").communicate()[0].decode("utf-8")
-                if body:
-                    body = subprocess.Popen(('neato', '-Tsvg'),
-                                            stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                            ).communicate(body.encode("utf-8"))[0].decode("utf-8")
-                if not body:
-                    self.send_error(500)
+                """), stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd="..").communicate()
+                if err:
+                    self.send_error(500, explain='SVG generation failed: ' + err.decode(errors='replace'))
+                    return
+                graph_body = out.decode("utf-8")
+                try:
+                    body = subprocess.run(('neato', '-Tsvg'), check=True, text=True, capture_output=True,
+                                          input=graph_body).stdout
+                except subprocess.CalledProcessError as e:
+                    self.send_error(500, explain='neato failed: ' + e.stderr)
                     return
             if ext == 'svg':
                 mt = 'image/svg+xml'
