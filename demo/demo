@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import argparse, math, nemu, os, re, signal
+import argparse, math, nemu, os, re, shlex, signal
 import socket, sqlite3, subprocess, sys, time, weakref
 from collections import defaultdict
 from contextlib import contextmanager
@@ -83,7 +83,7 @@ with open('fixnemu.py') as f:
 class Re6stNode(nemu.Node):
     name: str
     short: str
-    re6st_cmdline: Optional[str]
+    re6st_cmdline: Optional[list[str]]
 
     def __init__(self, name, short):
         super().__init__()
@@ -94,11 +94,14 @@ class Re6stNode(nemu.Node):
         self._screen = self.Popen((SCREEN, '-DmS', name))
         self.re6st_cmdline = None
 
-    def screen(self, *args):
-        cmd = [SCREEN, '-r', self.name, '-X', 'eval']
-        cmd += map(
-            """screen sh -c 'set %s; "\$@"; echo "\$@"; exec $SHELL'"""
-            .__mod__, args)
+    def screen(self, command: list[str]):
+        runner_cmd = 'set -- %s; "\\$@"; echo "\\$@"; exec $SHELL' % ' '.join(map(shlex.quote, command))
+        inner_cmd = [
+            'screen', 'sh', '-c', runner_cmd
+        ]
+        cmd = [
+            SCREEN, '-r', self.name, '-X', 'eval', shlex.join(inner_cmd)
+        ]
         return subprocess.call(cmd)
 
 
@@ -241,9 +244,8 @@ else:
     print("Connectivity IPv4 OK!")
 
 nodes: list[Re6stNode] = []
-gateway1.screen('miniupnpd -d -f miniupnpd.conf -P miniupnpd.pid'
-                ' -a %s -i %s' % (g1_if_1.name, g1_if_0_name))
-
+gateway1.screen(['miniupnpd', '-d', '-f', 'miniupnpd.conf', '-P', 'miniupnpd.pid',
+                 '-a', g1_if_1.name, '-i', g1_if_0_name])
 
 @contextmanager
 def new_network(registry: Re6stNode, reg_addr: str, serial: str, ca: str):
@@ -259,9 +261,10 @@ def new_network(registry: Re6stNode, reg_addr: str, serial: str, ca: str):
     fingerprint = "sha256:" + hashlib.sha256(
         crypto.dump_certificate(crypto.FILETYPE_ASN1, cert)).hexdigest()
     db_path = "%s/registry.db" % registry.name
-    registry.screen("\"%s\" ./py re6st-registry @%s/re6st-registry.conf"
-                    " --db %s --mailhost %s -v%u"
-                    % (sys.executable, registry.name, db_path, os.path.abspath('mbox'), VERBOSE))
+    registry.screen([
+        sys.executable, './py', 're6st-registry', '@%s/re6st-registry.conf' % registry.name,
+        '--db', db_path, '--mailhost', os.path.abspath('mbox'), '-v%u' % VERBOSE
+    ])
     registry_url = 'http://%s/' % reg_addr
     registry.Popen((sys.executable, '-c', """if 1:
         import socket, time
@@ -275,7 +278,7 @@ def new_network(registry: Re6stNode, reg_addr: str, serial: str, ca: str):
         """)).wait()
     db = sqlite3.connect(db_path, isolation_level=None)
 
-    def new_node(node: Re6stNode, folder: str, args='', prefix_len: Optional[int] = None, registry=registry_url):
+    def new_node(node: Re6stNode, folder: str, args: list[str]=[], prefix_len: Optional[int] = None, registry=registry_url):
         nodes.append(node)
         if not os.path.exists(folder + '/cert.crt'):
             dh_path = folder + '/dh2048.pem'
@@ -296,29 +299,30 @@ def new_network(registry: Re6stNode, reg_addr: str, serial: str, ca: str):
             p.communicate(str(token[0]))
             os.remove(dh_path)
             os.remove(folder + '/ca.crt')
-        node.re6st_cmdline = (
-                                 '"%s" ./py re6stnet @%s/re6stnet.conf -v%u --registry %s'
-                                 ' --console %s/run/console.sock %s'
-                             ) % (sys.executable, folder, VERBOSE, registry, folder, args)
+        node.re6st_cmdline = [
+            sys.executable, './py', 're6stnet', '@%s/re6stnet.conf' % folder,
+            '-v%u' % VERBOSE, '--registry', registry, '--console', '%s/run/console.sock' % folder,
+            *args
+        ]
         node.screen(node.re6st_cmdline)
 
-    new_node(registry, registry.name, '--ip ' + reg_addr, registry='http://localhost/')
+    new_node(registry, registry.name, ['--ip', reg_addr], registry='http://localhost/')
     yield new_node
     db.close()
 
 
 with new_network(registry, REGISTRY, REGISTRY_SERIAL, 'ca.crt') as new_node:
-    new_node(machine1, 'm1', '-I%s' % m1_if_0.name)
-    new_node(machine2, 'm2', '--remote-gateway 10.1.1.1', prefix_len=77)
-    new_node(machine3, 'm3', '-i%s' % m3_if_0.name)
-    new_node(machine4, 'm4', '-i%s' % m4_if_0.name)
-    new_node(machine5, 'm5', '-i%s' % m5_if_0.name)
-    new_node(machine6, 'm6', '-I%s' % m6_if_1.name)
+    new_node(machine1, 'm1', ['-I%s' % m1_if_0.name])
+    new_node(machine2, 'm2', ['--remote-gateway', '10.1.1.1'], prefix_len=77)
+    new_node(machine3, 'm3', ['-i%s' % m3_if_0.name])
+    new_node(machine4, 'm4', ['-i%s' % m4_if_0.name])
+    new_node(machine5, 'm5', ['-i%s' % m5_if_0.name])
+    new_node(machine6, 'm6', ['-I%s' % m6_if_1.name])
     new_node(machine7, 'm7')
     new_node(machine8, 'm8')
 
 with new_network(registry2, REGISTRY2, REGISTRY2_SERIAL, 'ca2.crt') as new_node:
-    new_node(machine10, 'm10', '-i%s' % m10_if_0.name)
+    new_node(machine10, 'm10', ['-i%s' % m10_if_0.name])
 
 if args.ping:
     for j, machine in enumerate(nodes):
@@ -332,8 +336,7 @@ if args.ping:
             for i in range(11)
             if i != j]
         name = machine.name if machine.short[0] == 'R' else 'm' + machine.short
-        machine.screen('python ping.py {} {}'.format(name, ' '.join(ips)))
-
+        machine.screen(['python', 'ping.py', name] + ips)
 
 class testHMAC(Thread):
 
