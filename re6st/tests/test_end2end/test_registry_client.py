@@ -41,7 +41,8 @@ class TestRegistryClientInteract(unittest.TestCase):
         self.max_clients = 10
 
     def tearDown(self):
-        self.server.proc.terminate()
+        with self.server.proc as p:
+            p.terminate()
 
     def test_1_main(self):
         """ a client interact a server, no re6stnet node test basic function"""
