@@ -70,6 +70,7 @@ class TestRegistryServer(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        cls.server.close()
         # remove database
         for file in [cls.config.db, cls.config.ca, cls.config.key]:
             try:

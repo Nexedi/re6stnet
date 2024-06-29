@@ -103,7 +103,4 @@ def decrypt(pkey, incontent):
     with open("node.key", 'wb') as f:
         f.write(pkey)
     args = "openssl rsautl -decrypt -inkey node.key".split()
-    p = subprocess.Popen(
-        args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    outcontent, err = p.communicate(incontent)
-    return outcontent
+    return subprocess.run(args, input=incontent, stdout=subprocess.PIPE).stdout
