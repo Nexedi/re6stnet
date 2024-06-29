@@ -266,14 +266,8 @@ def main():
 
     def call(cmd):
         logging.debug('%r', cmd)
-        p = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                                  stderr=subprocess.PIPE)
-        stdout, stderr = p.communicate()
-        if p.returncode:
-            raise EnvironmentError("%r failed with error %u\n%s"
-                                   % (' '.join(cmd), p.returncode, stderr))
-        return stdout
-    def ip4(object, *args):
+        return subprocess.run(cmd, capture_output=True, check=True).stdout
+    def ip4(object: str, *args):
         args = ['ip', '-4', object, 'add'] + list(args)
         call(args)
         args[3] = 'del'
