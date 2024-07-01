@@ -40,7 +40,7 @@ class FileHandler(logging.FileHandler):
         if self.lock.acquire(False):
             self.release()
 
-def setupLog(log_level, filename=None, **kw):
+def setupLog(log_level: int, filename: str | None=None, **kw):
     if log_level and filename:
         makedirs(os.path.dirname(filename))
         handler = FileHandler(filename)
@@ -184,7 +184,7 @@ def setCloexec(fd):
     flags = fcntl.fcntl(fd, fcntl.F_GETFD)
     fcntl.fcntl(fd, fcntl.F_SETFD, flags | fcntl.FD_CLOEXEC)
 
-def select(R, W, T):
+def select(R: Mapping, W: Mapping, T):
     try:
         r, w, _ = _select.select(R, W, (),
             max(0, min(T)[0] - time.time()) if T else None)
@@ -208,15 +208,15 @@ def makedirs(*args):
         if e.errno != errno.EEXIST:
             raise
 
-def binFromIp(ip):
+def binFromIp(ip: str) -> str:
     return binFromRawIp(socket.inet_pton(socket.AF_INET6, ip))
 
-def binFromRawIp(ip):
+def binFromRawIp(ip: bytes) -> str:
     ip1, ip2 = struct.unpack('>QQ', ip)
     return bin(ip1)[2:].rjust(64, '0') + bin(ip2)[2:].rjust(64, '0')
 
 
-def ipFromBin(ip, suffix=''):
+def ipFromBin(ip: str, suffix='') -> str:
     suffix_len = 128 - len(ip)
     if suffix_len > 0:
         ip += suffix.rjust(suffix_len, '0')
@@ -225,11 +225,11 @@ def ipFromBin(ip, suffix=''):
     return socket.inet_ntop(socket.AF_INET6,
         struct.pack('>QQ', int(ip[:64], 2), int(ip[64:], 2)))
 
-def dump_address(address):
+def dump_address(address: str) -> str:
     return ';'.join(map(','.join, address))
 
 # Yield ip, port, protocol, and country if it is in the address
-def parse_address(address_list):
+def parse_address(address_list: str) -> Iterator[tuple[str, str, str, str]]:
     for address in address_list.split(';'):
         try:
             a = address.split(',')
@@ -239,17 +239,18 @@ def parse_address(address_list):
             logging.warning("Failed to parse node address %r (%s)",
                             address, e)
 
-def binFromSubnet(subnet):
+def binFromSubnet(subnet: str) -> str:
     p, l = subnet.split('/')
     return bin(int(p))[2:].rjust(int(l), '0')
 
-def newHmacSecret():
-    """returns bytes"""
+def _newHmacSecret():
     from random import getrandbits as g
     pack = struct.Struct(">QQI").pack
     assert len(pack(0,0,0)) == HMAC_LEN
+    # A closure is built to avoid rebuilding the `pack` function at each call.
     return lambda x=None: pack(g(64) if x is None else x, g(64), g(32))
-newHmacSecret = newHmacSecret()
+
+newHmacSecret = _newHmacSecret() # https://github.com/python/mypy/issues/1174
 
 ### Integer serialization
 # - supports values from 0 to 0x202020202020201f
