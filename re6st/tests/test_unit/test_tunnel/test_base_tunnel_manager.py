@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/env python3
 import os
 import sys
 import unittest
@@ -67,7 +67,7 @@ class testBaseTunnelManager(unittest.TestCase):
     # @patch("re6st.tunnel.BaseTunnelManager._makeTunnel", create=True)
     # def test_processPacket_address_with_msg_peer(self, makeTunnel):
     #     """code is 1, peer and msg not none """
-    #     c = chr(1)
+    #     c = b"\x01"
     #     msg = "address"
     #     peer = x509.Peer("000001")
     #     self.tunnel._connecting = {peer}
@@ -81,7 +81,7 @@ class testBaseTunnelManager(unittest.TestCase):
 
     def test_processPacket_address(self):
         """code is 1, for address. And peer or msg are none"""
-        c = chr(1)
+        c = b"\x01"
         self.tunnel._address = {1: "1,1", 2: "2,2"}
 
         res = self.tunnel._processPacket(c)
@@ -95,7 +95,7 @@ class testBaseTunnelManager(unittest.TestCase):
         and each address join by ;
         it will truncate address which has more than 3 element
         """
-        c = chr(1)
+        c = b"\x01"
         peer = x509.Peer("000001")
         peer.protocol = 1
         self.tunnel._peers.append(peer)
@@ -111,11 +111,11 @@ class testBaseTunnelManager(unittest.TestCase):
         """code is 0, for network version, peer is not none
         2 case, one modify the version, one not
         """
-        c = chr(0)
+        c = b"\x00"
         peer = x509.Peer("000001")
-        version1 = "00003"
-        version2 = "00007"
-        self.tunnel._version = version3 = "00005"
+        version1 = b"00003"
+        version2 = b"00007"
+        self.tunnel._version = version3 = b"00005"
         self.tunnel._peers.append(peer)
 
         res = self.tunnel._processPacket(c + version1, peer)

@@ -43,7 +43,7 @@ freeifaddrs = libc.freeifaddrs
 freeifaddrs.restype = None
 freeifaddrs.argtypes = [POINTER(struct_ifaddrs)]
 
-class unpacker(object):
+class unpacker:
 
     def __init__(self, buf):
         self._buf = buf
@@ -55,7 +55,7 @@ class unpacker(object):
         self._offset += s.size
         return result
 
-class PimDm(object):
+class PimDm:
 
     def __init__(self):
         s_netlink = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE)

@@ -1,32 +1,32 @@
 import errno, os, socket, stat, threading
 
 
-class Socket(object):
+class Socket:
 
-    def __init__(self, socket):
+    def __init__(self, socket: socket.socket):
         # In case that the default timeout is not None.
         socket.settimeout(None)
         self._socket = socket
-        self._buf = ''
+        self._buf = b''
 
     def close(self):
         self._socket.close()
 
-    def write(self, data):
+    def write(self, data: bytes):
         self._socket.send(data)
 
-    def readline(self):
+    def readline(self) -> bytes:
         recv = self._socket.recv
         data = self._buf
         while True:
-            i = 1 + data.find('\n')
+            i = 1 + data.find(b'\n')
             if i:
                 self._buf = data[i:]
                 return data[:i]
             d = recv(4096)
             data += d
             if not d:
-                self._buf = ''
+                self._buf = b''
                 return data
 
     def flush(self):
@@ -37,14 +37,14 @@ class Socket(object):
         try:
             self._socket.recv(0)
             return True
-        except socket.error, (err, _):
-            if err != errno.EAGAIN:
+        except socket.error as e:
+            if e.errno != errno.EAGAIN:
                 raise
             self._socket.setblocking(1)
         return False
 
 
-class Console(object):
+class Console:
 
     def __init__(self, path, pdb):
         self.path = path
@@ -52,7 +52,7 @@ class Console(object):
             socket.SOCK_STREAM | socket.SOCK_CLOEXEC)
         try:
             self._removeSocket()
-        except OSError, e:
+        except OSError as e:
             if e.errno != errno.ENOENT:
                 raise
         s.bind(path)

@@ -5,3 +5,12 @@
 /build/
 /dist/
 /re6stnet.egg-info/
+.idea
+*.log
+*.pid
+*.db
+*.state
+*.crt
+*.pem
+demo/mbox
+*.sock

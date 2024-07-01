@@ -5,7 +5,7 @@ if 're6st' not in sys.modules:
 from re6st import utils, x509
 from OpenSSL import crypto
 
-with open("/etc/re6stnet/ca.crt") as f:
+with open("/etc/re6stnet/ca.crt", "rb") as f:
     ca = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
 network = x509.networkFromCa(ca)
 

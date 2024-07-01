@@ -40,4 +40,4 @@ protocol = 8
 min_protocol = 1
 
 if __name__ == "__main__":
-    print version
+    print(version)

@@ -30,9 +30,9 @@ def generate_cert(ca, ca_key, csr, prefix, serial, not_after=None):
     return
         crypto.X509Cert in pem format
     """
-    if type(ca) is str:
+    if type(ca) is bytes:
         ca = crypto.load_certificate(crypto.FILETYPE_PEM, ca)
-    if type(ca_key) is str:
+    if type(ca_key) is bytes:
         ca_key = crypto.load_privatekey(crypto.FILETYPE_PEM, ca_key)
     req = crypto.load_certificate_request(crypto.FILETYPE_PEM, csr)
 
@@ -40,7 +40,7 @@ def generate_cert(ca, ca_key, csr, prefix, serial, not_after=None):
     cert.gmtime_adj_notBefore(0)
     if not_after:
         cert.set_notAfter(
-            time.strftime("%Y%m%d%H%M%SZ", time.gmtime(not_after)))
+            time.strftime("%Y%m%d%H%M%SZ", time.gmtime(not_after)).encode())
     else:
         cert.gmtime_adj_notAfter(registry.RegistryServer.cert_duration)
     subject = req.get_subject()
@@ -56,9 +56,9 @@ def generate_cert(ca, ca_key, csr, prefix, serial, not_after=None):
 def create_cert_file(pkey_file, cert_file, ca, ca_key, prefix, serial):
     pkey, csr = generate_csr()
     cert = generate_cert(ca, ca_key, csr, prefix, serial)
-    with open(pkey_file, 'w') as f:
+    with open(pkey_file, 'wb') as f:
         f.write(pkey)
-    with open(cert_file, 'w') as f:
+    with open(cert_file, 'wb') as f:
         f.write(cert)
 
     return pkey, cert
@@ -84,26 +84,23 @@ def create_ca_file(pkey_file, cert_file, serial=0x120010db80042):
     cert.set_pubkey(key)
     cert.sign(key, "sha512")
 
-    with open(pkey_file, 'w') as pkey_file:
+    with open(pkey_file, 'wb') as pkey_file:
         pkey_file.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, key))
-    with open(cert_file, 'w') as cert_file:
+    with open(cert_file, 'wb') as cert_file:
         cert_file.write(crypto.dump_certificate(crypto.FILETYPE_PEM, cert))
 
     return key, cert
 
 
-def prefix2cn(prefix):
+def prefix2cn(prefix: str) -> str:
     return "%u/%u" % (int(prefix, 2), len(prefix))
 
-def serial2prefix(serial):
+def serial2prefix(serial: int) -> str:
     return bin(serial)[2:].rjust(16, '0')
 
 # pkey: private key
-def decrypt(pkey, incontent):
-    with open("node.key", 'w') as f:
+def decrypt(pkey: bytes, incontent: bytes) -> bytes:
+    with open("node.key", 'wb') as f:
         f.write(pkey)
     args = "openssl rsautl -decrypt -inkey node.key".split()
-    p = subprocess.Popen(
-        args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    outcontent, err = p.communicate(incontent)
-    return outcontent
+    return subprocess.run(args, input=incontent, stdout=subprocess.PIPE).stdout

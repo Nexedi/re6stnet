@@ -7,21 +7,23 @@ from setuptools.command import sdist as _sdist, build_py as _build_py
 from distutils import log
 
 version = {"__file__": "re6st/version.py"}
-execfile(version["__file__"], version)
+with open(version["__file__"]) as f:
+    code = compile(f.read(), version["__file__"], 'exec')
+    exec(code, version)
 
 def copy_file(self, infile, outfile, *args, **kw):
     if infile == version["__file__"]:
         if not self.dry_run:
             log.info("generating %s -> %s", infile, outfile)
-            with open(outfile, "wb") as f:
-                for x in sorted(version.iteritems()):
+            with open(outfile, "w") as f:
+                for x in sorted(version.items()):
                     if not x[0].startswith("_"):
                         f.write("%s = %r\n" % x)
         return outfile, 1
     elif isinstance(self, build_py) and \
          os.stat(infile).st_mode & stat.S_IEXEC:
         if os.path.isdir(infile) and os.path.isdir(outfile):
-            return (outfile, 0)
+            return outfile, 0
         # Adjust interpreter of OpenVPN hooks.
         with open(infile) as src:
             first_line = src.readline()
@@ -33,7 +35,7 @@ def copy_file(self, infile, outfile, *args, **kw):
                 patched += src.read()
                 dst = os.open(outfile, os.O_CREAT | os.O_WRONLY | os.O_TRUNC)
                 try:
-                    os.write(dst, patched)
+                    os.write(dst, patched.encode())
                 finally:
                     os.close(dst)
                 return outfile, 1
@@ -51,7 +53,8 @@ Environment :: Console
 License :: OSI Approved :: GNU General Public License (GPL)
 Natural Language :: English
 Operating System :: POSIX :: Linux
-Programming Language :: Python :: 2.7
+Programming Language :: Python :: 3
+Programming Language :: Python :: 3.11
 Topic :: Internet
 Topic :: System :: Networking
 """
@@ -73,6 +76,7 @@ setup(
     license = 'GPL 2+',
     platforms = ["any"],
     classifiers=classifiers.splitlines(),
+    python_requires = '>=3.11',
     long_description = ".. contents::\n\n" + open('README.rst').read()
                      + "\n" + open('CHANGES.rst').read() + git_rev,
     packages = find_packages(),
@@ -95,7 +99,7 @@ setup(
     extras_require = {
         'geoip': ['geoip2'],
         'multicast': ['PyYAML'],
-        'test': ['mock', 'pathlib2', 'nemu', 'python-unshare', 'python-passfd', 'multiping']
+        'test': ['mock', 'nemu3', 'unshare', 'multiping']
     },
     #dependency_links = [
     #    "http://miniupnp.free.fr/files/download.php?file=miniupnpc-1.7.20120714.tar.gz#egg=miniupnpc-1.7",
