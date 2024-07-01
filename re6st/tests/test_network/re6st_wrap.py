@@ -6,13 +6,15 @@ import ipaddress
 import json
 import logging
 import re
+import shlex
 import shutil
 import sqlite3
+import sys
 import tempfile
 import time
 import weakref
 from subprocess import PIPE
-from pathlib2 import Path
+from pathlib import Path
 
 from re6st.tests import tools
 from re6st.tests import DEMO_PATH
@@ -20,9 +22,10 @@ from re6st.tests import DEMO_PATH
 WORK_DIR = Path(__file__).parent / "temp_net_test"
 DH_FILE = DEMO_PATH / "dh2048.pem"
 
-RE6STNET = "python -m re6st.cli.node"
-RE6ST_REGISTRY = "python -m re6st.cli.registry"
-RE6ST_CONF = "python -m re6st.cli.conf"
+PYTHON = shlex.quote(sys.executable)
+RE6STNET = PYTHON + " -m re6st.cli.node"
+RE6ST_REGISTRY = PYTHON + " -m re6st.cli.registry"
+RE6ST_CONF = PYTHON + " -m re6st.cli.conf"
 
 def initial():
     """create the workplace"""
@@ -72,7 +75,7 @@ class Re6stRegistry(object):
 
         self.run()
         # wait the servcice started
-        p = self.node.Popen(['python', '-c', """if 1:
+        p = self.node.Popen([sys.executable, '-c', """if 1:
         import socket, time
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         while True:
@@ -115,7 +118,7 @@ class Re6stRegistry(object):
                '--client-count', (self.client_number+1)//2, '--port', self.port]
 
         #PY3: convert PosixPath to str, can be remove in Python 3
-        cmd = map(str, cmd)
+        cmd = list(map(str, cmd))
 
         cmd[:0] = RE6ST_REGISTRY.split()
 
@@ -210,7 +213,7 @@ class Re6stNode(object):
         # read token
         db = sqlite3.connect(str(self.registry.db), isolation_level=None)
         token = None
-        for _ in xrange(100):
+        for _ in range(100):
             time.sleep(.1)
             token = db.execute("SELECT token FROM token WHERE email=?",
                                (self.email,)).fetchone()
@@ -223,7 +226,7 @@ class Re6stNode(object):
         out, _ = p.communicate(str(token[0]))
         # logging.debug("re6st-conf output: {}".format(out))
         # find the ipv6 subnet of node
-        self.ip6 = re.search('(?<=subnet: )[0-9:a-z]+', out).group(0)
+        self.ip6 = re.search('(?<=subnet: )[0-9:a-z]+', out.decode("utf-8")).group(0)
         data = {'ip6': self.ip6, 'hash': self.registry.ident}
         with open(str(self.data_file), 'w') as f:
             json.dump(data, f)
@@ -236,7 +239,7 @@ class Re6stNode(object):
                '--key', self.key, '-v4', '--registry', self.registry.url,
                '--console', self.console]
         #PY3: same as for Re6stRegistry.run
-        cmd = map(str, cmd)
+        cmd = list(map(str, cmd))
         cmd[:0] = RE6STNET.split()
 
         cmd += args
