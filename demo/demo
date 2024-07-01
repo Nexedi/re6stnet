@@ -74,8 +74,6 @@ if args.duration:
     signal.signal(signal.SIGALRM, handler)
     signal.alarm(args.duration)
 
-with open('fixnemu.py') as f:
-    exec(compile(f.read(), 'fixnemu.py', 'exec'))
 
 class Re6stNode(nemu.Node):
     name: str
