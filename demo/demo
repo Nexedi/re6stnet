@@ -77,7 +77,6 @@ if args.duration:
     signal.signal(signal.SIGALRM, handler)
     signal.alarm(args.duration)
 
-
 class Re6stNode(nemu.Node):
     name: str
     short: str
@@ -101,7 +100,6 @@ class Re6stNode(nemu.Node):
             SCREEN, '-r', self.name, '-X', 'eval', shlex.join(inner_cmd)
         ]
         return subprocess.call(cmd)
-
 
 # create nodes
 internet = Re6stNode('internet', 'I')
@@ -206,14 +204,12 @@ m6_if_0.add_v6_address(address='fc42:6::1', prefix_len=16)
 m7_if_0.add_v6_address(address='fc42:7::1', prefix_len=16)
 m8_if_0.add_v6_address(address='fc42:8::1', prefix_len=16)
 
-
 def add_llrtr(iface, peer, dst='default'):
     for a in peer.get_addresses():
         a = a['address']
         if a.startswith('fe80:'):
             return iface.node.Popen(('ip', 'route', 'add', dst, 'via', a,
                                      'proto', 'static', 'dev', iface.name)).wait()
-
 
 # setup routes
 add_llrtr(re_if_0, in_if_0)
@@ -308,7 +304,6 @@ def new_network(registry: Re6stNode, reg_addr: str, serial: str, ca: str):
     yield new_node
     db.close()
 
-
 with new_network(registry, REGISTRY, REGISTRY_SERIAL, 'ca.crt') as new_node:
     new_node(machine1, 'm1', ['-I%s' % m1_if_0.name])
     new_node(machine2, 'm2', ['--remote-gateway', '10.1.1.1'], prefix_len=77)
@@ -376,7 +371,6 @@ class testHMAC(Thread):
         reg1_db.close()
         reg2_db.close()
 
-
 if args.hmac:
     import test_hmac
 
@@ -386,7 +380,6 @@ if args.hmac:
     del t
 
 _ll: dict[str, tuple[Re6stNode, bool]] = {}
-
 
 def node_by_ll(addr: str) -> tuple[Re6stNode, bool]:
     try:
@@ -416,7 +409,6 @@ def node_by_ll(addr: str) -> tuple[Re6stNode, bool]:
                         continue
                     _ll[a] = n, t
     return _ll[addr]
-
 
 def route_svg(ipv4, z=4):
     graph: dict[Re6stNode, dict[tuple[Re6stNode, bool], list[Re6stNode]]] = {}
