@@ -3,7 +3,7 @@ import os
 import random
 import string
 import json
-import httplib
+import http.client
 import base64
 import unittest
 import hmac
@@ -13,11 +13,12 @@ import tempfile
 from argparse import Namespace
 from OpenSSL import crypto
 from mock import Mock, patch
-from pathlib2 import Path
+from pathlib import Path
 
 from re6st import registry
 from re6st.tests.tools import *
 from re6st.tests import DEMO_PATH
+
 
 # TODO test for request_dump, requestToken, getNetworkConfig, getBoostrapPeer
 # getIPV4Information, versions
@@ -49,6 +50,7 @@ def insert_cert(cur, ca, prefix, not_after=None, email=None):
     insert_cert.serial += 1
     return key, cert
 
+
 insert_cert.serial = 0
 
 
@@ -77,17 +79,26 @@ class TestRegistryServer(unittest.TestCase):
 
     def setUp(self):
         self.email = ''.join(random.sample(string.ascii_lowercase, 4)) \
-            + "@mail.com"
+                     + "@mail.com"
 
     def test_recv(self):
-        recv = self.server.sock.recv = Mock()
-        recv.side_effect = [
+        side_effect = iter([
             "0001001001001a_msg",
             "0001001001002\0001dqdq",
             "0001001001001\000a_msg",
             "0001001001001\000\4a_msg",
             "0000000000000\0" # ERROR, IndexError: msg is null
-        ]
+        ])
+
+        class SocketProxy:
+            def __init__(self, wrappee):
+                self.wrappee = wrappee
+                self.recv = lambda _: next(side_effect)
+
+            def __getattr__(self, attr):
+                return getattr(self.wrappee, attr)
+
+        self.server.sock = SocketProxy(self.server.sock)
 
         try:
             res1 = self.server.recv(4)
@@ -115,7 +126,7 @@ class TestRegistryServer(unittest.TestCase):
         now = int(time.time()) - self.config.grace_period + 20
         # makeup data
         insert_cert(cur, self.server.cert, prefix_old, 1)
-        insert_cert(cur, self.server.cert, prefix, now -1)
+        insert_cert(cur, self.server.cert, prefix, now - 1)
         cur.execute("INSERT INTO token VALUES (?,?,?,?)",
                     (token_old, self.email, 4, 2))
         cur.execute("INSERT INTO token VALUES (?,?,?,?)",
@@ -143,16 +154,16 @@ class TestRegistryServer(unittest.TestCase):
         prefix = "0000000011111111"
         method = "func"
         protocol = 7
-        params = {"cn" : prefix, "a" : 1, "b" : 2}
+        params = {"cn": prefix, "a": 1, "b": 2}
         func.getcallargs.return_value = params
         del func._private
-        func.return_value = result = "this_is_a_result"
-        key = "this_is_a_key"
+        func.return_value = result = b"this_is_a_result"
+        key = b"this_is_a_key"
         self.server.sessions[prefix] = [(key, protocol)]
         request = Mock()
         request.path = "/func?a=1&b=2&cn=0000000011111111"
         request.headers = {registry.HMAC_HEADER: base64.b64encode(
-            hmac.HMAC(key, request.path, hashlib.sha1).digest())}
+            hmac.HMAC(key, request.path.encode(), hashlib.sha1).digest())}
 
         self.server.handle_request(request, method, params)
 
@@ -162,11 +173,11 @@ class TestRegistryServer(unittest.TestCase):
                          [(hashlib.sha1(key).digest(), protocol)])
         func.assert_called_once_with(**params)
         # http response check
-        request.send_response.assert_called_once_with(httplib.OK)
+        request.send_response.assert_called_once_with(http.client.OK)
         request.send_header.assert_any_call("Content-Length", str(len(result)))
         request.send_header.assert_any_call(
             registry.HMAC_HEADER,
-            base64.b64encode(hmac.HMAC(key, result, hashlib.sha1).digest()))
+            base64.b64encode(hmac.HMAC(key, result, hashlib.sha1).digest()).decode("ascii"))
         request.wfile.write.assert_called_once_with(result)
 
         # remove the create session \n
@@ -176,12 +187,12 @@ class TestRegistryServer(unittest.TestCase):
     def test_handle_request_private(self, func):
         """case request with _private attr"""
         method = "func"
-        params = {"a" : 1, "b" : 2}
+        params = {"a": 1, "b": 2}
         func.getcallargs.return_value = params
         func.return_value = None
         request_good = Mock()
         request_good.client_address = self.config.authorized_origin
-        request_good.headers = {'X-Forwarded-For':self.config.authorized_origin[0]}
+        request_good.headers = {'X-Forwarded-For': self.config.authorized_origin[0]}
         request_bad = Mock()
         request_bad.client_address = ["wrong_address"]
 
@@ -189,8 +200,8 @@ class TestRegistryServer(unittest.TestCase):
         self.server.handle_request(request_bad, method, params)
 
         func.assert_called_once_with(**params)
-        request_bad.send_error.assert_called_once_with(httplib.FORBIDDEN)
-        request_good.send_response.assert_called_once_with(httplib.NO_CONTENT)
+        request_bad.send_error.assert_called_once_with(http.client.FORBIDDEN)
+        request_good.send_response.assert_called_once_with(http.client.NO_CONTENT)
 
     # will cause valueError, if a node send hello twice to a registry
     def test_getPeerProtocol(self):
@@ -213,7 +224,7 @@ class TestRegistryServer(unittest.TestCase):
         res = self.server.hello(prefix, protocol=protocol)
 
         # decrypt
-        length = len(res)/2
+        length = len(res) // 2
         key, sign = res[:length], res[length:]
         key = decrypt(pkey, key)
         self.assertEqual(self.server.sessions[prefix][-1][0], key,
@@ -282,7 +293,7 @@ class TestRegistryServer(unittest.TestCase):
         nb_less = 0
         for cert in self.server.iterCert():
             s = cert[0].get_subject().serialNumber
-            if(s and int(s) <= serial):
+            if s and int(s) <= serial:
                 nb_less += 1
         self.assertEqual(nb_less, serial)
 
@@ -378,7 +389,7 @@ class TestRegistryServer(unittest.TestCase):
 
         hmacs = get_hmac()
         key_1 = hmacs[1]
-        self.assertEqual(hmacs, [None, key_1, ''])
+        self.assertEqual(hmacs, [None, key_1, b''])
 
         # step 2
         self.server.updateHMAC()
@@ -397,11 +408,10 @@ class TestRegistryServer(unittest.TestCase):
 
         self.assertEqual(get_hmac(), [None, key_2, key_1])
 
-        #setp 5
+        # step 5
         self.server.updateHMAC()
 
         self.assertEqual(get_hmac(), [key_2, None, None])
-
 
     def test_getNodePrefix(self):
         # prefix in short format
@@ -426,20 +436,38 @@ class TestRegistryServer(unittest.TestCase):
             ('0000000000000001', '2 0/16 6/16')
         ]
         recv.side_effect = recv_case
+
         def side_effct(rlist, wlist, elist, timeout):
             # rlist is true until the len(recv_case)th call
             side_effct.i -= side_effct.i > 0
             return [side_effct.i, wlist, None]
+
         side_effct.i = len(recv_case) + 1
         select.side_effect = side_effct
 
         res = self.server.topology()
 
-        expect_res = '{"36893488147419103232/80": ["0/16", "7/16"], ' \
-            '"": ["36893488147419103232/80", "3/16", "1/16", "0/16", "7/16"], ' \
-            '"4/16": ["0/16"], "3/16": ["0/16", "7/16"], "0/16": ["6/16", "7/16"], '\
-            '"1/16": ["6/16", "0/16"], "7/16": ["6/16", "4/16"]}'''
-        self.assertEqual(res, expect_res)
+        class CustomDecoder(json.JSONDecoder):
+            def __init__(self, **kwargs):
+                json.JSONDecoder.__init__(self, **kwargs)
+                self.parse_array = self.JSONArray
+                self.scan_once = json.scanner.py_make_scanner(self)
+
+            def JSONArray(self, s_and_end, scan_once, **kwargs):
+                values, end = json.decoder.JSONArray(s_and_end, scan_once, **kwargs)
+                return set(values), end
+
+        res = json.loads(res, cls=CustomDecoder)
+
+        self.assertEqual(res, {
+            "": {"36893488147419103232/80", "3/16", "1/16", "0/16", "7/16"},
+            "0/16": {"6/16", "7/16"},
+            "1/16": {"6/16", "0/16"},
+            "36893488147419103232/80": {"0/16", "7/16"},
+            "3/16": {"0/16", "7/16"},
+            "4/16": {"0/16"},
+            "7/16": {"6/16", "4/16"},
+        })
 
 
 if __name__ == "__main__":

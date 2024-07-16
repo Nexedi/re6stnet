@@ -1,4 +1,4 @@
-#!/usr/bin/python2 -S
+#!/usr/bin/env -S python3 -S
 import os, sys
 
 script_type = os.environ['script_type']
@@ -7,10 +7,11 @@ external_ip = os.getenv('trusted_ip') or os.environ['trusted_ip6']
 # Write into pipe connect/disconnect events
 fd = int(sys.argv[1])
 os.write(fd, repr((script_type, (os.environ['common_name'], os.environ['dev'],
-                   int(os.environ['tls_serial_0']), external_ip))))
+                   int(os.environ['tls_serial_0']), external_ip)))
+         .encode("utf-8"))
 
 if script_type == 'client-connect':
-    if os.read(fd, 1) == '\0':
+    if os.read(fd, 1) == b'\x00':
         sys.exit(1)
     # Send client its external ip address
     with open(sys.argv[2], 'w') as f:
