@@ -3,7 +3,7 @@ import errno, os, socket, stat, threading
 
 class Socket:
 
-    def __init__(self, socket):
+    def __init__(self, socket: socket.socket):
         # In case that the default timeout is not None.
         socket.settimeout(None)
         self._socket = socket
@@ -12,10 +12,10 @@ class Socket:
     def close(self):
         self._socket.close()
 
-    def write(self, data):
+    def write(self, data: bytes):
         self._socket.send(data)
 
-    def readline(self):
+    def readline(self) -> bytes:
         recv = self._socket.recv
         data = self._buf
         while True:

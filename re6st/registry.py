@@ -22,10 +22,13 @@ import base64, hmac, hashlib, http.client, inspect, json, logging
 import mailbox, os, platform, random, select, smtplib, socket, sqlite3
 import string, sys, threading, time, weakref, zlib
 from collections import defaultdict, deque
+from collections.abc import Iterator
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from email.mime.text import MIMEText
 from operator import itemgetter
+from typing import Tuple
+
 from OpenSSL import crypto
 from urllib.parse import urlparse, unquote, urlencode
 from . import ctl, tunnel, utils, version, x509
@@ -57,6 +60,8 @@ class RegistryServer:
 
     peers = 0, ()
     cert_duration = 365 * 86400
+
+    sessions: dict[str, list[tuple[bytes, int]]]
 
     def _geoiplookup(self, ip):
         raise HTTPError(http.client.BAD_REQUEST)
@@ -140,7 +145,7 @@ class RegistryServer:
         if self.geoip_db:
             from geoip2 import database, errors
             country = database.Reader(self.geoip_db).country
-            def geoiplookup(ip):
+            def geoiplookup(ip: str) -> Tuple[str, str]:
                 try:
                     req = country(ip)
                     return req.country.iso_code, req.continent.code
@@ -206,7 +211,7 @@ class RegistryServer:
         self.sock.sendto(prefix.encode() + bytes((0, code)),
                          ('::1', tunnel.PORT))
 
-    def recv(self, code):
+    def recv(self, code: int) -> (str, str):
         try:
             prefix, msg = self.sock.recv(1 << 16).split(b'\0', 1)
             int(prefix, 2)
@@ -241,7 +246,7 @@ class RegistryServer:
     def babel_dump(self):
         self._wait_dump = False
 
-    def iterCert(self):
+    def iterCert(self) -> Iterator[Tuple[crypto.X509, str, str]]:
         for prefix, email, cert in self.db.execute(
                 "SELECT * FROM cert WHERE cert IS NOT NULL"):
             try:
@@ -341,12 +346,12 @@ class RegistryServer:
         if result:
             request.wfile.write(result)
 
-    def getPeerProtocol(self, cn):
+    def getPeerProtocol(self, cn: str) -> int:
         session, = self.sessions[cn]
         return session[1]
 
     @rpc
-    def hello(self, client_prefix, protocol='1'):
+    def hello(self, client_prefix: str, protocol='1') -> bytes:
         with self.lock:
             cert = self.getCert(client_prefix)
             key = utils.newHmacSecret()
@@ -356,7 +361,7 @@ class RegistryServer:
         assert len(key) == len(sign)
         return key + sign
 
-    def getCert(self, client_prefix):
+    def getCert(self, client_prefix: str) -> bytes:
         assert self.lock.locked()
         cert = self.db.execute("SELECT cert FROM cert"
                                " WHERE prefix=? AND cert IS NOT NULL",
@@ -366,19 +371,19 @@ class RegistryServer:
         return cert[0]
 
     @rpc_private
-    def isToken(self, token):
+    def isToken(self, token: str):
         with self.lock:
             if self.db.execute("SELECT 1 FROM token WHERE token = ?",
                                (token,)).fetchone():
                 return b"1"
 
     @rpc_private
-    def deleteToken(self, token):
+    def deleteToken(self, token: str):
         with self.lock:
             self.db.execute("DELETE FROM token WHERE token = ?", (token,))
 
     @rpc_private
-    def addToken(self, email, token):
+    def addToken(self, email: str, token: str | None) -> str:
         prefix_len = self.config.prefix_length
         if not prefix_len:
             raise HTTPError(http.client.FORBIDDEN)
@@ -506,7 +511,8 @@ class RegistryServer:
             q("UPDATE cert SET cert = 'reserved' WHERE prefix = ?", (prefix,))
 
     @rpc
-    def requestCertificate(self, token, req, location='', ip=''):
+    def requestCertificate(self, token: str | None, req: bytes,
+                           location: str='', ip: str=''):
         logging.debug("Requesting certificate with token %s", token)
         req = crypto.load_certificate_request(crypto.FILETYPE_PEM, req)
         with self.lock:
@@ -580,7 +586,7 @@ class RegistryServer:
         return cert
 
     @rpc
-    def renewCertificate(self, cn):
+    def renewCertificate(self, cn: str) -> bytes:
         with self.lock:
             with self.db as db:
                 pem = self.getCert(cn)
@@ -596,16 +602,16 @@ class RegistryServer:
                     cert.get_subject(), cert.get_pubkey(), not_after)
 
     @rpc
-    def getCa(self):
+    def getCa(self) -> bytes:
         return crypto.dump_certificate(crypto.FILETYPE_PEM, self.cert.ca)
 
     @rpc
-    def getDh(self, cn):
+    def getDh(self, cn: str) -> bytes:
         with open(self.config.dh, "rb") as f:
             return f.read()
 
     @rpc
-    def getNetworkConfig(self, cn):
+    def getNetworkConfig(self, cn: str) -> bytes:
         with self.lock:
             cert = self.getCert(cn)
             config = self.network_config.copy()
@@ -615,7 +621,7 @@ class RegistryServer:
                     v and base64.b64encode(x509.encrypt(cert, v)).decode()
         return zlib.compress(json.dumps(config).encode("utf-8"))
 
-    def _queryAddress(self, peer):
+    def _queryAddress(self, peer: str) -> str:
         logging.info("Querying address for %s/%s %r",
                      int(peer, 2), len(peer), peer)
         self.sendto(peer, 1)
@@ -633,12 +639,12 @@ class RegistryServer:
                      int(peer, 2), len(peer))
 
     @rpc
-    def getCountry(self, cn, address):
+    def getCountry(self, cn: str, address: str) -> str | None:
         country = self._geoiplookup(address)[0]
         return None if country == '*' else country
 
     @rpc
-    def getBootstrapPeer(self, cn):
+    def getBootstrapPeer(self, cn: str) -> bytes | None:
         logging.info("Answering bootstrap peer for %s", cn)
         with self.peers_lock:
             age, peers = self.peers
@@ -673,7 +679,7 @@ class RegistryServer:
         return x509.encrypt(cert, msg.encode())
 
     @rpc_private
-    def revoke(self, cn_or_serial):
+    def revoke(self, cn_or_serial: int | str):
         with self.lock, self.db:
             q = self.db.execute
             try:
@@ -694,12 +700,12 @@ class RegistryServer:
                 q("INSERT INTO crl VALUES (?,?)", (serial, not_after))
                 self.updateNetworkConfig()
 
-    def newHMAC(self, i, key=None):
+    def newHMAC(self, i: int, key: bytes=None):
        if key is None:
           key = os.urandom(16)
        self.setConfig(BABEL_HMAC[i], key)
 
-    def delHMAC(self, i):
+    def delHMAC(self, i: int):
        self.db.execute("DELETE FROM config WHERE name=?", (BABEL_HMAC[i],))
 
     @rpc_private
@@ -726,7 +732,7 @@ class RegistryServer:
         self.sendto(self.prefix, 0)
 
     @rpc_private
-    def getNodePrefix(self, email):
+    def getNodePrefix(self, email: str) -> str | None:
         with self.lock, self.db:
             try:
                 cert, = next(
@@ -738,7 +744,7 @@ class RegistryServer:
         return x509.subnetFromCert(certificate)
 
     @rpc_private
-    def getIPv6Address(self, email):
+    def getIPv6Address(self, email: str) -> str:
         cn = self.getNodePrefix(email)
         if cn:
             return utils.ipFromBin(
@@ -746,7 +752,7 @@ class RegistryServer:
                 + utils.binFromSubnet(cn))
 
     @rpc_private
-    def getIPv4Information(self, email):
+    def getIPv4Information(self, email: str) -> str | None:
         peer = self.getNodePrefix(email)
         if peer:
             peer = utils.binFromSubnet(peer)
@@ -765,7 +771,7 @@ class RegistryServer:
                 return msg.split(',')[0]
 
     @rpc_private
-    def versions(self):
+    def versions(self) -> str:
         with self.peers_lock:
             self.request_dump()
             peers = {prefix
@@ -791,7 +797,7 @@ class RegistryServer:
         return json.dumps(peer_dict)
 
     @rpc_private
-    def topology(self):
+    def topology(self) -> str:
         logging.debug("Computing topology")
         p = lambda p: '%s/%s' % (int(p, 2), len(p))
         peers = deque((p(self.prefix),))
@@ -827,11 +833,17 @@ class RegistryServer:
 
 
 class RegistryClient:
+    """
+    Client for the re6st registry.
+
+    Method calls are forwarded to the registry server.
+    String results are always returned as bytes.
+    """
 
     _hmac = None
     user_agent = "re6stnet/%s, %s" % (version.version, platform.platform())
 
-    def __init__(self, url, cert=None, auto_close=True):
+    def __init__(self, url: str, cert: x509.Cert=None, auto_close=True):
         self.cert = cert
         self.auto_close = auto_close
         url_parsed = urlparse(url)
@@ -843,7 +855,7 @@ class RegistryClient:
                           )[scheme](unquote(host), timeout=60)
         self._path = path.rstrip('/')
 
-    def __getattr__(self, name):
+    def __getattr__(self, name: str):
         getcallargs = getattr(RegistryServer, name).getcallargs
         def rpc(*args, **kw) -> bytes:
             kw = getcallargs(*args, **kw)

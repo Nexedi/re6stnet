@@ -34,13 +34,13 @@ class Array:
     def __init__(self, item):
         self._item = item
 
-    def encode(self, buffer, value):
+    def encode(self, buffer: bytes, value: list):
         buffer += uint16.pack(len(value))
         encode = self._item.encode
         for value in value:
             encode(buffer, value)
 
-    def decode(self, buffer, offset=0):
+    def decode(self, buffer: bytes, offset=0) -> tuple[int, list]:
         r = []
         o = offset + 2
         decode = self._item.decode
@@ -52,11 +52,11 @@ class Array:
 class String:
 
     @staticmethod
-    def encode(buffer, value):
+    def encode(buffer: bytes, value: str):
         buffer += value.encode("utf-8") + b'\0'
 
     @staticmethod
-    def decode(buffer, offset=0):
+    def decode(buffer: bytes, offset=0) -> tuple[int, str]:
         i = buffer.index(0, offset)
         return i + 1, buffer[offset:i].decode("utf-8")
 
@@ -171,7 +171,7 @@ class Babel:
 
     _decode = None
 
-    def __init__(self, socket_path, handler, network):
+    def __init__(self, socket_path: str, handler, network: str):
         self.socket_path = socket_path
         self.handler = handler
         self.network = network
@@ -304,7 +304,7 @@ class iterRoutes:
 
     _waiting = True
 
-    def __new__(cls, control_socket, network):
+    def __new__(cls, control_socket: str, network: str):
         self = object.__new__(cls)
         c = Babel(control_socket, self, network)
         c.request_dump()
