@@ -1,4 +1,4 @@
-#!/usr/bin/python2 -S
+#!/usr/bin/env -S python3 -S
 import os, sys
 
 script_type = os.environ['script_type']
@@ -14,4 +14,5 @@ if script_type == 'up':
 if script_type == 'route-up':
     import time
     os.write(int(sys.argv[1]), repr((os.environ['common_name'], time.time(),
-        int(os.environ['tls_serial_0']), os.environ['OPENVPN_external_ip'])))
+        int(os.environ['tls_serial_0']), os.environ['OPENVPN_external_ip']))
+             .encode())

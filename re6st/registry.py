@@ -18,16 +18,16 @@ Authenticated communication:
   - the last one that was really used by the client (!hello)
   - the one of the last handshake (hello)
 """
-import base64, hmac, hashlib, httplib, inspect, json, logging
+import base64, hmac, hashlib, http.client, inspect, json, logging
 import mailbox, os, platform, random, select, smtplib, socket, sqlite3
 import string, sys, threading, time, weakref, zlib
 from collections import defaultdict, deque
 from datetime import datetime
-from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from email.mime.text import MIMEText
 from operator import itemgetter
 from OpenSSL import crypto
-from urllib import splittype, splithost, unquote, urlencode
+from urllib.parse import urlparse, unquote, urlencode
 from . import ctl, tunnel, utils, version, x509
 
 HMAC_HEADER = "Re6stHMAC"
@@ -35,13 +35,13 @@ RENEW_PERIOD = 30 * 86400
 BABEL_HMAC = 'babel_hmac0', 'babel_hmac1', 'babel_hmac2'
 
 def rpc(f):
-    args, varargs, varkw, defaults = inspect.getargspec(f)
-    assert not (varargs or varkw), f
-    if not defaults:
-        defaults = ()
-    i = len(args) - len(defaults)
-    f.getcallargs = eval("lambda %s: locals()" % ','.join(args[1:i]
-        + map("%s=%r".__mod__, zip(args[i:], defaults))))
+    argspec = inspect.getfullargspec(f)
+    assert not (argspec.varargs or argspec.varkw), f
+    sig = inspect.signature(f)
+    sig = sig.replace(parameters=[v.replace(annotation=inspect.Parameter.empty)
+                                  for v in sig.parameters.values()][1:],
+                      return_annotation=inspect.Signature.empty)
+    f.getcallargs = eval("lambda %s: locals()" % str(sig)[1:-1])
     return f
 
 def rpc_private(f):
@@ -53,13 +53,13 @@ class HTTPError(Exception):
     pass
 
 
-class RegistryServer(object):
+class RegistryServer:
 
     peers = 0, ()
     cert_duration = 365 * 86400
 
     def _geoiplookup(self, ip):
-        raise HTTPError(httplib.BAD_REQUEST)
+        raise HTTPError(http.client.BAD_REQUEST)
 
     def __init__(self, config):
         self.config = config
@@ -69,14 +69,14 @@ class RegistryServer(object):
 
         # Parse community file
         self.community_map = {}
-	if config.community:
+        if config.community:
             with open(config.community) as x:
                 for x in x:
                     x = x.strip()
                     if x and not x.startswith('#'):
                         x = x.split()
                         self.community_map[x.pop(0)] = x
-            if sum('*' in x for x in self.community_map.itervalues()) != 1:
+            if sum('*' in x for x in self.community_map.values()) != 1:
                 sys.exit("Invalid community configuration: missing or multiple default location ('*')")
         else:
             self.community_map[''] = '*'
@@ -91,7 +91,7 @@ class RegistryServer(object):
                 "name TEXT PRIMARY KEY NOT NULL",
                 "value")
         self.prefix = self.getConfig("prefix", None)
-        self.version = str(self.getConfig("version", "\0")) # BBB: blob
+        self.version = self.getConfig("version", b'\0')
         utils.sqliteCreateTable(self.db, "token",
                 "token TEXT PRIMARY KEY NOT NULL",
                 "email TEXT NOT NULL",
@@ -142,7 +142,7 @@ class RegistryServer(object):
             def geoiplookup(ip):
                 try:
                     req = country(ip)
-                    return req.country.iso_code.encode(), req.continent.code.encode()
+                    return req.country.iso_code, req.continent.code
                 except (errors.AddressNotFoundError, ValueError):
                     return '*', '*'
             self._geoiplookup = geoiplookup
@@ -169,8 +169,8 @@ class RegistryServer(object):
     def updateNetworkConfig(self, _it0=itemgetter(0)):
         kw = {
             'babel_default': 'max-rtt-penalty 5000 rtt-max 500 rtt-decay 125',
-            'crl': map(_it0, self.db.execute(
-                "SELECT serial FROM crl ORDER BY serial")),
+            'crl': list(map(_it0, self.db.execute(
+                "SELECT serial FROM crl ORDER BY serial"))),
             'protocol': version.protocol,
             'registry_prefix': self.prefix,
         }
@@ -184,32 +184,31 @@ class RegistryServer(object):
         config = json.dumps(kw, sort_keys=True)
         if config != self.getConfig('last_config', None):
             self.increaseVersion()
-            # BBB: Use buffer because of http://bugs.python.org/issue13676
-            #      on Python 2.6
-            self.setConfig('version', buffer(self.version))
+            self.setConfig('version', self.version)
             self.setConfig('last_config', config)
             self.sendto(self.prefix, 0)
         # The following entry lists values that are base64-encoded.
         kw[''] = 'version',
-        kw['version'] = self.version.encode('base64')
+        kw['version'] = base64.b64encode(self.version).decode()
         self.network_config = kw
 
     def increaseVersion(self):
         x = utils.packInteger(1 + utils.unpackInteger(self.version)[0])
         self.version = x + self.cert.sign(x)
 
-    def sendto(self, prefix, code):
-        self.sock.sendto("%s\0%c" % (prefix, code), ('::1', tunnel.PORT))
+    def sendto(self, prefix: str, code: int):
+        self.sock.sendto(prefix.encode() + bytes((0, code)),
+                         ('::1', tunnel.PORT))
 
     def recv(self, code):
         try:
-            prefix, msg = self.sock.recv(1<<16).split('\0', 1)
+            prefix, msg = self.sock.recv(1 << 16).split(b'\0', 1)
             int(prefix, 2)
         except ValueError:
             pass
         else:
-            if msg and ord(msg[0]) == code:
-                return prefix, msg[1:]
+            if len(msg) >= 1 and msg[0] == code:
+                return prefix.decode(), msg[1:].decode()
         return None, None
 
     def select(self, r, w, t):
@@ -286,14 +285,15 @@ class RegistryServer(object):
             x_forwarded_for = request.headers.get('X-Forwarded-For')
             if request.client_address[0] not in authorized_origin or \
                x_forwarded_for and x_forwarded_for not in authorized_origin:
-                return request.send_error(httplib.FORBIDDEN)
+                return request.send_error(http.client.FORBIDDEN)
         key = m.getcallargs(**kw).get('cn')
         if key:
             h = base64.b64decode(request.headers[HMAC_HEADER])
             with self.lock:
                 session = self.sessions[key]
                 for key, protocol in session:
-                    if h == hmac.HMAC(key, request.path, hashlib.sha1).digest():
+                    if h == hmac.HMAC(key, request.path.encode(), hashlib.sha1
+                                      ).digest():
                         break
                 else:
                     raise Exception("Wrong HMAC")
@@ -313,19 +313,21 @@ class RegistryServer(object):
                         request.headers.get("host"))
         try:
             result = m(**kw)
-        except HTTPError, e:
+        except HTTPError as e:
             return request.send_error(*e.args)
         except:
-            logging.warning(request.requestline, exc_info=1)
-            return request.send_error(httplib.INTERNAL_SERVER_ERROR)
+            logging.warning(request.requestline, exc_info=True)
+            return request.send_error(http.client.INTERNAL_SERVER_ERROR)
         if result:
-            request.send_response(httplib.OK)
+            if type(result) is str:
+                result = result.encode("utf-8")
+            request.send_response(http.client.OK)
             request.send_header("Content-Length", str(len(result)))
         else:
-            request.send_response(httplib.NO_CONTENT)
+            request.send_response(http.client.NO_CONTENT)
         if key:
             request.send_header(HMAC_HEADER, base64.b64encode(
-                hmac.HMAC(key, result, hashlib.sha1).digest()))
+                hmac.HMAC(key, result, hashlib.sha1).digest()).decode("ascii"))
         request.end_headers()
         if result:
             request.wfile.write(result)
@@ -349,14 +351,14 @@ class RegistryServer(object):
         assert self.lock.locked()
         return self.db.execute("SELECT cert FROM cert"
                                " WHERE prefix=? AND cert IS NOT NULL",
-                               (client_prefix,)).next()[0]
+                               (client_prefix,)).fetchone()[0]
 
     @rpc_private
     def isToken(self, token):
         with self.lock:
             if self.db.execute("SELECT 1 FROM token WHERE token = ?",
                                (token,)).fetchone():
-                return "1"
+                return b"1"
 
     @rpc_private
     def deleteToken(self, token):
@@ -367,7 +369,7 @@ class RegistryServer(object):
     def addToken(self, email, token):
         prefix_len = self.config.prefix_length
         if not prefix_len:
-            raise HTTPError(httplib.FORBIDDEN)
+            raise HTTPError(http.client.FORBIDDEN)
         request = token is None
         with self.lock:
             while True:
@@ -381,7 +383,7 @@ class RegistryServer(object):
                     break
                 except sqlite3.IntegrityError:
                     if not request:
-                        raise HTTPError(httplib.CONFLICT)
+                        raise HTTPError(http.client.CONFLICT)
             self.timeout = 1
         if request:
             return token
@@ -389,7 +391,7 @@ class RegistryServer(object):
     @rpc
     def requestToken(self, email):
         if not self.config.mailhost:
-            raise HTTPError(httplib.FORBIDDEN)
+            raise HTTPError(http.client.FORBIDDEN)
 
         token = self.addToken(email, None)
 
@@ -418,11 +420,11 @@ class RegistryServer(object):
             s.quit()
 
     def getCommunity(self, country, continent):
-        for prefix, location_list in self.community_map.iteritems():
+        for prefix, location_list in self.community_map.items():
             if country in location_list:
                 return prefix
         default = ''
-        for prefix, location_list in self.community_map.iteritems():
+        for prefix, location_list in self.community_map.items():
             if continent in location_list:
                 return prefix
             if '*' in location_list:
@@ -436,7 +438,7 @@ class RegistryServer(object):
         while True:
             max_len = q("SELECT max(length(prefix)) FROM cert"
                         " WHERE cert is null AND length(prefix) < ?",
-                        max_len).next()
+                        max_len).fetchone()
             if not max_len[0]:
                 break
             for prefix, in q("SELECT prefix FROM cert"
@@ -460,25 +462,25 @@ class RegistryServer(object):
         while True:
             try:
                 # Find longest free prefix whithin community.
-                prefix, = q(
+                prefix, = next(q(
                     "SELECT prefix FROM cert"
                     " WHERE prefix LIKE ?"
                     "   AND length(prefix) <= ? AND cert is null"
                     " ORDER BY length(prefix) DESC",
-                    (community + '%', prefix_len)).next()
+                    (community + '%', prefix_len)))
             except StopIteration:
                 # Community not yet allocated?
                 # There should be exactly 1 row whose
                 # prefix is the beginning of community.
-                prefix, x = q("SELECT prefix, cert FROM cert"
+                prefix, x = next(q("SELECT prefix, cert FROM cert"
                               " WHERE substr(?,1,length(prefix)) = prefix",
-                              (community,)).next()
+                              (community,)))
                 if x is not None:
                     logging.error('No more free /%u prefix available',
                                   prefix_len)
                     raise
             # Split the tree until prefix has wanted length.
-            for x in xrange(len(prefix), prefix_len):
+            for x in range(len(prefix), prefix_len):
                 # Prefix starts with community, then we complete with 0.
                 x = community[x] if x < community_len else '0'
                 q("UPDATE cert SET prefix = ? WHERE prefix = ?",
@@ -496,11 +498,11 @@ class RegistryServer(object):
             with self.db:
                 if token:
                     if not self.config.prefix_length:
-                        raise HTTPError(httplib.FORBIDDEN)
+                        raise HTTPError(http.client.FORBIDDEN)
                     try:
-                        token, email, prefix_len, _ = self.db.execute(
+                        token, email, prefix_len, _ = next(self.db.execute(
                             "SELECT * FROM token WHERE token = ?",
-                            (token,)).next()
+                            (token,)))
                     except StopIteration:
                         return
                     self.db.execute("DELETE FROM token WHERE token = ?",
@@ -508,7 +510,7 @@ class RegistryServer(object):
                 else:
                     prefix_len = self.config.anonymous_prefix_length
                     if not prefix_len:
-                        raise HTTPError(httplib.FORBIDDEN)
+                        raise HTTPError(http.client.FORBIDDEN)
                     email = None
                 country, continent = '*', '*'
                 if self.geoip_db:
@@ -584,7 +586,7 @@ class RegistryServer(object):
 
     @rpc
     def getDh(self, cn):
-        with open(self.config.dh) as f:
+        with open(self.config.dh, "rb") as f:
             return f.read()
 
     @rpc
@@ -595,8 +597,8 @@ class RegistryServer(object):
             hmac = [self.getConfig(k, None) for k in BABEL_HMAC]
             for i, v in enumerate(v for v in hmac if v is not None):
                 config[('babel_hmac_sign', 'babel_hmac_accept')[i]] = \
-                    v and x509.encrypt(cert, v).encode('base64')
-        return zlib.compress(json.dumps(config))
+                    v and base64.b64encode(x509.encrypt(cert, v)).decode()
+        return zlib.compress(json.dumps(config).encode("utf-8"))
 
     def _queryAddress(self, peer):
         self.sendto(peer, 1)
@@ -624,7 +626,7 @@ class RegistryServer(object):
             if age < time.time() or not peers:
                 self.request_dump()
                 peers = [prefix
-                    for neigh_routes in self.ctl.neighbours.itervalues()
+                    for neigh_routes in self.ctl.neighbours.values()
                     for prefix in neigh_routes[1]
                     if prefix]
                 peers.append(self.prefix)
@@ -647,7 +649,7 @@ class RegistryServer(object):
             cert = self.getCert(cn)
         msg = "%s %s" % (peer, msg)
         logging.info("Sending bootstrap peer: %s", msg)
-        return x509.encrypt(cert, msg)
+        return x509.encrypt(cert, msg.encode())
 
     @rpc_private
     def revoke(self, cn_or_serial):
@@ -673,7 +675,7 @@ class RegistryServer(object):
 
     def newHMAC(self, i, key=None):
        if key is None:
-          key = buffer(os.urandom(16))
+          key = os.urandom(16)
        self.setConfig(BABEL_HMAC[i], key)
 
     def delHMAC(self, i):
@@ -696,18 +698,19 @@ class RegistryServer(object):
             else:
                 # Initialization of HMAC on the network
                 self.newHMAC(1)
-                self.newHMAC(2, '')
+                self.newHMAC(2, b'')
             self.increaseVersion()
-            self.setConfig('version', buffer(self.version))
-            self.network_config['version']  = self.version.encode('base64')
+            self.setConfig('version', self.version)
+            self.network_config['version']  = base64.b64encode(self.version)
         self.sendto(self.prefix, 0)
 
     @rpc_private
     def getNodePrefix(self, email):
         with self.lock, self.db:
             try:
-                cert, = self.db.execute("SELECT cert FROM cert WHERE email = ?",
-                                        (email,)).next()
+                cert, = next(
+                    self.db.execute("SELECT cert FROM cert WHERE email = ?",
+                                        (email,)))
             except StopIteration:
                 return
         certificate = crypto.load_certificate(crypto.FILETYPE_PEM, cert)
@@ -728,7 +731,7 @@ class RegistryServer(object):
             peer = utils.binFromSubnet(peer)
             with self.peers_lock:
                 self.request_dump()
-                for neigh_routes in self.ctl.neighbours.itervalues():
+                for neigh_routes in self.ctl.neighbours.values():
                     for prefix in neigh_routes[1]:
                         if prefix == peer:
                             break
@@ -736,7 +739,7 @@ class RegistryServer(object):
                     return
             logging.info("%s %s", email, peer)
             with self.lock:
-                msg = self._queryAddress(peer)
+                msg = self._queryAddress(peer).decode()
             if msg:
                 return msg.split(',')[0]
 
@@ -745,7 +748,7 @@ class RegistryServer(object):
         with self.peers_lock:
             self.request_dump()
             peers = {prefix
-                for neigh_routes in self.ctl.neighbours.itervalues()
+                for neigh_routes in self.ctl.neighbours.values()
                 for prefix in neigh_routes[1]
                 if prefix}
         peers.add(self.prefix)
@@ -777,7 +780,7 @@ class RegistryServer(object):
                 r, w, _ = select.select(s, s if peers else (), (), 3)
                 if r:
                     prefix, x = self.recv(5)
-                    if prefix and x:
+                    if prefix:
                         prefix = p(prefix)
                         x = x.split()
                         try:
@@ -794,10 +797,10 @@ class RegistryServer(object):
                     self.sendto(utils.binFromSubnet(peers.popleft()), 5)
                 elif not r:
                     break
-        return json.dumps({k: list(v) for k, v in graph.iteritems()})
+        return json.dumps({k: list(v) for k, v in graph.items()})
 
 
-class RegistryClient(object):
+class RegistryClient:
 
     _hmac = None
     user_agent = "re6stnet/%s, %s" % (version.version, platform.platform())
@@ -805,21 +808,23 @@ class RegistryClient(object):
     def __init__(self, url, cert=None, auto_close=True):
         self.cert = cert
         self.auto_close = auto_close
-        scheme, host = splittype(url)
-        host, path = splithost(host)
-        self._conn = dict(http=httplib.HTTPConnection,
-                          https=httplib.HTTPSConnection,
+        url_parsed = urlparse(url)
+        scheme = url_parsed.scheme
+        host = url_parsed.netloc
+        path = url_parsed.path
+        self._conn = dict(http=http.client.HTTPConnection,
+                          https=http.client.HTTPSConnection,
                           )[scheme](unquote(host), timeout=60)
         self._path = path.rstrip('/')
 
     def __getattr__(self, name):
         getcallargs = getattr(RegistryServer, name).getcallargs
-        def rpc(*args, **kw):
+        def rpc(*args, **kw) -> bytes:
             kw = getcallargs(*args, **kw)
             query = '/' + name
             if kw:
-                if any(type(v) is not str for v in kw.itervalues()):
-                    raise TypeError
+                if any(not isinstance(v, (str, bytes)) for v in kw.values()):
+                    raise TypeError(kw)
                 query += '?' + urlencode(kw)
             url = self._path + query
             client_prefix = kw.get('cn')
@@ -834,7 +839,8 @@ class RegistryClient(object):
                             n = len(h) // 2
                             self.cert.verify(h[n:], h[:n])
                             key = self.cert.decrypt(h[:n])
-                        h = hmac.HMAC(key, query, hashlib.sha1).digest()
+                        h = (hmac.HMAC(key, query.encode(), hashlib.sha1)
+                             .digest())
                         key = hashlib.sha1(key).digest()
                         self._hmac = hashlib.sha1(key).digest()
                     else:
@@ -846,14 +852,15 @@ class RegistryClient(object):
                     self._conn.endheaders()
                     response = self._conn.getresponse()
                     body = response.read()
-                    if response.status in (httplib.OK, httplib.NO_CONTENT):
+                    if response.status in (http.client.OK,
+                                           http.client.NO_CONTENT):
                         if (not client_prefix or
                                 hmac.HMAC(key, body, hashlib.sha1).digest() ==
                                 base64.b64decode(response.msg[HMAC_HEADER])):
                             if self.auto_close and name != 'hello':
                                 self._conn.close()
                             return body
-                    elif response.status == httplib.FORBIDDEN:
+                    elif response.status == http.client.FORBIDDEN:
                         # XXX: We should improve error handling, while making
                         #      sure re6st nodes don't crash on temporary errors.
                         #      This is currently good enough for re6st-conf, to
@@ -864,7 +871,7 @@ class RegistryClient(object):
             except HTTPError:
                 raise
             except Exception:
-                logging.info(url, exc_info=1)
+                logging.info(url, exc_info=True)
             else:
                 logging.info('%s\nUnexpected response %s %s',
                              url, response.status, response.reason)

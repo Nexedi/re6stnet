@@ -1,3 +1,4 @@
+import binascii
 import logging, errno, os
 from . import utils
 
@@ -43,7 +44,7 @@ def server(iface, max_clients, dh_path, fd, port, proto, encrypt, *args, **kw):
         '--max-clients', str(max_clients),
         '--port', str(port),
         '--proto', proto,
-        *args, **kw)
+        *args, pass_fds=[fd], **kw)
 
 
 def client(iface, address_list, encrypt, *args, **kw):
@@ -82,7 +83,7 @@ def router(ip, ip4, rt6, hello_interval, log_path, state_path, pidfile,
     if hmac_sign:
         def key(cmd, id, value):
             cmd += '-C', ('key type blake2s128 id %s value %s' %
-                          (id, value.encode('hex')))
+                          (id, binascii.hexlify(value).decode()))
         key(cmd, 'sign', hmac_sign)
         default += ' key sign'
         if hmac_accept is not None:
@@ -132,7 +133,7 @@ def router(ip, ip4, rt6, hello_interval, log_path, state_path, pidfile,
     # WKRD: babeld fails to start if pidfile already exists
     try:
         os.remove(pidfile)
-    except OSError, e:
+    except OSError as e:
         if e.errno != errno.ENOENT:
             raise
     logging.info('%r', cmd)
