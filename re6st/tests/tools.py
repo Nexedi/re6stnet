@@ -92,14 +92,14 @@ def create_ca_file(pkey_file, cert_file, serial=0x120010db80042):
     return key, cert
 
 
-def prefix2cn(prefix):
+def prefix2cn(prefix: str) -> str:
     return "%u/%u" % (int(prefix, 2), len(prefix))
 
-def serial2prefix(serial):
+def serial2prefix(serial: int) -> str:
     return bin(serial)[2:].rjust(16, '0')
 
 # pkey: private key
-def decrypt(pkey, incontent):
+def decrypt(pkey: bytes, incontent: bytes) -> bytes:
     with open("node.key", 'wb') as f:
         f.write(pkey)
     args = "openssl rsautl -decrypt -inkey node.key".split()

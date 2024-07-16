@@ -11,11 +11,13 @@ import hashlib
 import time
 import tempfile
 from argparse import Namespace
+from sqlite3 import Cursor
+
 from OpenSSL import crypto
 from mock import Mock, patch
 from pathlib import Path
 
-from re6st import registry
+from re6st import registry, x509
 from re6st.tests.tools import *
 from re6st.tests import DEMO_PATH
 
@@ -23,7 +25,7 @@ from re6st.tests import DEMO_PATH
 # TODO test for request_dump, requestToken, getNetworkConfig, getBoostrapPeer
 # getIPV4Information, versions
 
-def load_config(filename="registry.json"):
+def load_config(filename: str="registry.json") -> Namespace:
     with open(filename) as f:
         config = json.load(f)
     config["dh"] = DEMO_PATH / "dh2048.pem"
@@ -37,13 +39,14 @@ def load_config(filename="registry.json"):
     return Namespace(**config)
 
 
-def get_cert(cur, prefix):
+def get_cert(cur: Cursor, prefix: str):
     res = cur.execute(
         "SELECT cert FROM cert WHERE prefix=?", (prefix,)).fetchone()
     return res[0]
 
 
-def insert_cert(cur, ca, prefix, not_after=None, email=None):
+def insert_cert(cur: Cursor, ca: x509.Cert, prefix: str,
+                not_after=None, email=None):
     key, csr = generate_csr()
     cert = generate_cert(ca.ca, ca.key, csr, prefix, insert_cert.serial, not_after)
     cur.execute("INSERT INTO cert VALUES (?,?,?)", (prefix, email, cert))
@@ -54,7 +57,7 @@ def insert_cert(cur, ca, prefix, not_after=None, email=None):
 insert_cert.serial = 0
 
 
-def delete_cert(cur, prefix):
+def delete_cert(cur: Cursor, prefix: str):
     cur.execute("DELETE FROM cert WHERE prefix = ?", (prefix,))
 
 

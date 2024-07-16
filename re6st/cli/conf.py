@@ -13,7 +13,7 @@ def create(path, text=None, mode=0o666):
     finally:
         os.close(fd)
 
-def loadCert(pem):
+def loadCert(pem: bytes):
     return crypto.load_certificate(crypto.FILETYPE_PEM, pem)
 
 def main():
