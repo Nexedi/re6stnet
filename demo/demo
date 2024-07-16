@@ -4,6 +4,7 @@ import socket, sqlite3, subprocess, sys, time, weakref
 from collections import defaultdict
 from contextlib import contextmanager
 from threading import Thread
+from typing import Optional
 
 IPTABLES = 'iptables'
 SCREEN = 'screen'
@@ -242,7 +243,7 @@ gateway1.screen(['miniupnpd', '-d', '-f', 'miniupnpd.conf', '-P',
                  'miniupnpd.pid', '-a', g1_if_1.name, '-i', g1_if_0_name])
 
 @contextmanager
-def new_network(registry, reg_addr, serial, ca):
+def new_network(registry: Re6stNode, reg_addr: str, serial: str, ca: str):
     from OpenSSL import crypto
     import hashlib, sqlite3
     os.path.exists(ca) or subprocess.check_call(
@@ -272,7 +273,9 @@ def new_network(registry, reg_addr, serial, ca):
                 time.sleep(.1)
         """)).wait()
     db = sqlite3.connect(db_path, isolation_level=None)
-    def new_node(node, folder, args='', prefix_len=None, registry=registry_url):
+
+    def new_node(node: Re6stNode, folder: str, args: list[str]=[],
+                 prefix_len: Optional[int] = None, registry=registry_url):
         nodes.append(node)
         if not os.path.exists(folder + '/cert.crt'):
             dh_path = folder + '/dh2048.pem'
@@ -378,8 +381,9 @@ if args.hmac:
     t.start()
     del t
 
-_ll = {}
-def node_by_ll(addr):
+_ll: dict[str, tuple[Re6stNode, bool]] = {}
+
+def node_by_ll(addr: str) -> tuple[Re6stNode, bool]:
     try:
         return _ll[addr]
     except KeyError:
@@ -410,7 +414,7 @@ def node_by_ll(addr):
 
 
 def route_svg(ipv4, z=4):
-    graph = {}
+    graph: dict[Re6stNode, dict[tuple[Re6stNode, bool], list[Re6stNode]]] = {}
     for n in nodes:
         g = graph[n] = defaultdict(list)
         for r in n.get_routes():
