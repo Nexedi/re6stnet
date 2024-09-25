@@ -6,8 +6,6 @@ import weakref
 from subprocess import DEVNULL, PIPE
 from pathlib import Path
 
-from re6st.tests import DEMO_PATH
-
 IPTABLES = 'iptables-nft'
 
 class ConnectableError(Exception):

@@ -280,9 +280,12 @@ def new_network(registry: Re6stNode, reg_addr: str, serial: str, ca: str):
             if not os.path.exists(dh_path):
                 os.symlink('../dh2048.pem', dh_path)
             email = node.name + '@example.com'
-            p = node.Popen((sys.executable, '../py', 're6st-conf', '--registry', registry,
-                            '--email', email, '--fingerprint', fingerprint),
-                           stdin=subprocess.PIPE, cwd=folder)
+            p = node.Popen((
+                sys.executable, '../py', 're6st-conf',
+                '--registry', registry,
+                '--email', email,
+                '--fingerprint', fingerprint,
+            ), stdin=subprocess.PIPE, cwd=folder)
             token = None
             while not token:
                 time.sleep(.1)
@@ -301,7 +304,8 @@ def new_network(registry: Re6stNode, reg_addr: str, serial: str, ca: str):
         ]
         node.screen(node.re6st_cmdline)
 
-    new_node(registry, registry.name, ['--ip', reg_addr], registry='http://localhost/')
+    new_node(registry, registry.name, ['--ip', reg_addr],
+             registry='http://localhost/')
     yield new_node
     db.close()
 
@@ -471,7 +475,7 @@ if args.port:
             try:
                 name, ext = self._path_match(self.path).groups()
                 page = self.pages.index(name)
-            except AttributeError as ValueError:
+            except (AttributeError, ValueError):
                 if self.path == '/':
                     self.send_response(302)
                     self.send_header('Location', self.pages[0] + '.html')
@@ -521,8 +525,7 @@ if args.port:
                         capture_output=True,
                         input=graph_body).stdout
                 except subprocess.CalledProcessError as e:
-                    self.send_error(500, explain='neato failed: '
-                                                 + e.stderr)
+                    self.send_error(500, explain='neato failed: ' + e.stderr)
                     return
             if ext == 'svg':
                 mt = 'image/svg+xml'

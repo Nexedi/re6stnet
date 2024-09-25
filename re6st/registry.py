@@ -220,9 +220,7 @@ class RegistryServer:
         else:
             if len(msg) >= 1 and msg[0] == code:
                 return prefix.decode(), msg[1:].decode()
-
             logging.error("Invalid message or unexpected code: %r", msg)
-
         return None, None
 
     def select(self, r, w, t):
@@ -305,7 +303,7 @@ class RegistryServer:
         key = m.getcallargs(**kw).get('cn')
         if key:
             h = base64.b64decode(request.headers[HMAC_HEADER])
-            with (self.lock):
+            with self.lock:
                 session = self.sessions[key]
                 for key, protocol in session:
                     if h == hmac.HMAC(key, request.path.encode(), hashlib.sha1
@@ -366,7 +364,7 @@ class RegistryServer:
     def getCert(self, client_prefix: str) -> bytes:
         assert self.lock.locked()
         cert = self.db.execute("SELECT cert FROM cert"
-                                   " WHERE prefix=? AND cert IS NOT NULL",
+                               " WHERE prefix=? AND cert IS NOT NULL",
                                (client_prefix,)).fetchone()
         assert cert, (f"No cert result for prefix '{client_prefix}';"
                       f" this should not happen, DB is inconsistent")
@@ -838,8 +836,8 @@ class RegistryClient:
     """
     Client for the re6st registry.
 
-    Method calls are forwarded to the registry server. String results are always
-    returned as bytes.
+    Method calls are forwarded to the registry server.
+    String results are always returned as bytes.
     """
 
     _hmac = None

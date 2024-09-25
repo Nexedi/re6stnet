@@ -197,7 +197,7 @@ class TestRegistryServer(unittest.TestCase):
         func.return_value = None
         request_good = Mock()
         request_good.client_address = self.config.authorized_origin
-        request_good.headers = {'X-Forwarded-For': self.config.authorized_origin[0]}
+        request_good.headers = {'X-Forwarded-For':self.config.authorized_origin[0]}
         request_bad = Mock()
         request_bad.client_address = ["wrong_address"]
 
@@ -454,12 +454,12 @@ class TestRegistryServer(unittest.TestCase):
 
         class CustomDecoder(json.JSONDecoder):
             def __init__(self, **kwargs):
-                json.JSONDecoder.__init__(self, **kwargs)
+                super().__init__(**kwargs)
                 self.parse_array = self.JSONArray
                 self.scan_once = json.scanner.py_make_scanner(self)
 
-            def JSONArray(self, s_and_end, scan_once, **kwargs):
-                values, end = json.decoder.JSONArray(s_and_end, scan_once, **kwargs)
+            def JSONArray(self, *args, **kw):
+                values, end = json.decoder.JSONArray(*args, **kw)
                 return set(values), end
 
         res = json.loads(res, cls=CustomDecoder)

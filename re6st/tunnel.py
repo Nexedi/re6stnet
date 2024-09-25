@@ -71,7 +71,8 @@ class Connection:
     serial = None
     time = float('inf')
 
-    def __init__(self, tunnel_manager: "TunnelManager", address_list, iface, prefix):
+    def __init__(self, tunnel_manager: "TunnelManager",
+                 address_list, iface, prefix):
         self.tunnel_manager = tunnel_manager
         self.address_list = address_list
         self.iface = iface

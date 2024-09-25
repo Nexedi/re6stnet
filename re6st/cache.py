@@ -64,9 +64,8 @@ class Cache:
         return db
 
     @staticmethod
-    def _selectConfig(execute): # BBB: blob
-        return ((k, str(v) if type(v) is memoryview else v)
-            for k, v in execute("SELECT * FROM config"))
+    def _selectConfig(execute):
+        return execute("SELECT * FROM config")
 
     def _loadConfig(self, config):
         cls = self.__class__
@@ -129,12 +128,8 @@ class Cache:
                 remove.append(k)
             db.execute("DELETE FROM config WHERE name in ('%s')"
                        % "','".join(remove))
-            # BBB: Use buffer because of http://bugs.python.org/issue13676
-            #      on Python 2.6
             db.executemany("INSERT OR REPLACE INTO config VALUES(?,?)",
-                           ((k, memoryview(v) if k in base64_list or
-                             k.startswith('babel_hmac') else v)
-                            for k, v in config.items()))
+                           config.items())
         self._loadConfig(config.items())
         return [k[:-5] if k.endswith(':json') else k
                 for k in chain(remove, (k
