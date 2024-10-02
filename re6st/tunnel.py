@@ -2,8 +2,13 @@ import errno, json, logging, os, platform, random, socket
 import subprocess, struct, sys, time, weakref
 from collections import defaultdict, deque
 from bisect import bisect, insort
+from collections.abc import Iterator, Sequence
+from typing import Callable, TYPE_CHECKING
+
 from OpenSSL import crypto
 from . import ctl, plib, utils, version, x509
+if TYPE_CHECKING:
+    from . import cache
 
 PORT = 326
 
@@ -21,7 +26,8 @@ proto_dict = {
 proto_dict['tcp'] = proto_dict['tcp4']
 proto_dict['udp'] = proto_dict['udp4']
 
-def resolve(ip, port, proto):
+def resolve(ip, port, proto: str) \
+        -> tuple[socket.AddressFamily | None, Iterator[str]]:
     try:
         family, proto = proto_dict[proto]
     except KeyError:
@@ -31,16 +37,16 @@ def resolve(ip, port, proto):
 
 class MultiGatewayManager(dict):
 
-    def __init__(self, gateway):
+    def __init__(self, gateway: Callable[[str], str]):
         self._gw = gateway
 
-    def _route(self, cmd, dest, gw):
+    def _route(self, cmd: str, dest: str, gw: str):
         if gw:
             cmd = 'ip', '-4', 'route', cmd, '%s/32' % dest, 'via', gw
             logging.trace('%r', cmd)
             subprocess.check_call(cmd)
 
-    def add(self, dest, route):
+    def add(self, dest: str, route: bool):
         try:
             self[dest][1] += 1
         except KeyError:
@@ -48,7 +54,7 @@ class MultiGatewayManager(dict):
             self[dest] = [gw, 0]
             self._route('add', dest, gw)
 
-    def remove(self, dest):
+    def remove(self, dest: str):
         gw, count = self[dest]
         if count:
             self[dest][1] = count - 1
@@ -59,13 +65,14 @@ class MultiGatewayManager(dict):
             except:
                 pass
 
-class Connection(object):
+class Connection:
 
     _retry = 0
     serial = None
     time = float('inf')
 
-    def __init__(self, tunnel_manager, address_list, iface, prefix):
+    def __init__(self, tunnel_manager: "TunnelManager",
+                 address_list, iface, prefix):
         self.tunnel_manager = tunnel_manager
         self.address_list = address_list
         self.iface = iface
@@ -94,7 +101,7 @@ class Connection(object):
             '--remap-usr1', 'SIGTERM',
             '--ping-exit', str(tm.timeout),
             '--route-up', '%s %u' % (plib.ovpn_client, tm.write_sock.fileno()),
-            *tm.ovpn_args)
+            *tm.ovpn_args, pass_fds=[tm.write_sock.fileno()])
         tm.resetTunnelRefresh()
         self._retry += 1
 
@@ -109,7 +116,7 @@ class Connection(object):
         if i:
             cache.addPeer(self._prefix, ','.join(self.address_list[i]), True)
         else:
-            cache.connecting(self._prefix, 0)
+            cache.connecting(self._prefix, False)
 
     def close(self):
         try:
@@ -132,7 +139,7 @@ class Connection(object):
             self.open()
         return 0
 
-class TunnelKiller(object):
+class TunnelKiller:
 
     state = None
 
@@ -169,7 +176,7 @@ class TunnelKiller(object):
         if (self.address, self.ifindex) in tm.ctl.locked:
             self.state = 'locked'
             self.timeout = time.time() + 2 * tm.timeout
-            tm.sendto(self.peer, '\2' if self.client else '\3')
+            tm.sendto(self.peer, b'\2' if self.client else b'\3')
         else:
             self.timeout = 0
 
@@ -186,7 +193,7 @@ class TunnelKiller(object):
     locked = unlocking = lambda _: None
 
 
-class BaseTunnelManager(object):
+class BaseTunnelManager:
 
     # TODO: To minimize downtime when network parameters change, we should do
     #       our best to not restart any process. Ideally, this list should be
@@ -198,7 +205,8 @@ class BaseTunnelManager(object):
     _geoiplookup = None
     _forward = None
 
-    def __init__(self, control_socket, cache, cert, conf_country, address=()):
+    def __init__(self, control_socket, cache: "cache.Cache", cert: x509.Cert,
+                 conf_country, address=()):
         self.cert = cert
         self._network = cert.network
         self._prefix = cert.prefix
@@ -242,14 +250,14 @@ class BaseTunnelManager(object):
             self._country = {}
 
             address_dict = {family: self._updateCountry(address)
-                            for family, address in address_dict.iteritems()}
+                            for family, address in address_dict.items()}
         elif cache.same_country:
             sys.exit("Can not respect 'same_country' network configuration"
                      " (GEOIP2_MMDB not set)")
         self._address = {family: utils.dump_address(address)
-                         for family, address in address_dict.iteritems()
+                         for family, address in address_dict.items()
                          if address}
-        cache.my_address = ';'.join(self._address.itervalues())
+        cache.my_address = ';'.join(self._address.values())
 
         self.sock = socket.socket(socket.AF_INET6,
             socket.SOCK_DGRAM | socket.SOCK_CLOEXEC)
@@ -329,7 +337,7 @@ class BaseTunnelManager(object):
     def _getPeer(self, prefix):
         return self._peers[bisect(self._peers, prefix) - 1]
 
-    def sendto(self, prefix, msg):
+    def sendto(self, prefix: str, msg):
         to = utils.ipFromBin(self._network + prefix), PORT
         peer = self._getPeer(prefix)
         if peer.prefix != prefix:
@@ -344,9 +352,11 @@ class BaseTunnelManager(object):
             peer.hello0Sent()
 
     def _sendto(self, to, msg, peer=None):
+        if type(msg) is str:
+            msg = msg.encode()
         try:
             r = self.sock.sendto(peer.encode(msg) if peer else msg, to)
-        except socket.error, e:
+        except socket.error as e:
             (logging.info if e.errno == errno.ENETUNREACH else logging.error)(
                 'Failed to send message to %s (%s)', to, e)
             return
@@ -359,19 +369,20 @@ class BaseTunnelManager(object):
         to = address[:2]
         if address[0] == '::1':
             try:
-                prefix, msg = msg.split('\0', 1)
+                prefix, msg = msg.split(b'\0', 1)
+                prefix = prefix.decode()
                 int(prefix, 2)
             except ValueError:
                 return
             if msg:
                 self._forward = to
-                code = ord(msg[0])
+                code = msg[0]
                 if prefix == self._prefix:
                     msg = self._processPacket(msg)
                     if msg:
                         self._sendto(to, '%s\0%c%s' % (prefix, code, msg))
                 else:
-                    self.sendto(prefix, chr(code | 0x80) + msg[1:])
+                    self.sendto(prefix, bytes([code | 0x80]) + msg[1:])
             return
         try:
             sender = utils.binFromIp(address[0])
@@ -384,7 +395,7 @@ class BaseTunnelManager(object):
         msg = peer.decode(msg)
         if type(msg) is tuple:
           seqno, msg, protocol = msg
-          def handleHello(peer, seqno, msg, retry):
+          def handleHello(peer, seqno, msg: bytes, retry):
             if seqno == 2:
                 i = len(msg) // 2
                 h = msg[:i]
@@ -394,10 +405,10 @@ class BaseTunnelManager(object):
                 except (AttributeError, crypto.Error, x509.NewSessionError,
                         subprocess.CalledProcessError):
                     logging.debug('ignored new session key from %r',
-                                  address, exc_info=1)
+                                  address, exc_info=True)
                     return
                 peer.version = self._version \
-                    if self._sendto(to, '\0' + self._version, peer) else ''
+                    if self._sendto(to, b'\0' + self._version, peer) else b''
                 return
             if seqno:
                 h = x509.fingerprint(self.cert.cert).digest()
@@ -410,7 +421,7 @@ class BaseTunnelManager(object):
                 serial = cert.get_serial_number()
                 if serial in self.cache.crl:
                     raise ValueError("revoked")
-            except (x509.VerifyError, ValueError), e:
+            except (x509.VerifyError, ValueError) as e:
                 if retry:
                     return True
                 logging.debug('ignored invalid certificate from %r (%s)',
@@ -444,10 +455,12 @@ class BaseTunnelManager(object):
             # We got a valid and non-empty message. Always reply
             # something so that the sender knows we're still connected.
             answer = self._processPacket(msg, peer.prefix)
-            self._sendto(to, msg[0] + answer if answer else "", peer)
+            self._sendto(to, msg[0:1] + answer.encode() if answer else b'',
+                         peer)
 
-    def _processPacket(self, msg, peer=None):
-        c = ord(msg[0])
+
+    def _processPacket(self, msg: bytes, peer: x509.Peer|str=None):
+        c = msg[0]
         msg = msg[1:]
         code = c & 0x7f
         if c > 0x7f and msg:
@@ -456,6 +469,7 @@ class BaseTunnelManager(object):
         elif code == 1: # address
             if msg:
                 if peer:
+                    msg = msg.decode()
                     self.cache.addPeer(peer, msg)
                     try:
                         self._connecting.remove(peer)
@@ -467,8 +481,8 @@ class BaseTunnelManager(object):
                     # Don't send country to old nodes
                     if self._getPeer(peer).protocol < 7:
                         return ';'.join(','.join(a.split(',')[:3]) for a in
-                            ';'.join(self._address.itervalues()).split(';'))
-                return ';'.join(self._address.itervalues())
+                            ';'.join(self._address.values()).split(';'))
+                return ';'.join(self._address.values())
         elif not code: # network version
             if peer:
                 try:
@@ -526,7 +540,7 @@ class BaseTunnelManager(object):
                 if peer.prefix != prefix:
                     self.sendto(prefix, None)
                 elif (peer.version < self._version and
-                      self.sendto(prefix, '\0' + self._version)):
+                      self.sendto(prefix, b'\0' + self._version)):
                     peer.version = self._version
 
     def broadcastNewVersion(self):
@@ -553,18 +567,18 @@ class BaseTunnelManager(object):
         if (not self.NEED_RESTART.isdisjoint(changed)
             or version.protocol < self.cache.min_protocol
             # TODO: With --management, we could kill clients without restarting.
-            or not all(crl.isdisjoint(serials.itervalues())
-                       for serials in self._served.itervalues())):
+            or not all(crl.isdisjoint(serials.values())
+                       for serials in self._served.values())):
             # Wait at least 1 second to broadcast new version to neighbours.
             self.selectTimeout(time.time() + 1 + self.cache.delay_restart,
                                self._restart)
 
-    def handleServerEvent(self, sock):
+    def handleServerEvent(self, sock: socket.socket):
         event, args = eval(sock.recv(65536))
         logging.debug("%s%r", event, args)
         r = getattr(self, '_ovpn_' + event.replace('-', '_'))(*args)
         if r is not None:
-            sock.send(chr(r))
+            sock.send(bytes([r]))
 
     def _ovpn_client_connect(self, common_name, iface, serial, trusted_ip):
         if serial in self.cache.crl:
@@ -576,7 +590,7 @@ class BaseTunnelManager(object):
                 self._gateway_manager.add(trusted_ip, False)
             if prefix in self._connection_dict and self._prefix < prefix:
                 self._kill(prefix)
-                self.cache.connecting(prefix, 0)
+                self.cache.connecting(prefix, False)
         return True
 
     def _ovpn_client_disconnect(self, common_name, iface, serial, trusted_ip):
@@ -606,7 +620,7 @@ class BaseTunnelManager(object):
         with open('/proc/net/ipv6_route', "r", 4096) as f:
             try:
                 routing_table = f.read()
-            except IOError, e:
+            except IOError as e:
                 # ???: If someone can explain why the kernel sometimes fails
                 #      even when there's a lot of free memory.
                 if e.errno != errno.ENOMEM:
@@ -635,7 +649,7 @@ class BaseTunnelManager(object):
                 logging.error("%s. Flushing...", msg)
                 subprocess.call(("ip", "-6", "route", "flush", "cached"))
                 self.sendto(self.cache.registry_prefix,
-                    '\7%s (%s)' % (msg, os.uname()[2]))
+                    b'\7%s (%s)' % (msg, os.uname()[2]))
                 break
 
     def _updateCountry(self, address):
@@ -660,7 +674,8 @@ class TunnelManager(BaseTunnelManager):
 
     def __init__(self, control_socket, cache, cert, openvpn_args,
                  timeout, client_count, iface_list, conf_country, address,
-                 ip_changed, remote_gateway, disable_proto, neighbour_list=()):
+                 ip_changed, remote_gateway: Callable[[str], str],
+                 disable_proto: Sequence[str], neighbour_list=()):
         super(TunnelManager, self).__init__(control_socket,
                                             cache, cert, conf_country, address)
         self.ovpn_args = openvpn_args
@@ -683,7 +698,7 @@ class TunnelManager(BaseTunnelManager):
 
         self._client_count = client_count
         self.new_iface_list = deque('re6stnet' + str(i)
-            for i in xrange(1, self._client_count + 1))
+            for i in range(1, self._client_count + 1))
         self._free_iface_list = []
 
     def close(self):
@@ -752,7 +767,7 @@ class TunnelManager(BaseTunnelManager):
     def babel_dump(self):
         t = time.time()
         if self._killing:
-            for prefix, tunnel_killer in self._killing.items():
+            for prefix, tunnel_killer in list(self._killing.items()):
                 if tunnel_killer.timeout < t:
                     if tunnel_killer.state != 'unlocking':
                         logging.info(
@@ -780,7 +795,7 @@ class TunnelManager(BaseTunnelManager):
 
     def _cleanDeads(self):
         disconnected = False
-        for prefix in self._connection_dict.keys():
+        for prefix in list(self._connection_dict):
             status = self._connection_dict[prefix].refresh()
             if status:
                 disconnected |= status > 0
@@ -872,7 +887,7 @@ class TunnelManager(BaseTunnelManager):
                             address_list.append((ip, x[1], x[2]))
                     continue
             address_list.append(x[:3])
-        self.cache.connecting(prefix, 1)
+        self.cache.connecting(prefix, True)
         if not address_list:
             return False
         logging.info('Establishing a connection with %u/%u',
@@ -902,7 +917,7 @@ class TunnelManager(BaseTunnelManager):
             neighbours = self.ctl.neighbours
             # Collect all nodes known by Babel
             peers = {prefix
-                for neigh_routes in neighbours.itervalues()
+                for neigh_routes in neighbours.values()
                 for prefix in neigh_routes[1]
                 if prefix}
             # Keep only distant peers.
@@ -957,7 +972,7 @@ class TunnelManager(BaseTunnelManager):
                 address = self.cache.getAddress(peer)
                 if address:
                     count -= self._makeTunnel(peer, address)
-                elif self.sendto(peer, '\1'):
+                elif self.sendto(peer, b'\1'):
                     self._connecting.add(peer)
                     count -= 1
         elif distant_peers is None:
@@ -987,7 +1002,7 @@ class TunnelManager(BaseTunnelManager):
                         break
 
     def killAll(self):
-        for prefix in self._connection_dict.keys():
+        for prefix in list(self._connection_dict):
             self._kill(prefix)
 
     def handleClientEvent(self):
@@ -999,7 +1014,7 @@ class TunnelManager(BaseTunnelManager):
         if c and c.time < float(time):
             try:
                 c.connected(serial)
-            except (KeyError, TypeError), e:
+            except (KeyError, TypeError) as e:
                 logging.error("%s (route_up %s)", e, common_name)
         else:
             logging.info("ignore route_up notification for %s %r",
@@ -1010,10 +1025,10 @@ class TunnelManager(BaseTunnelManager):
                 if self.cache.same_country:
                     address = self._updateCountry(address)
                 self._address[family] = utils.dump_address(address)
-                self.cache.my_address = ';'.join(self._address.itervalues())
+                self.cache.my_address = ';'.join(self._address.values())
 
     def broadcastNewVersion(self):
         self._babel_dump_new_version()
-        for prefix, c in self._connection_dict.items():
+        for prefix, c in list(self._connection_dict.items()):
             if c.serial in self.cache.crl:
                 self._kill(prefix)

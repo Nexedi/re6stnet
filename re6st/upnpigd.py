@@ -7,7 +7,7 @@ class UPnPException(Exception):
     pass
 
 
-class Forwarder(object):
+class Forwarder:
     """
     External port is chosen randomly between 32768 & 49151 included.
     """
@@ -17,7 +17,7 @@ class Forwarder(object):
     _lcg_n = 0
 
     @classmethod
-    def _getExternalPort(cls):
+    def _getExternalPort(cls) -> int:
         # Since _refresh() does not test all ports in a row, we prefer to
         # return random ports to maximize the chance to find a free port.
         # A linear congruential generator should be random enough, without
@@ -35,12 +35,12 @@ class Forwarder(object):
         self._u.discoverdelay = 200
         self._rules = []
 
-    def __getattr__(self, name):
+    def __getattr__(self, name: str):
         wrapped = getattr(self._u, name)
         def wrapper(*args, **kw):
             try:
                 return wrapped(*args, **kw)
-            except Exception, e:
+            except Exception as e:
                 raise UPnPException(str(e))
         return wraps(wrapped)(wrapper)
 
@@ -68,14 +68,14 @@ class Forwarder(object):
         else:
             try:
                 return self._refresh()
-            except UPnPException, e:
-                logging.debug("UPnP failure", exc_info=1)
+            except UPnPException as e:
+                logging.debug("UPnP failure", exc_info=True)
                 self.clear()
         try:
             self.discover()
             self.selectigd()
             return self._refresh()
-        except UPnPException, e:
+        except UPnPException as e:
             self.next_refresh = self._next_retry = time.time() + 60
             logging.info(str(e))
             self.clear()
@@ -109,7 +109,7 @@ class Forwarder(object):
                 try:
                     self.addportmapping(port, *args)
                     break
-                except UPnPException, e:
+                except UPnPException as e:
                     if str(e) != 'ConflictInMappingEntry':
                         raise
                     port = None
