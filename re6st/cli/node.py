@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/env python3
 import atexit, errno, logging, os, shutil, signal
 import socket, struct, subprocess, sys
 from collections import deque
@@ -246,7 +246,7 @@ def main():
             try:
                 from re6st.upnpigd import Forwarder
                 forwarder = Forwarder('re6stnet openvpn server')
-            except Exception, e:
+            except Exception as e:
                 if ipv4:
                     raise
                 logging.info("%s: assume we are not NATed", e)
@@ -266,19 +266,13 @@ def main():
 
     def call(cmd):
         logging.debug('%r', cmd)
-        p = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                                  stderr=subprocess.PIPE)
-        stdout, stderr = p.communicate()
-        if p.returncode:
-            raise EnvironmentError("%r failed with error %u\n%s"
-                                   % (' '.join(cmd), p.returncode, stderr))
-        return stdout
-    def ip4(object, *args):
+        return subprocess.run(cmd, capture_output=True, check=True).stdout
+    def ip4(object: str, *args):
         args = ['ip', '-4', object, 'add'] + list(args)
         call(args)
         args[3] = 'del'
         cleanup.append(lambda: subprocess.call(args))
-    def ip(object, *args):
+    def ip(object: str, *args):
         args = ['ip', '-6', object, 'add'] + list(args)
         call(args)
         args[3] = 'del'
@@ -299,7 +293,7 @@ def main():
         timeout = 4 * cache.hello
         cleanup = [lambda: cache.cacheMinimize(config.client_count),
                    lambda: shutil.rmtree(config.run, True)]
-        utils.makedirs(config.run, 0700)
+        utils.makedirs(config.run, 0o700)
         control_socket = os.path.join(config.run, 'babeld.sock')
         if config.client_count and not config.client:
             tunnel_manager = tunnel.TunnelManager(control_socket,
@@ -362,7 +356,7 @@ def main():
                 if not dh:
                     dh = os.path.join(config.state, "dh.pem")
                     cache.getDh(dh)
-                for iface, (port, proto) in server_tunnels.iteritems():
+                for iface, (port, proto) in server_tunnels.items():
                     r, x = socket.socketpair(socket.AF_UNIX, socket.SOCK_DGRAM)
                     utils.setCloexec(r)
                     cleanup.append(plib.server(iface, config.max_clients,
@@ -442,7 +436,7 @@ def main():
                 except:
                     pass
             exit.release()
-    except ReexecException, e:
+    except ReexecException as e:
         logging.info(e)
     except Exception:
         utils.log_exception()
@@ -455,7 +449,7 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except SystemExit, e:
+    except SystemExit as e:
         if type(e.code) is str:
             if hasattr(logging, 'trace'): # utils.setupLog called
                 logging.critical(e.code)

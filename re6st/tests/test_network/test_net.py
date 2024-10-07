@@ -1,35 +1,16 @@
 """contain ping-test for re6set net"""
 import os
+import sys
 import unittest
 import time
 import psutil
 import logging
 import random
-from pathlib2 import Path
+from pathlib import Path
 
-import network_build
-import re6st_wrap
+from . import network_build, re6st_wrap
 
 PING_PATH = str(Path(__file__).parent.resolve() / "ping.py")
-
-def deploy_re6st(nm, recreate=False):
-    net = nm.registries
-    nodes = []
-    registries = []
-    re6st_wrap.Re6stRegistry.registry_seq = 0
-    re6st_wrap.Re6stNode.node_seq = 0
-    for registry in net:
-        reg = re6st_wrap.Re6stRegistry(registry, "2001:db8:42::", len(net[registry]),
-                                       recreate=recreate)
-        reg_node = re6st_wrap.Re6stNode(registry, reg, name=reg.name)
-        registries.append(reg)
-        reg_node.run("--gateway", "--disable-proto", "none", "--ip", registry.ip)
-        nodes.append(reg_node)
-        for m in net[registry]:
-            node = re6st_wrap.Re6stNode(m, reg)
-            node.run("-i" + m.iface.name)
-            nodes.append(node)
-    return nodes, registries
 
 def wait_stable(nodes, timeout=240):
     """try use ping6 from each node to the other until ping success to all the
@@ -47,12 +28,13 @@ def wait_stable(nodes, timeout=240):
     for node in nodes:
         sub_ips = set(ips) - {node.ip6}
         node.ping_proc = node.node.Popen(
-            ["python", PING_PATH, '--retry', '-a'] + list(sub_ips))
+            [sys.executable, PING_PATH, '--retry', '-a'] + list(sub_ips),
+            env=os.environ)
 
     # check all the node network can ping each other, in order reverse
     unfinished = list(nodes)
     while unfinished:
-        for i in xrange(len(unfinished)-1, -1, -1):
+        for i in range(len(unfinished)-1, -1, -1):
             node = unfinished[i]
             if node.ping_proc.poll() is not None:
                 logging.debug("%s 's network is stable", node.name)
@@ -75,7 +57,41 @@ class TestNet(unittest.TestCase):
     def setUpClass(cls):
         """create work dir"""
         logging.basicConfig(level=logging.INFO)
+
+    def setUp(self):
         re6st_wrap.initial()
+
+    def deploy_re6st(self, nm, recreate=False):
+        net = nm.registries
+        nodes = []
+        registries = []
+        re6st_wrap.Re6stRegistry.registry_seq = 0
+        re6st_wrap.Re6stNode.node_seq = 0
+        for registry in net:
+            reg = re6st_wrap.Re6stRegistry(registry, "2001:db8:42::",
+                                           len(net[registry]),
+                                           recreate=recreate)
+            reg_node = re6st_wrap.Re6stNode(registry, reg, name=reg.name)
+            registries.append(reg)
+            reg_node.run("--gateway", "--disable-proto", "none",
+                         "--ip", registry.ip)
+            nodes.append(reg_node)
+            for m in net[registry]:
+                node = re6st_wrap.Re6stNode(m, reg)
+                node.run("-i" + m.iface.name)
+                nodes.append(node)
+
+        def clean_re6st():
+            for node in nodes:
+                node.node.destroy()
+                node.stop()
+
+            for reg in registries:
+                reg.terminate()
+
+        self.addCleanup(clean_re6st)
+
+        return nodes, registries
 
     @classmethod
     def tearDownClass(cls):
@@ -94,7 +110,7 @@ class TestNet(unittest.TestCase):
         """create a network in a net segment, test the connectivity by ping
         """
         nm = network_build.net_route()
-        nodes, _ = deploy_re6st(nm)
+        nodes, _ = self.deploy_re6st(nm)
 
         wait_stable(nodes, 40)
         time.sleep(10)
@@ -107,7 +123,7 @@ class TestNet(unittest.TestCase):
         then test if network recover, this test seems always failed
         """
         nm = network_build.net_demo()
-        nodes, _ = deploy_re6st(nm)
+        nodes, _ = self.deploy_re6st(nm)
 
         wait_stable(nodes, 100)
 
@@ -126,7 +142,7 @@ class TestNet(unittest.TestCase):
         then test if network recover,
         """
         nm = network_build.net_route()
-        nodes, _ = deploy_re6st(nm)
+        nodes, _ = self.deploy_re6st(nm)
 
         wait_stable(nodes, 40)
 
