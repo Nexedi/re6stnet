@@ -14,10 +14,12 @@ Requires:   iproute
 Requires:   openssl
 Requires:   openvpn >= 2.4
 Requires:   openvpn < 2.5
-Requires:   python >= 2.7
+Requires:   python >= 3.11
 Requires:   pyOpenSSL >= 0.13
 Requires:   python-setuptools
 %if 0%{?fedora}
+BuildRequires: openssl-devel
+BuildRequires: python3
 BuildRequires: python3-devel
 %endif
 Recommends: python-miniupnpc
