@@ -252,7 +252,7 @@ class Babel:
         unidentified = set(n)
         self.neighbours = neighbours = {}
         a = len(self.network)
-        logging.info("Routes: %r", routes)
+        logging.debug("Routes: %r", routes)
         for route in routes:
             assert route.flags & 1, route # installed
             if route.prefix.startswith(b'\0\0\0\0\0\0\0\0\0\0\xff\xff'):
