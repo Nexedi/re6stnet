@@ -6,15 +6,9 @@ def _git_call(*args):
     return _S.call(("git", "-c", "safe.directory=" + _d) + args, cwd=_d)
 
 def _git_output(*args):
-    p = _S.Popen(
+    return _S.check_output(
             ("git", "-c", "safe.directory=" + _d) + args,
-            cwd=_d,
-            stdout=_S.PIPE,
-            stderr=_S.PIPE)
-    out, err = p.communicate()
-    if p.returncode:
-        raise _S.CalledProcessError(p.returncode, "git", err)
-    return out.strip()
+            cwd=_d, text=True).strip()
 
 _git_call("update-index", "-q", "--refresh")
 dirty = _git_call("diff-index", "--quiet", "HEAD", "--")
