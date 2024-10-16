@@ -1,5 +1,5 @@
 %define _builddir %(pwd)
-%define ver %(python2 re6st/version.py)
+%define ver %(python3 re6st/version.py)
 %define units re6stnet.service re6st-registry.service
 
 Summary:    resilient, scalable, IPv6 network application
@@ -14,12 +14,15 @@ Requires:   iproute
 Requires:   openssl
 Requires:   openvpn >= 2.4
 Requires:   openvpn < 2.5
-Requires:   python >= 2.7
+Requires:   python >= 3.11
 Requires:   pyOpenSSL >= 0.13
 Requires:   python-setuptools
-%if 0%{?fedora}
 BuildRequires: python3-devel
-%endif
+# dependencies for compilation of python3
+BuildRequires: libffi-devel
+BuildRequires: (lzma-devel or liblzma-devel or xz-devel)
+BuildRequires: zlib-devel
+BuildRequires: (libbz2-devel or bzip2-devel)
 Recommends: python-miniupnpc
 Conflicts:  re6st-node
 
@@ -29,7 +32,7 @@ Conflicts:  re6st-node
 make
 # Fix shebangs before Fedora's shebang mangling
 %if 0%{?fedora}
-pathfix.py -i %{__python3} -p -n $(grep -l -R -e "#\!.*python$")
+%py3_shebang_fix $(grep -l -R -e "#\!.*python$")
 %endif
 
 %install
@@ -38,6 +41,7 @@ make install PREFIX=%_prefix MANDIR=%_mandir DESTDIR=$1 %{?_unitdir:UNITDIR=%{_u
 # Exclude man pages because they will be compressed.
 find $1 -mindepth 1 -path \*%_mandir -prune -o \
   -name re6st\* -prune -printf /%%P\\n > INSTALLED
+export QA_RPATHS=$(( 0x0001|0x0002|0x0020 ))
 
 %clean
 rm -rf "$RPM_BUILD_ROOT" INSTALLED
