@@ -1,15 +1,1 @@
-*.pyc
-*.pyo
-*.swp
-*~
-/build/
 /dist/
-/re6stnet.egg-info/
-*.log
-*.pid
-*.db
-*.state
-*.crt
-*.pem
-demo/mbox
-*.sock
