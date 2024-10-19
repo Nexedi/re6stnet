@@ -2,15 +2,15 @@ Source: re6stnet
 Maintainer: Julien Muchembled <jm@nexedi.com>
 Section: net
 Priority: optional
-Build-Depends: debhelper (>= 9.20120909), debhelper (>= 10) | dh-systemd, python (>= 2.7), python-setuptools, python-docutils | python3-docutils
-Standards-Version: 3.9.1
-X-Python-Version: >= 2.7
+Build-Depends: debhelper-compat (= 13), pybuild-plugin-pyproject, python3, python3-hatchling, python3-docutils
+Standards-Version: 4.7.0
+X-Python3-Version: >= 3.11
 
 Package: re6stnet
 Architecture: all
-Depends: ${misc:Depends}, ${python:Depends}, python-pkg-resources, python-openssl (>= 0.13), openvpn (>= 2.4), openpvn (<< 2.5~), babeld (= v1.12.1-nxd3), iproute2 | iproute, openssl
-Recommends: ${python:Recommends}, logrotate
-Suggests: ${python:Suggests}, ndisc6
+Depends: ${misc:Depends}, ${python3:Depends}, python3-openssl (>= 0.13), openvpn (>= 2.4), openpvn (<< 2.5~), babeld (= 1.12.1+nxd3), iproute2, openssl
+Recommends: ${python3:Recommends}, logrotate
+Suggests: ${python3:Suggests}, ndisc6
 Conflicts: re6st-node
 Replaces: re6st-node
 Description: resilient, scalable, IPv6 network application

@@ -2,7 +2,7 @@
 # -*- makefile -*-
 #export DH_VERBOSE=1
 
-VERSION = $(shell python re6st/version.py)
+VERSION = $(shell python3 re6st/version.py)
 
 # In order to build DEB snapshot package whose version is derived from current
 # Git revision, the `debian/changelog` file must be generated automatically,
@@ -13,15 +13,18 @@ build-package: debian/changelog
 
 include debian/common.mk
 
-override_dh_python2:
-	sed -i /^miniupnpc$$/d `find $(TMP)/usr -name requires.txt`
-	dh_python2 --recommends=miniupnpc --suggests=geoip2
+override_dh_python3:
+	dh_python3 --no-guessing-deps --recommends=miniupnpc --suggests=geoip2
 
 override_dh_auto_clean:
+	dh_auto_clean
 	make clean
 
-# Do not build twice ('setup.py install' builds automatically)
-override_dh_auto_build:
+override_dh_auto_install:
+	dh_auto_install
+	make DESTDIR=$(TMP) PREFIX=/usr install
+	find $(TMP)/usr -name 'ovpn-*' -print0 | \
+	xargs -0 sed -i "1s,.*,#!/usr/bin/python3 -S,"
 
 %:
-	dh $@ --with python2,systemd --buildsystem=python_distutils
+	dh $@ --with python3 --buildsystem=pybuild

@@ -1,0 +1,9 @@
+dnsmasq.leases
+*.log
+*.pid
+*.db
+*.state
+*.crt
+*.pem
+/mbox
+*.sock
