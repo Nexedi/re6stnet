@@ -1,0 +1,53 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "re6stnet"
+description = "Resilient, Scalable, IPv6 Network"
+authors = [
+  { name = "Nexedi", email = "re6stnet@erp5.org" },
+]
+license = { text = "GPL-2.0-or-later" }
+classifiers = [
+  "Environment :: Console",
+  "Operating System :: POSIX :: Linux",
+  "Topic :: Internet",
+  "Topic :: System :: Networking",
+]
+requires-python = ">= 3.11"
+dependencies = [
+  "pyOpenSSL >= 0.13",
+  "miniupnpc",
+]
+dynamic = ["readme", "version"]
+
+[project.optional-dependencies]
+geoip = ["geoip2"]
+multicast = ["PyYAML"]
+test = ["mock", "nemu3", "unshare", "multiping"]
+
+[project.scripts]
+re6st-conf = "re6st.cli.conf:main"
+re6stnet = "re6st.cli.node:main"
+re6st-registry = "re6st.cli.registry:main"
+
+[project.urls]
+Homepage = "http://re6st.net"
+
+[tool.hatch.metadata.hooks.custom]
+
+[tool.hatch.build.hooks.custom]
+
+[tool.hatch.build]
+include = [
+  "/re6st",
+  "/docs",
+  "/*.rst",
+]
+exclude = [
+  "/re6st/tests",
+]
+
+[tool.hatch.build.targets.wheel]
+only-packages = true
