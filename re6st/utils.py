@@ -8,15 +8,6 @@ HMAC_LEN = len(hashlib.sha1(b'').digest())
 class ReexecException(Exception):
     pass
 
-try:
-    subprocess.CalledProcessError(0, '', '')
-except TypeError: # BBB: Python < 2.7
-    def __init__(self, returncode, cmd, output=None):
-        self.returncode = returncode
-        self.cmd = cmd
-        self.output = output
-    subprocess.CalledProcessError.__init__ = __init__
-
 logging_levels = logging.WARNING, logging.INFO, logging.DEBUG, 5
 
 class FileHandler(logging.FileHandler):
@@ -167,17 +158,19 @@ class Popen(subprocess.Popen):
     def send_signal(self, sig):
         logging.info('Sending signal %s to pid %s %r',
                      sig, self.pid, self._args)
-        super(Popen, self).send_signal(sig)
+        # We don't need the change from https://bugs.python.org/issue38630
+        # and it would complicate stop()
+        assert self.returncode is None
+        os.kill(self.pid, sig)
 
     def stop(self):
         if self.pid and self.returncode is None:
             self.terminate()
             t = threading.Timer(5, self.kill)
             t.start()
-            r = os.waitid(os.P_PID, self.pid, os.WNOWAIT)
+            os.waitid(os.P_PID, self.pid, os.WEXITED | os.WNOWAIT)
             t.cancel()
             self.poll()
-            return r
 
 
 def setCloexec(fd):

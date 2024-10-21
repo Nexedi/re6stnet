@@ -1,8 +1,9 @@
 DESTDIR = /
+# https://github.com/pypa/pip/issues/10978
 PREFIX = /usr/local
 MANDIR = $(PREFIX)/share/man
-UNITDIR = /lib/systemd/system
-PYTHON = $(or $(shell command -v python2),python)
+UNITDIR = $(PREFIX)/lib/systemd/system
+PYTHON3 = $(shell command -v python3)
 
 MANPAGELIST := $(patsubst %,docs/%,re6st-conf.1 re6st-registry.1 re6stnet.8)
 
@@ -18,7 +19,8 @@ install: install-noinit
 
 install-noinit: install-man
 	set -e $(DESTDIR)$(PREFIX) /bin/re6stnet; [ -x $$1$$2 ] || \
-	$(PYTHON) setup.py install --prefix=$(PREFIX) --root=$(DESTDIR); \
+	{ [ "$(PREFIX)" = /usr/local ]; $(PYTHON3) -m pip install --root=$(DESTDIR) .; }; \
+	find $$1 -name 'ovpn-*' -print0 |xargs -0 sed -i "1s,.*,#!$(PYTHON3) -S,"; \
 	install -d $$1/sbin; mv $$1$$2 $$1/sbin
 	install -Dpm 0644 daemon/README.conf $(DESTDIR)/etc/re6stnet/README
 	install -Dpm 0644 daemon/logrotate.conf $(DESTDIR)/etc/logrotate.d/re6stnet
@@ -29,5 +31,4 @@ install-man: $(MANPAGELIST)
 	done
 
 clean:
-	find -name '*.pyc' -delete
-	rm -rf build dist re6stnet.egg-info $(MANPAGELIST)
+	find -name __pycache__ -print0 |xargs -0 rm -rf dist $(MANPAGELIST)
