@@ -25,7 +25,7 @@ dynamic = ["readme", "version"]
 [project.optional-dependencies]
 geoip = ["geoip2"]
 multicast = ["PyYAML"]
-test = ["mock", "nemu3", "unshare", "multiping"]
+test = ["mock", "nemu3", "unshare", "multiping", "psutil"]
 
 [project.scripts]
 re6st-conf = "re6st.cli.conf:main"
