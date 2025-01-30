@@ -269,8 +269,10 @@ class Cache:
                 q("INSERT OR REPLACE INTO peer VALUES (?,?)", (prefix, address))
             q("INSERT OR REPLACE INTO volatile.stat VALUES (?,0)", (prefix,))
 
-    def getCountry(self, ip: str) -> str:
+    def getCountry(self, ip: str) -> str | None:
         try:
-            return self._registry.getCountry(self._prefix, ip).decode()
-        except socket.error as e:
-            logging.warning('Failed to get country (%s)', ip)
+            country = self._registry.getCountry(self._prefix, ip)
+            if country is not None:
+                return country.decode()
+        except (socket.error, UnicodeDecodeError) as e:
+            logging.warning('Failed to get country for %s (%s)', ip, e)
