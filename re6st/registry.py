@@ -366,9 +366,10 @@ class RegistryServer:
         cert = self.db.execute("SELECT cert FROM cert"
                                " WHERE prefix=? AND cert IS NOT NULL",
                                (client_prefix,)).fetchone()
-        assert cert, (f"No cert result for prefix '{client_prefix}';"
-                      f" this should not happen, DB is inconsistent")
-        return cert[0]
+        if cert:
+            return cert[0]
+        logging.info("No certificate found for prefix %s.", client_prefix)
+        raise HTTPError(http.client.NOT_FOUND)
 
     @rpc_private
     def isToken(self, token: str):
