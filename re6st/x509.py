@@ -36,15 +36,17 @@ def openssl(*args: str, fds=[]) -> utils.Popen:
         stderr=subprocess.PIPE, pass_fds=fds)
 
 def encrypt(cert: bytes, data: bytes) -> bytes:
+    def write_cert():
+        os.write(w, cert)
+        os.close(w)
     r, w = os.pipe()
     try:
-        threading.Thread(target=os.write, args=(w, cert)).start()
+        threading.Thread(target=write_cert, daemon=True).start()
         p = openssl('rsautl', '-encrypt', '-certin',
                     '-inkey', '/proc/self/fd/%u' % r, fds=[r])
-        out, err = p.communicate(data)
     finally:
         os.close(r)
-        os.close(w)
+    out, err = p.communicate(data)
     if p.returncode:
         raise subprocess.CalledProcessError(p.returncode, 'openssl', err)
     return out
