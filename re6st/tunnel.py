@@ -465,7 +465,8 @@ class BaseTunnelManager:
         code = c & 0x7f
         if c > 0x7f and msg:
             if peer and self._forward:
-                self._sendto(self._forward, '%s\0%c%s' % (peer, code, msg))
+                self._sendto(self._forward,
+                             b'%s\0%c%s' % (peer.encode(), code, msg))
         elif code == 1: # address
             if msg:
                 if peer:
