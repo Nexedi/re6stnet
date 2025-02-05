@@ -16,11 +16,6 @@ SOL_IPV6 = 41
 
 class RequestHandler(BaseHTTPRequestHandler):
 
-    if __import__("sys").version_info < (2, 7, 4):
-      def address_string(self):
-        # Workaround for http://bugs.python.org/issue6085
-        return self.client_address[0]
-
     def do_GET(self):
         try:
             try:

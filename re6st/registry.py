@@ -729,7 +729,8 @@ class RegistryServer:
                 self.newHMAC(2, b'')
             self.increaseVersion()
             self.setConfig('version', self.version)
-            self.network_config['version']  = base64.b64encode(self.version)
+            self.network_config['version'] = \
+                base64.b64encode(self.version).decode()
         self.sendto(self.prefix, 0)
 
     @rpc_private
