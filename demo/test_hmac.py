@@ -6,7 +6,7 @@ BABEL_HMAC = 'babel_hmac0', 'babel_hmac1', 'babel_hmac2'
 def getConfig(db, name):
     r = db.execute("SELECT value FROM config WHERE name=?", (name,)).fetchone()
     if r:
-        return b2a_hex(*r)
+        return b2a_hex(*r).decode()
 
 def killRe6st(node):
     for p in psutil.Process(node._screen.pid).children():
