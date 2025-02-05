@@ -380,7 +380,8 @@ class BaseTunnelManager:
                 if prefix == self._prefix:
                     msg = self._processPacket(msg)
                     if msg:
-                        self._sendto(to, '%s\0%c%s' % (prefix, code, msg))
+                        self._sendto(to,
+                                     b'%s\0%c%s' % (prefix.encode(), code, msg))
                 else:
                     self.sendto(prefix, bytes([code | 0x80]) + msg[1:])
             return
@@ -455,9 +456,7 @@ class BaseTunnelManager:
             # We got a valid and non-empty message. Always reply
             # something so that the sender knows we're still connected.
             answer = self._processPacket(msg, peer.prefix)
-            self._sendto(to, msg[0:1] + answer.encode() if answer else b'',
-                         peer)
-
+            self._sendto(to, msg[0:1] + answer if answer else b'', peer)
 
     def _processPacket(self, msg: bytes, peer: x509.Peer|str=None):
         c = msg[0]
@@ -478,12 +477,13 @@ class BaseTunnelManager:
                         return
                     self._makeTunnel(peer, msg)
             else:
-                if peer:
-                    # Don't send country to old nodes
-                    if self._getPeer(peer).protocol < 7:
-                        return ';'.join(','.join(a.split(',')[:3]) for a in
-                            ';'.join(self._address.values()).split(';'))
-                return ';'.join(self._address.values())
+                return ';'.join(
+                    (','.join(a.split(',')[:3]) for a in
+                        ';'.join(self._address.values()).split(';'))
+                    if peer and
+                        # Don't send country to old nodes
+                        self._getPeer(peer).protocol < 7 else
+                    self._address.values()).encode()
         elif not code: # network version
             if peer:
                 try:
@@ -516,14 +516,15 @@ class BaseTunnelManager:
                         self._kill(peer)
         elif code == 4: # node information
             if not msg:
-                return "%s, %s" % (version.version, platform.platform())
+                return ("%s, %s" % (version.version,
+                                    platform.platform())).encode()
         elif code == 5:
             # the registry wants to know the topology for debugging purpose
             if not peer or peer == self.cache.registry_prefix:
-                return str(len(self._connection_dict)) + ''.join(
+                return (str(len(self._connection_dict)) + ''.join(
                     ' %s/%s' % (int(x, 2), len(x))
                     for x in (self._connection_dict, self._served)
-                    for x in x)
+                    for x in x)).encode()
         elif code == 7:
             # XXX: Quick'n dirty way to log in a common place.
             if peer and self._prefix == self.cache.registry_prefix:
