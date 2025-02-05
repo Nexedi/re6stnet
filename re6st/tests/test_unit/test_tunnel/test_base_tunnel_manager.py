@@ -86,7 +86,7 @@ class testBaseTunnelManager(unittest.TestCase):
 
         res = self.tunnel._processPacket(c)
 
-        self.assertEqual(res, "1,1;2,2")
+        self.assertEqual(res, b"1,1;2,2")
 
 
     def test_processPacket_address_with_peer(self):
@@ -103,7 +103,7 @@ class testBaseTunnelManager(unittest.TestCase):
 
         res = self.tunnel._processPacket(c, peer)
 
-        self.assertEqual(res, "1,1,1;0,0,0;2,2,2")
+        self.assertEqual(res, b"1,1,1;0,0,0;2,2,2")
 
     @patch("re6st.x509.Cert.verifyVersion", Mock(return_value=True))
     @patch("re6st.tunnel.BaseTunnelManager.selectTimeout")

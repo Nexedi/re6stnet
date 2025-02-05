@@ -339,8 +339,11 @@ if args.ping:
 class testHMAC(Thread):
 
     def run(self):
-        updateHMAC = ('python', '-c', "import urllib, sys; sys.exit("
-            "204 != urllib.urlopen('http://127.0.0.1/updateHMAC').code)")
+        updateHMAC = (sys.executable, '-c', """if 1:
+            from urllib.request import urlopen
+            import sys
+            sys.exit(204 != urlopen('http://127.0.0.1/updateHMAC').code)
+            """)
         reg1_db = sqlite3.connect('registry/registry.db', isolation_level=None,
                                   check_same_thread=False)
         reg2_db = sqlite3.connect('registry2/registry.db', isolation_level=None,
