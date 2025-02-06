@@ -150,6 +150,13 @@ class TunnelKiller:
         self.client = client
         self()
 
+    def __repr__(self):
+        return '<%s state=%s client=%s timeout=%s>' % (
+            self.__class__.__name__,
+            self.state,
+            self.client,
+            self.timeout)
+
     def __call__(self):
         if self.state:
             return getattr(self, self.state)()
@@ -768,6 +775,7 @@ class TunnelManager(BaseTunnelManager):
 
     def babel_dump(self):
         t = time.time()
+        logging.debug('babel_dump: self._killing=%r', self._killing)
         if self._killing:
             for prefix, tunnel_killer in list(self._killing.items()):
                 if tunnel_killer.timeout < t:
@@ -906,6 +914,8 @@ class TunnelManager(BaseTunnelManager):
 
     def _makeNewTunnels(self, route_dumped):
         count = self._client_count - len(self._connection_dict)
+        logging.debug('_makeNewTunnels(route_dumped=%s,count=%s)',
+                      route_dumped, count)
         if not count:
             return
         # CAVEAT: Forget any peer that didn't reply to our previous address
@@ -915,7 +925,6 @@ class TunnelManager(BaseTunnelManager):
         self._connecting.clear()
         distant_peers = self._distant_peers
         if route_dumped:
-            logging.debug('Analyze routes ...')
             neighbours = self.ctl.neighbours
             # Collect all nodes known by Babel
             peers = {prefix
@@ -1009,7 +1018,7 @@ class TunnelManager(BaseTunnelManager):
 
     def handleClientEvent(self):
         msg = self._read_sock.recv(65536)
-        logging.debug("route_up%s", msg)
+        logging.debug("handleClientEvent(%s)", msg)
         common_name, time, serial, ip = eval(msg)
         prefix = utils.binFromSubnet(common_name)
         c = self._connection_dict.get(prefix)

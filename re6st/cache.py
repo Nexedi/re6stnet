@@ -89,6 +89,8 @@ class Cache:
         try:
             # TODO: When possible, the registry should be queried via the re6st.
             network_config = self._registry.getNetworkConfig(self._prefix)
+            if network_config is None:
+                return
             logging.debug('getNetworkConfig result: %r', network_config)
             x = json.loads(zlib.decompress(network_config))
             base64_list = x.pop('', ())
@@ -110,7 +112,7 @@ class Cache:
         except Exception:
             # Even if the response is authenticated, a mistake on the registry
             # should not kill the whole network in a few seconds.
-            logging.exception("buggy registry ?")
+            logging.warning("buggy registry ?", exc_info=True)
             return
         # XXX: check version ?
         self.delay_restart = config.pop("delay_restart", 0)
