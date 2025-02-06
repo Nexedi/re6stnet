@@ -800,7 +800,6 @@ class RegistryServer:
 
     @rpc_private
     def topology(self) -> str:
-        logging.debug("Computing topology")
         p = lambda p: '%s/%s' % (int(p, 2), len(p))
         peers = deque((p(self.prefix),))
         graph = defaultdict(set)
@@ -859,7 +858,7 @@ class RegistryClient:
 
     def __getattr__(self, name: str):
         getcallargs = getattr(RegistryServer, name).getcallargs
-        def rpc(*args, **kw) -> bytes:
+        def rpc(*args, **kw) -> bytes | None:
             kw = getcallargs(*args, **kw)
             query = '/' + name
             if kw:
@@ -876,6 +875,8 @@ class RegistryClient:
                         if not key:
                             retry = False
                             h = self.hello(client_prefix, str(version.protocol))
+                            if h is None:
+                                return
                             n = len(h) // 2
                             self.cert.verify(h[n:], h[:n])
                             key = self.cert.decrypt(h[:n])
