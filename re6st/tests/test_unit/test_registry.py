@@ -383,11 +383,10 @@ class TestRegistryServer(unittest.TestCase):
     @patch("re6st.registry.RegistryServer.sendto", Mock())
     def test_updateHMAC(self):
         def get_hmac():
-            return [self.server.getConfig(registry.BABEL_HMAC[i], None)
-                    for i in range(3)]
+            return [self.server.getConfig(x, None) for x in registry.BABEL_HMAC]
 
-        for i in range(3):
-            self.server.delHMAC(i)
+        for x in registry.BABEL_HMAC:
+            self.server.setConfig(x)
 
         # step 1
         self.server.updateHMAC()
@@ -395,28 +394,34 @@ class TestRegistryServer(unittest.TestCase):
         hmacs = get_hmac()
         key_1 = hmacs[1]
         self.assertEqual(hmacs, [None, key_1, b''])
+        self.assertNotIn('valid_until', self.server.network_config)
 
         # step 2
         self.server.updateHMAC()
 
         self.assertEqual(get_hmac(), [key_1, None, None])
+        self.assertNotIn('valid_until', self.server.network_config)
 
         # step 3
+        t = time.time()
         self.server.updateHMAC()
 
         hmacs = get_hmac()
         key_2 = hmacs[1]
         self.assertEqual(get_hmac(), [key_1, key_2, None])
+        self.assertLess(t, self.server.network_config['valid_until'])
 
         # step 4
         self.server.updateHMAC()
 
         self.assertEqual(get_hmac(), [None, key_2, key_1])
+        self.assertNotIn('valid_until', self.server.network_config)
 
         # step 5
         self.server.updateHMAC()
 
         self.assertEqual(get_hmac(), [key_2, None, None])
+        self.assertNotIn('valid_until', self.server.network_config)
 
     def test_getNodePrefix(self):
         # prefix in short format

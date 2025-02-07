@@ -30,6 +30,7 @@ class testBaseTunnelManager(unittest.TestCase):
         self.cache = patcher.start()()
         self.sock = pacher_sock.start()
         self.cache.same_country = False
+        self.cache.valid_until = None
 
         address = [(2, [('10.0.0.2', '1194', 'udp'), ('10.0.0.2', '1194', 'tcp')])]
         self.tunnel = tunnel.BaseTunnelManager(self.control_socket,

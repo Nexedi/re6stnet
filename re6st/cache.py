@@ -5,6 +5,8 @@ from . import utils, version, x509
 
 class Cache:
 
+    valid_until = None
+
     def __init__(self, db_path: str, registry, cert: x509.Cert, db_size=200):
         self._prefix = cert.prefix
         self._db_size = db_size
