@@ -36,6 +36,7 @@ from . import ctl, tunnel, utils, version, x509
 HMAC_HEADER = "Re6stHMAC"
 RENEW_PERIOD = 30 * 86400
 BABEL_HMAC = 'babel_hmac0', 'babel_hmac1', 'babel_hmac2'
+NETCONF_TEMP = 86400
 
 def rpc(f):
     argspec = inspect.getfullargspec(f)
@@ -174,8 +175,9 @@ class RegistryServer:
         return r
 
     def setConfig(self, *name_value):
-        self.db.execute("INSERT OR REPLACE INTO config VALUES (?, ?)",
-                        name_value)
+        self.db.execute(
+            "DELETE FROM config WHERE name=?" if len(name_value) == 1 else
+            "INSERT OR REPLACE INTO config VALUES (?, ?)", name_value)
 
     def updateNetworkConfig(self, _it0=itemgetter(0)):
         kw = {
@@ -201,6 +203,9 @@ class RegistryServer:
         # The following entry lists values that are base64-encoded.
         kw[''] = 'version',
         kw['version'] = base64.b64encode(self.version).decode()
+        valid_until = self.getConfig('valid_until', None)
+        if valid_until:
+            kw['valid_until'] = valid_until
         self.network_config = kw
 
     def increaseVersion(self):
@@ -706,27 +711,32 @@ class RegistryServer:
           key = os.urandom(16)
        self.setConfig(BABEL_HMAC[i], key)
 
-    def delHMAC(self, i: int):
-       self.db.execute("DELETE FROM config WHERE name=?", (BABEL_HMAC[i],))
-
     @rpc_private
     def updateHMAC(self):
         with self.lock, self.db:
             hmac = [self.getConfig(BABEL_HMAC[i], None) for i in (0,1,2)]
+            valid_until = None
             if hmac[0]:
                 if hmac[1]:
                     self.newHMAC(2, hmac[0])
-                    self.delHMAC(0)
+                    self.setConfig(BABEL_HMAC[0])
                 else:
                     self.newHMAC(1)
+                    valid_until = time.time() + NETCONF_TEMP
             elif hmac[1]:
                 self.newHMAC(0, hmac[1])
-                self.delHMAC(1)
-                self.delHMAC(2)
+                self.setConfig(BABEL_HMAC[1])
+                self.setConfig(BABEL_HMAC[2])
             else:
                 # Initialization of HMAC on the network
                 self.newHMAC(1)
                 self.newHMAC(2, b'')
+            if valid_until is None:
+                self.network_config.pop('valid_until', None)
+                self.setConfig('valid_until')
+            else:
+                self.network_config['valid_until'] = valid_until
+                self.setConfig('valid_until', valid_until)
             self.increaseVersion()
             self.setConfig('version', self.version)
             self.network_config['version'] = \
