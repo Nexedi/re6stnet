@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from . import cache
 
 PORT = 326
+NETCONF_CHECK = 3600
 
 family_dict = {
     socket.AF_INET: 'IPv4',
@@ -279,9 +280,8 @@ class BaseTunnelManager:
 
         self.ctl = ctl.Babel(control_socket, weakref.proxy(self), self._network)
 
-        # Only to check routing cache. Should go back to
-        # TunnelManager when we don't need to check it anymore.
-        self._next_refresh = time.time()
+        now = self._next_refresh = time.time()
+        self._maybe_old_version = None is not cache.valid_until < now
 
     def close(self):
         self.sock.close()
@@ -290,22 +290,24 @@ class BaseTunnelManager:
     def select(self, r, w, t):
         r[self.sock] = self.handlePeerEvent
         t += self._timeouts
-        if self._next_refresh: # same comment as in __init__
+        if self._next_refresh:
             t.append((self._next_refresh, self.refresh))
         self.ctl.select(r, w, t)
 
     def refresh(self):
-        self._next_refresh = time.time() + self.cache.hello
-        self.checkRoutingCache()
+        self._next_refresh = None
+        if self._prefix != self.cache.registry_prefix:
+            self.__request_dump('check_netconf')
 
     def __request_dump(self, reason):
         try:
             requesting_dump = self.__requesting_dump
         except AttributeError:
             requesting_dump = self.__requesting_dump = set()
-        if not requesting_dump:
-            self.ctl.request_dump()
+        request = not requesting_dump
         requesting_dump.add(reason)
+        if request:
+            self.ctl.request_dump()
 
     def babel_dump(self):
         for x in self.__requesting_dump:
@@ -323,8 +325,9 @@ class BaseTunnelManager:
                     logging.debug("timeout: updating %r (%s)", callback.__name__, next)
                     t[i] = next, callback
                 return
-        logging.debug("timeout: adding %r (%s)", callback.__name__, next)
-        t.append((next, callback))
+        if next:
+            logging.debug("timeout: adding %r (%s)", callback.__name__, next)
+            t.append((next, callback))
 
     def invalidatePeers(self):
         next = float('inf')
@@ -542,6 +545,22 @@ class BaseTunnelManager:
         raise utils.ReexecException(
             "Restart with new network parameters")
 
+    def _babel_dump_check_netconf(self):
+        now = time.time()
+        self._next_refresh = now + NETCONF_CHECK
+        peers = {prefix
+            for neigh_routes in self.ctl.neighbours.values()
+            for prefix in neigh_routes[1]
+            if prefix}
+        maybe_old_version = (lambda: None is not self.cache.valid_until < now
+            ) if self.cache.registry_prefix in peers else lambda: True
+        if maybe_old_version():
+            if not self._maybe_old_version:
+                self._maybe_old_version = True
+                return
+            self.newVersion(False)
+        self._maybe_old_version = maybe_old_version()
+
     def _babel_dump_new_version(self):
         for prefix in self.ctl.neighbours:
             if prefix:
@@ -555,14 +574,18 @@ class BaseTunnelManager:
     def broadcastNewVersion(self):
         self.__request_dump('new_version')
 
-    def newVersion(self):
+    def newVersion(self, retry=True):
         changed = self.cache.updateConfig()
         if changed is None:
-            logging.info("will retry to update network parameters in 5 minutes")
-            self.selectTimeout(time.time() + 300, self.newVersion)
+            if retry:
+                logging.info(
+                    "will retry to update network parameters in 5 minutes")
+                self.selectTimeout(time.time() + 300, self.newVersion)
             return
         logging.info("changed: %r", sorted(changed))
         self.selectTimeout(None, self.newVersion)
+        if not changed:
+            return
         self._version = self.cache.version
         self.broadcastNewVersion()
         self.cache.warnProtocol()
@@ -618,49 +641,6 @@ class BaseTunnelManager:
             if self._gateway_manager is not None:
                 self._gateway_manager.remove(trusted_ip)
 
-    def checkRoutingCache(self):
-        # WRKD: Check that routes in cache match the routing table.
-        #       There were changes in Linux 4.2 to not cache routes uselessly
-        #       and the bug may have been fixed at the same time. At least,
-        #       it happens less often than with previous versions.
-        #       babeld has a distinct issue (no atomic update of route) that
-        #       increases the probability of invalid entries in the cache:
-        #        https://lists.alioth.debian.org/pipermail/babel-users/2016-June/002547.html
-        with open('/proc/net/ipv6_route', "r", 4096) as f:
-            try:
-                routing_table = f.read()
-            except IOError as e:
-                # ???: If someone can explain why the kernel sometimes fails
-                #      even when there's a lot of free memory.
-                if e.errno != errno.ENOMEM:
-                    raise
-                logging.error("Ignoring ENOMEM when checking routing cache")
-                return
-        cache = []
-        other = []
-        n = self._network
-        a = len(n)
-        for line in routing_table.splitlines():
-            line = line.split()
-            dst = bin(int(line[0], 16))[2:].rjust(128, '0')
-            if dst.startswith(n):
-                flags = int(line[8], 16)
-                if not (flags & 0x80000000): # RTF_LOCAL
-                    (cache if flags & 0x1000000 # RTF_CACHE
-                     else other).append((dst[a:int(line[1], 16)], line[4]))
-        other.sort()
-        for dst, via in cache:
-            i = bisect(other, (dst,))
-            if i == len(other) or dst < other[i][0]:
-                i -= 1
-            if dst.startswith(other[i][0]) and via != other[i][1]:
-                msg = "Invalid route in cache for " + utils.ipFromBin(n + dst)
-                logging.error("%s. Flushing...", msg)
-                subprocess.call(("ip", "-6", "route", "flush", "cached"))
-                self.sendto(self.cache.registry_prefix,
-                    b'\7%s (%s)' % (msg, os.uname()[2]))
-                break
-
     def _updateCountry(self, address):
         def update():
             for a in address:
@@ -709,6 +689,9 @@ class TunnelManager(BaseTunnelManager):
         self.new_iface_list = deque('re6stnet' + str(i)
             for i in range(1, self._client_count + 1))
         self._free_iface_list = []
+        self._next_netconf_check = float('inf') \
+            if self._prefix == cache.registry_prefix else self._next_refresh
+        self._next_refresh = time.time()
 
     def close(self):
         self.killAll()
@@ -771,10 +754,12 @@ class TunnelManager(BaseTunnelManager):
             self.ctl.request_dump() # calls babel_dump immediately at startup
         else:
             self._next_refresh = time.time() + 5
-        self.checkRoutingCache()
 
     def babel_dump(self):
         t = time.time()
+        if self._next_netconf_check < t:
+            self._babel_dump_check_netconf()
+            self._next_netconf_check = self._next_refresh
         logging.debug('babel_dump: self._killing=%r', self._killing)
         if self._killing:
             for prefix, tunnel_killer in list(self._killing.items()):

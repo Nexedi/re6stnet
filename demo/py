@@ -6,8 +6,10 @@ def __file__():
     from argparse import ArgumentParser
     _parse_args = ArgumentParser.parse_args
     ArgumentParser.parse_args = lambda self: _parse_args(self, sys.argv[2:])
-    # Always import to prevent re6st.node.cli from altering the first sys.path
-    from re6st import registry
+    # We also import to prevent re6st.cli.node from altering the first sys.path
+    from re6st import registry, tunnel
+    registry.NETCONF_TEMP = 600
+    tunnel.NETCONF_CHECK = 60
 
     if 1:
         # Check renewal of certificate.
