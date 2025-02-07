@@ -1,6 +1,9 @@
 - We have forked babeld for several changes. We'd like all our patches to be
   merged upstream. See https://lab.nexedi.com/nexedi/babeld
 
+- Fix babeld not updating routes atomically. There was a discussion about this
+  at https://lists.alioth.debian.org/pipermail/babel-users/2016-June/002547.html
+
 - Filter non-routable IPs. Add an option not to do it.
 
 - More runtime configuration changes (i.e. without complete restart).
