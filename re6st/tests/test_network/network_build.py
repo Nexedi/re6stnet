@@ -14,14 +14,14 @@ class ConnectableError(Exception):
 class Node(nemu.Node):
     """simple nemu.Node used for registry and nodes"""
     def __init__(self):
-        super(Node, self).__init__()
+        super().__init__()
         self.Popen(('sysctl', '-q',
                     'net.ipv4.icmp_echo_ignore_broadcasts=0')).wait()
 
     def _add_interface(self, iface):
         self.iface = iface
         iface.__dict__['node'] = weakref.proxy(self)
-        return super(Node, self)._add_interface(iface)
+        return super()._add_interface(iface)
 
     @property
     def ip(self):
