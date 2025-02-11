@@ -665,8 +665,7 @@ class TunnelManager(BaseTunnelManager):
                  timeout, client_count, iface_list, conf_country, address,
                  ip_changed, remote_gateway: Callable[[str], str],
                  disable_proto: Sequence[str], neighbour_list=()):
-        super(TunnelManager, self).__init__(control_socket,
-                                            cache, cert, conf_country, address)
+        super().__init__(control_socket, cache, cert, conf_country, address)
         self.ovpn_args = openvpn_args
         self.timeout = timeout
         self._read_sock, self.write_sock = socket.socketpair(
@@ -698,7 +697,7 @@ class TunnelManager(BaseTunnelManager):
         self.delInterfaces()
         self._read_sock.close()
         self.write_sock.close()
-        super(TunnelManager, self).close()
+        super().close()
 
     @property
     def encrypt(self):
@@ -741,7 +740,7 @@ class TunnelManager(BaseTunnelManager):
         del self._iface_to_prefix[iface]
 
     def select(self, r, w, t):
-        super(TunnelManager, self).select(r, w, t)
+        super().select(r, w, t)
         r[self._read_sock] = self.handleClientEvent
 
     def refresh(self):
