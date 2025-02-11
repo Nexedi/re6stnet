@@ -59,7 +59,7 @@ def log_exception():
 class HelpFormatter(argparse.ArgumentDefaultsHelpFormatter):
 
     def _get_help_string(self, action):
-        return super(HelpFormatter, self)._get_help_string(action) \
+        return super()._get_help_string(action) \
             if action.default else action.help
 
     def _split_lines(self, text, width):
@@ -99,7 +99,7 @@ class ArgParser(argparse.ArgumentParser):
                 yield arg
 
     def __init__(self, **kw):
-        super(ArgParser, self).__init__(formatter_class=self._HelpFormatter,
+        super().__init__(formatter_class=self._HelpFormatter,
             epilog="""Options can be read from a file. For example:
   $ cat OPTIONS_FILE
   ca /etc/re6stnet/ca.crt""", **kw)
@@ -149,7 +149,7 @@ class Popen(subprocess.Popen):
     def __init__(self, *args, **kw):
         self._args = tuple(args[0] if args else kw['args'])
         try:
-            super(Popen, self).__init__(*args, **kw)
+            super().__init__(*args, **kw)
         except OSError as e:
             if e.errno != errno.ENOMEM:
                 raise
