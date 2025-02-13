@@ -108,9 +108,6 @@ class Cache:
                     k += ':json'
                     v = json.dumps(v)
                 config[k] = v
-        except socket.error as e:
-            logging.warning(e)
-            return
         except Exception:
             # Even if the response is authenticated, a mistake on the registry
             # should not kill the whole network in a few seconds.
@@ -153,16 +150,12 @@ class Cache:
         if not os.path.exists(path):
             retry = 1
             while True:
-                try:
-                    dh = self._registry.getDh(self._prefix)
-                    if dh:
-                        break
-                    e = None
-                except socket.error:
-                    e = sys.exc_info()
+                dh = self._registry.getDh(self._prefix)
+                if dh:
+                    break
                 logging.warning(
                     "Failed to get DH parameters from the registry."
-                    " Will retry in %s seconds", retry, exc_info=e)
+                    " Will retry in %s seconds", retry)
                 time.sleep(retry)
                 retry = min(60, retry * 2)
             with open(path, "wb") as f:
@@ -239,8 +232,10 @@ class Cache:
         logging.info('Getting Boot peer...')
         try:
             bootpeer = self._registry.getBootstrapPeer(self._prefix)
+            if bootpeer is None:
+                return
             prefix, address = self._decrypt(bootpeer).decode().split()
-        except (socket.error, subprocess.CalledProcessError, ValueError) as e:
+        except (subprocess.CalledProcessError, ValueError) as e:
             logging.warning('Failed to bootstrap (%s)',
                             e if bootpeer else 'no peer returned')
         else:
@@ -274,9 +269,9 @@ class Cache:
             q("INSERT OR REPLACE INTO volatile.stat VALUES (?,0)", (prefix,))
 
     def getCountry(self, ip: str) -> str | None:
-        try:
-            country = self._registry.getCountry(self._prefix, ip)
-            if country is not None:
+        country = self._registry.getCountry(self._prefix, ip)
+        if country is not None:
+            try:
                 return country.decode()
-        except (socket.error, UnicodeDecodeError) as e:
-            logging.warning('Failed to get country for %s (%s)', ip, e)
+            except UnicodeDecodeError as e:
+                logging.warning('Failed to get country for %s (%s)', ip, e)
