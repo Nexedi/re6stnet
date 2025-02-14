@@ -714,7 +714,7 @@ class RegistryServer:
     @rpc_private
     def updateHMAC(self):
         with self.lock, self.db:
-            hmac = [self.getConfig(BABEL_HMAC[i], None) for i in (0,1,2)]
+            hmac = [self.getConfig(x, None) for x in BABEL_HMAC]
             valid_until = None
             if hmac[0]:
                 if hmac[1]:
