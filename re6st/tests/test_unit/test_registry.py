@@ -42,14 +42,15 @@ def load_config(filename: str="registry.json") -> Namespace:
 def get_cert(cur: Cursor, prefix: str):
     res = cur.execute(
         "SELECT cert FROM cert WHERE prefix=?", (prefix,)).fetchone()
-    return res[0]
+    return res[0].encode()
 
 
 def insert_cert(cur: Cursor, ca: x509.Cert, prefix: str,
                 not_after=None, email=None):
     key, csr = generate_csr()
     cert = generate_cert(ca.ca, ca.key, csr, prefix, insert_cert.serial, not_after)
-    cur.execute("INSERT INTO cert VALUES (?,?,?)", (prefix, email, cert))
+    cur.execute("INSERT INTO cert VALUES (?,?,?)",
+                (prefix, email, cert.decode()))
     insert_cert.serial += 1
     return key, cert
 
