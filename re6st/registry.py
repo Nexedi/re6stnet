@@ -372,7 +372,7 @@ class RegistryServer:
                                " WHERE prefix=? AND cert IS NOT NULL",
                                (client_prefix,)).fetchone()
         if cert:
-            return cert[0]
+            return cert[0].encode()
         logging.info("No certificate found for prefix %s.", client_prefix)
         raise HTTPError(http.client.NOT_FOUND)
 
@@ -587,7 +587,7 @@ class RegistryServer:
         cert.sign(self.cert.key, 'sha512')
         cert = crypto.dump_certificate(crypto.FILETYPE_PEM, cert)
         self.db.execute("UPDATE cert SET cert = ? WHERE prefix = ?",
-                        (cert, client_prefix))
+                        (cert.decode(), client_prefix))
         self.timeout = 1
         return cert
 
