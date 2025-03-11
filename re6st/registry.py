@@ -309,7 +309,9 @@ class RegistryServer:
         if key:
             h = base64.b64decode(request.headers[HMAC_HEADER])
             with self.lock:
-                session = self.sessions[key]
+                session = self.sessions.get(key)
+                if session is None: # common after a restart on the registry
+                    return request.send_error(http.client.UNAUTHORIZED)
                 for key, protocol in session:
                     if h == hmac.HMAC(key, request.path.encode(), hashlib.sha1
                                       ).digest():
