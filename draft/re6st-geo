@@ -5,7 +5,7 @@ import xml.etree.cElementTree as ET
 from collections import defaultdict
 if 're6st' not in sys.modules:
     import os; sys.path[0] = os.path.dirname(sys.path[0])
-from re6st import ctl, tunnel, utils
+from re6st import routing, tunnel, utils
 
 from re6st.registry import RegistryServer
 
@@ -27,7 +27,7 @@ def cmd_update(db, config):
     p = dict(q("SELECT prefix, mode FROM ip"))
     peers = set()
     now = int(time.time())
-    for prefix in ctl.iterRoutes(config.control_socket, network):
+    for prefix in routing.iterRoutes(config.control_socket, network):
         if prefix in p:
             q("UPDATE ip SET last=? WHERE prefix=?", (now, prefix))
             if not p[prefix]:
