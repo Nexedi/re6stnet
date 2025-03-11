@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import http.client, logging, os, socket, sys
+from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler
 from socketserver import ThreadingTCPServer
 from urllib.parse import parse_qsl
@@ -31,7 +32,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 return self.server.handle_request(self, path, query)
         except Exception:
             logging.info(self.requestline, exc_info=True)
-        self.send_error(http.client.BAD_REQUEST)
+        self.send_error(HTTPStatus.BAD_REQUEST)
 
     def log_error(*args):
         pass
