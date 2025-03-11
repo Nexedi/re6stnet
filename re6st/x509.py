@@ -3,13 +3,17 @@ import calendar, hashlib, hmac, logging, os, struct, subprocess, threading, time
 from typing import Callable, Any
 
 from OpenSSL import crypto
+from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
-from cryptography.x509 import load_pem_x509_certificate
+from cryptography.x509 import \
+    load_der_x509_certificate, load_pem_x509_certificate
 
 from . import utils
 from .version import protocol
+
+PADDING_HASH = padding.PKCS1v15(), hashes.SHA512()
 
 def newHmacSecret() -> bytes:
     return utils.newHmacSecret(int(time.time() * 1000000))
@@ -170,21 +174,11 @@ class Cert:
                     raise VerifyError(int(code), int(depth), msg.strip())
         return r
 
-    def verify(self, sign: bytes, data: bytes):
-        pub_key = self.ca_crypto.public_key()
-        pub_key.verify(
-            sign,
-            data,
-            padding.PKCS1v15(),
-            hashes.SHA512()
-        )
+    def verify(self, *args):
+        self.ca_crypto.public_key().verify(*args, *PADDING_HASH)
 
     def sign(self, data: bytes) -> bytes:
-        return self.key_crypto.sign(
-            data,
-            padding.PKCS1v15(),
-            hashes.SHA512()
-        )
+        return self.key_crypto.sign(data, *PADDING_HASH)
 
     def decrypt(self, data: bytes) -> bytes:
         p = openssl('rsautl', '-decrypt', '-inkey', self.key_path)
@@ -195,9 +189,9 @@ class Cert:
 
     def verifyVersion(self, version):
         try:
-            n = 1 + (version[0] >> 5)
+            n = 1 + (version[0] >> 5) # see utils.unpackInteger
             self.verify(version[n:], version[:n])
-        except (IndexError, crypto.Error):
+        except (IndexError, InvalidSignature):
             raise VerifyError(None, None, 'invalid network version')
 
 
@@ -290,8 +284,8 @@ class Peer:
         self._last = None
         self.protocol = protocol
 
-    def verify(self, sign: bytes, data: bytes):
-        crypto.verify(self.cert, sign, data, 'sha512')
+    def verify(self, *args):
+        self.cert_crypto.public_key().verify(*args, *PADDING_HASH)
 
     seqno_struct = struct.Struct("!L")
 
