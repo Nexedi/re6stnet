@@ -32,7 +32,7 @@ from typing import Tuple
 
 from OpenSSL import crypto
 from urllib.parse import urlparse, unquote, urlencode
-from . import ctl, tunnel, utils, version, x509
+from . import routing, tunnel, utils, version, x509
 
 HMAC_HEADER = "Re6stHMAC"
 RENEW_PERIOD = 30 * 86400
@@ -140,7 +140,7 @@ class RegistryServer:
         self.email = self.cert.ca.get_subject().emailAddress
 
         self.peers_lock = threading.Lock()
-        self.ctl = ctl.Babel(os.path.join(config.run, 'babeld.sock'),
+        self.routing = routing.Babel(os.path.join(config.run, 'babeld.sock'),
             weakref.proxy(self), self.network)
 
         self.geoip_db = os.getenv('GEOIP2_MMDB')
@@ -168,7 +168,7 @@ class RegistryServer:
     def close(self):
         self.sock.close()
         self.db.close()
-        self.ctl.close()
+        self.routing.close()
 
     def getConfig(self, name, *default):
         r, = next(self.db.execute(
@@ -236,18 +236,18 @@ class RegistryServer:
     def request_dump(self):
         assert self.peers_lock.locked()
         def abort():
-            raise ctl.BabelException
+            raise routing.BabelException
         self._wait_dump = True
         for _ in 0, 1:
-            self.ctl.request_dump()
+            self.routing.request_dump()
             try:
                 while self._wait_dump:
                     args = {}, {}, ((time.time() + 5, abort),)
-                    self.ctl.select(*args)
+                    self.routing.select(*args)
                     utils.select(*args)
                 break
-            except ctl.BabelException:
-                self.ctl.reset()
+            except routing.BabelException:
+                self.routing.reset()
 
     def babel_dump(self):
         self._wait_dump = False
@@ -660,7 +660,7 @@ class RegistryServer:
             if age < time.time() or not peers:
                 self.request_dump()
                 peers = [prefix
-                    for neigh_routes in self.ctl.neighbours.values()
+                    for neigh_routes in self.routing.neighbours.values()
                     for prefix in neigh_routes[1]
                     if prefix]
                 peers.append(self.prefix)
@@ -773,7 +773,7 @@ class RegistryServer:
             peer = utils.binFromSubnet(peer)
             with self.peers_lock:
                 self.request_dump()
-                for neigh_routes in self.ctl.neighbours.values():
+                for neigh_routes in self.routing.neighbours.values():
                     for prefix in neigh_routes[1]:
                         if prefix == peer:
                             break
@@ -790,7 +790,7 @@ class RegistryServer:
         with self.peers_lock:
             self.request_dump()
             peers = {prefix
-                for neigh_routes in self.ctl.neighbours.values()
+                for neigh_routes in self.routing.neighbours.values()
                 for prefix in neigh_routes[1]
                 if prefix}
         peers.add(self.prefix)

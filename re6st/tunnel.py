@@ -6,7 +6,7 @@ from collections.abc import Iterator, Sequence
 from typing import Callable, TYPE_CHECKING
 
 from OpenSSL import crypto
-from . import ctl, plib, utils, version, x509
+from . import plib, routing, utils, version, x509
 if TYPE_CHECKING:
     from . import cache
 
@@ -161,27 +161,29 @@ class TunnelKiller:
     def __call__(self):
         if self.state:
             return getattr(self, self.state)()
-        tm_ctl = self.tm.ctl
+        tm_routing = self.tm.routing
         try:
-            neigh = tm_ctl.neighbours[self.peer][0]
+            neigh = tm_routing.neighbours[self.peer][0]
         except KeyError:
             return
         self.state = 'softLocking'
-        tm_ctl.send(ctl.SetCostMultiplier(neigh.address, neigh.ifindex, 4096))
+        tm_routing.send(routing.SetCostMultiplier(
+            neigh.address, neigh.ifindex, 4096))
         self.address = neigh.address
         self.ifindex = neigh.ifindex
         self.cost_multiplier = neigh.cost_multiplier
 
     def softLocking(self):
         tm = self.tm
-        if self.peer in tm.ctl.neighbours or None in tm.ctl.neighbours:
+        if self.peer in tm.routing.neighbours or None in tm.routing.neighbours:
             return
-        tm.ctl.send(ctl.SetCostMultiplier(self.address, self.ifindex, 0))
+        tm.routing.send(routing.SetCostMultiplier(
+            self.address, self.ifindex, 0))
         self.state = "hardLocking"
 
     def hardLocking(self):
         tm = self.tm
-        if (self.address, self.ifindex) in tm.ctl.locked:
+        if (self.address, self.ifindex) in tm.routing.locked:
             self.state = 'locked'
             self.timeout = time.time() + 2 * tm.timeout
             tm.sendto(self.peer, b'\2' if self.client else b'\3')
@@ -190,8 +192,8 @@ class TunnelKiller:
 
     def unlock(self):
         if self.state:
-            self.tm.ctl.send(ctl.SetCostMultiplier(self.address, self.ifindex,
-                                                   self.cost_multiplier))
+            self.tm.routing.send(routing.SetCostMultiplier(
+                self.address, self.ifindex, self.cost_multiplier))
 
     def abort(self):
         if self.state != 'unlocking':
@@ -278,21 +280,22 @@ class BaseTunnelManager:
         self._peers = [p]
         self._timeouts = [(p.stop_date, self.invalidatePeers)]
 
-        self.ctl = ctl.Babel(control_socket, weakref.proxy(self), self._network)
+        self.routing = routing.Babel(
+            control_socket, weakref.proxy(self), self._network)
 
         now = self._next_refresh = time.time()
         self._maybe_old_version = None is not cache.valid_until < now
 
     def close(self):
         self.sock.close()
-        self.ctl.close()
+        self.routing.close()
 
     def select(self, r, w, t):
         r[self.sock] = self.handlePeerEvent
         t += self._timeouts
         if self._next_refresh:
             t.append((self._next_refresh, self.refresh))
-        self.ctl.select(r, w, t)
+        self.routing.select(r, w, t)
 
     def refresh(self):
         self._next_refresh = None
@@ -307,7 +310,7 @@ class BaseTunnelManager:
         request = not requesting_dump
         requesting_dump.add(reason)
         if request:
-            self.ctl.request_dump()
+            self.routing.request_dump()
 
     def babel_dump(self):
         for x in self.__requesting_dump:
@@ -319,10 +322,12 @@ class BaseTunnelManager:
         for i, x in enumerate(t):
             if x[1] == callback:
                 if not next:
-                    logging.debug("timeout: removing %r (%s)", callback.__name__, next)
+                    logging.debug("timeout: removing %r (%s)",
+                                  callback.__name__, next)
                     del t[i]
                 elif force or next < x[0]:
-                    logging.debug("timeout: updating %r (%s)", callback.__name__, next)
+                    logging.debug("timeout: updating %r (%s)",
+                                  callback.__name__, next)
                     t[i] = next, callback
                 return
         if next:
@@ -550,7 +555,7 @@ class BaseTunnelManager:
         now = time.time()
         self._next_refresh = now + NETCONF_CHECK
         peers = {prefix
-            for neigh_routes in self.ctl.neighbours.values()
+            for neigh_routes in self.routing.neighbours.values()
             for prefix in neigh_routes[1]
             if prefix}
         maybe_old_version = (lambda: None is not self.cache.valid_until < now
@@ -563,7 +568,7 @@ class BaseTunnelManager:
         self._maybe_old_version = maybe_old_version()
 
     def _babel_dump_new_version(self):
-        for prefix in self.ctl.neighbours:
+        for prefix in self.routing.neighbours:
             if prefix:
                 peer = self._getPeer(prefix)
                 if peer.prefix != prefix:
@@ -751,7 +756,8 @@ class TunnelManager(BaseTunnelManager):
            self._killing or \
            self._makeNewTunnels(False):
             self._next_refresh = None
-            self.ctl.request_dump() # calls babel_dump immediately at startup
+            # At startup, the following line calls babel_dump immediately.
+            self.routing.request_dump()
         else:
             self._next_refresh = time.time() + 5
 
@@ -802,7 +808,7 @@ class TunnelManager(BaseTunnelManager):
         # Then sort by the number of routed nodes.
         n = 0
         try:
-            for x in self.ctl.neighbours[prefix][1]:
+            for x in self.routing.neighbours[prefix][1]:
                 # Ignore the default route, which is redundant with the
                 # border gateway node.
                 if x:
@@ -836,7 +842,7 @@ class TunnelManager(BaseTunnelManager):
         if tunnel_killer:
             if tunnel_killer.state:
                 if not iface or \
-                   iface == self.ctl.interfaces[tunnel_killer.ifindex]:
+                   iface == self.routing.interfaces[tunnel_killer.ifindex]:
                     tunnel_killer.abort()
             else:
                 del self._killing[prefix]
@@ -910,7 +916,7 @@ class TunnelManager(BaseTunnelManager):
         self._connecting.clear()
         distant_peers = self._distant_peers
         if route_dumped:
-            neighbours = self.ctl.neighbours
+            neighbours = self.routing.neighbours
             # Collect all nodes known by Babel
             peers = {prefix
                 for neigh_routes in neighbours.values()
