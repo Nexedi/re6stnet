@@ -24,6 +24,7 @@ import string, sys, threading, time, weakref, zlib
 from collections import defaultdict, deque
 from collections.abc import Iterator
 from datetime import datetime
+from http import HTTPStatus
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from email.mime.text import MIMEText
 from operator import itemgetter
@@ -65,7 +66,7 @@ class RegistryServer:
     sessions: dict[str, list[tuple[bytes, int]]]
 
     def _geoiplookup(self, ip):
-        raise HTTPError(http.client.BAD_REQUEST)
+        raise HTTPError(HTTPStatus.BAD_REQUEST)
 
     def __init__(self, config):
         self.config = config
@@ -304,14 +305,14 @@ class RegistryServer:
             x_forwarded_for = request.headers.get('X-Forwarded-For')
             if request.client_address[0] not in authorized_origin or \
                x_forwarded_for and x_forwarded_for not in authorized_origin:
-                return request.send_error(http.client.FORBIDDEN)
+                return request.send_error(HTTPStatus.FORBIDDEN)
         key = m.getcallargs(**kw).get('cn')
         if key:
             h = base64.b64decode(request.headers[HMAC_HEADER])
             with self.lock:
                 session = self.sessions.get(key)
                 if session is None: # common after a restart on the registry
-                    return request.send_error(http.client.UNAUTHORIZED)
+                    return request.send_error(HTTPStatus.UNAUTHORIZED)
                 for key, protocol in session:
                     if h == hmac.HMAC(key, request.path.encode(), hashlib.sha1
                                       ).digest():
@@ -338,14 +339,14 @@ class RegistryServer:
             return request.send_error(*e.args)
         except:
             logging.warning(request.requestline, exc_info=True)
-            return request.send_error(http.client.INTERNAL_SERVER_ERROR)
+            return request.send_error(HTTPStatus.INTERNAL_SERVER_ERROR)
         if result:
             if type(result) is str:
                 result = result.encode("utf-8")
-            request.send_response(http.client.OK)
+            request.send_response(HTTPStatus.OK)
             request.send_header("Content-Length", str(len(result)))
         else:
-            request.send_response(http.client.NO_CONTENT)
+            request.send_response(HTTPStatus.NO_CONTENT)
         if key:
             request.send_header(HMAC_HEADER, base64.b64encode(
                 hmac.HMAC(key, result, hashlib.sha1).digest()).decode("ascii"))
@@ -376,7 +377,7 @@ class RegistryServer:
         if cert:
             return cert[0].encode()
         logging.info("No certificate found for prefix %s.", client_prefix)
-        raise HTTPError(http.client.NOT_FOUND)
+        raise HTTPError(HTTPStatus.NOT_FOUND)
 
     @rpc_private
     def isToken(self, token: str):
@@ -394,7 +395,7 @@ class RegistryServer:
     def addToken(self, email: str, token: str | None) -> str:
         prefix_len = self.config.prefix_length
         if not prefix_len:
-            raise HTTPError(http.client.FORBIDDEN)
+            raise HTTPError(HTTPStatus.FORBIDDEN)
         request = token is None
         with self.lock:
             while True:
@@ -408,7 +409,7 @@ class RegistryServer:
                     break
                 except sqlite3.IntegrityError:
                     if not request:
-                        raise HTTPError(http.client.CONFLICT)
+                        raise HTTPError(HTTPStatus.CONFLICT)
             self.timeout = 1
         if request:
             return token
@@ -416,7 +417,7 @@ class RegistryServer:
     @rpc
     def requestToken(self, email):
         if not self.config.mailhost:
-            raise HTTPError(http.client.FORBIDDEN)
+            raise HTTPError(HTTPStatus.FORBIDDEN)
 
         token = self.addToken(email, None)
 
@@ -527,7 +528,7 @@ class RegistryServer:
             with self.db:
                 if token:
                     if not self.config.prefix_length:
-                        raise HTTPError(http.client.FORBIDDEN)
+                        raise HTTPError(HTTPStatus.FORBIDDEN)
                     try:
                         token, email, prefix_len, _ = next(self.db.execute(
                             "SELECT * FROM token WHERE token = ?",
@@ -539,7 +540,7 @@ class RegistryServer:
                 else:
                     prefix_len = self.config.anonymous_prefix_length
                     if not prefix_len:
-                        raise HTTPError(http.client.FORBIDDEN)
+                        raise HTTPError(HTTPStatus.FORBIDDEN)
                     email = None
                 country, continent = '*', '*'
                 if self.geoip_db:
@@ -905,15 +906,15 @@ class RegistryClient:
                     self._conn.endheaders()
                     response = self._conn.getresponse()
                     body = response.read()
-                    if response.status in (http.client.OK,
-                                           http.client.NO_CONTENT):
+                    if response.status in (HTTPStatus.OK,
+                                           HTTPStatus.NO_CONTENT):
                         if (not client_prefix or
                                 hmac.HMAC(key, body, hashlib.sha1).digest() ==
                                 base64.b64decode(response.msg[HMAC_HEADER])):
                             if self.auto_close and name != 'hello':
                                 self._conn.close()
                             return body
-                    elif response.status == http.client.FORBIDDEN:
+                    elif response.status == HTTPStatus.FORBIDDEN:
                         # XXX: We should improve error handling, while making
                         #      sure re6st nodes don't crash on temporary errors.
                         #      This is currently good enough for re6st-conf, to
