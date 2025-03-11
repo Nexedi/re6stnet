@@ -413,8 +413,8 @@ class BaseTunnelManager:
                 try:
                     peer.verify(msg[i:], h)
                     peer.newSession(self.cert.decrypt(h), protocol)
-                except (AttributeError, crypto.Error, x509.NewSessionError,
-                        subprocess.CalledProcessError):
+                except (AttributeError, x509.InvalidSignature,
+                        x509.NewSessionError, subprocess.CalledProcessError):
                     logging.debug('ignored new session key from %r',
                                   address, exc_info=True)
                     return
@@ -447,6 +447,7 @@ class BaseTunnelManager:
                 peer = x509.Peer(p)
                 insort(self._peers, peer)
             peer.cert = cert
+            peer.cert_crypto = x509.load_der_x509_certificate(msg)
             peer.serial = serial
             peer.stop_date = stop_date
             self.selectTimeout(stop_date, self.invalidatePeers, False)
