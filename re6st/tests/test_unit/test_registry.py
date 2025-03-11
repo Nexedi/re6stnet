@@ -3,7 +3,6 @@ import os
 import random
 import string
 import json
-import http.client
 import base64
 import unittest
 import hmac
@@ -11,6 +10,7 @@ import hashlib
 import time
 import tempfile
 from argparse import Namespace
+from http import HTTPStatus
 from sqlite3 import Cursor
 
 from OpenSSL import crypto
@@ -179,7 +179,7 @@ class TestRegistryServer(unittest.TestCase):
                          [(hashlib.sha1(key).digest(), protocol)])
         func.assert_called_once_with(**params)
         # http response check
-        request.send_response.assert_called_once_with(http.client.OK)
+        request.send_response.assert_called_once_with(HTTPStatus.OK)
         request.send_header.assert_any_call("Content-Length", str(len(result)))
         request.send_header.assert_any_call(
             registry.HMAC_HEADER,
@@ -207,8 +207,8 @@ class TestRegistryServer(unittest.TestCase):
         self.server.handle_request(request_bad, method, params)
 
         func.assert_called_once_with(**params)
-        request_bad.send_error.assert_called_once_with(http.client.FORBIDDEN)
-        request_good.send_response.assert_called_once_with(http.client.NO_CONTENT)
+        request_bad.send_error.assert_called_once_with(HTTPStatus.FORBIDDEN)
+        request_good.send_response.assert_called_once_with(HTTPStatus.NO_CONTENT)
 
     # will cause valueError, if a node send hello twice to a registry
     def test_getPeerProtocol(self):

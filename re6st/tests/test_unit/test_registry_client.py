@@ -5,6 +5,7 @@ import hmac
 import http.client
 import base64
 import hashlib
+from http import HTTPStatus
 from mock import Mock, patch
 
 from re6st import registry
@@ -34,7 +35,7 @@ class TestRegistryClient(unittest.TestCase):
         protocol = "7"
         body = "a_hmac_key"
         query = "/hello?client_prefix=0000000011111111&protocol=7"
-        response = fakeResponse(body, http.client.OK)
+        response = fakeResponse(body, HTTPStatus.OK)
         self.client._conn.getresponse.return_value = response
 
         res = self.client.hello(prefix, protocol)
@@ -58,7 +59,7 @@ class TestRegistryClient(unittest.TestCase):
         key = hashlib.sha1(key).digest()
         # response part
         body = b'this is a body'
-        response = fakeResponse(body, http.client.NO_CONTENT)
+        response = fakeResponse(body, HTTPStatus.NO_CONTENT)
         response.msg = dict(Re6stHMAC=base64.b64encode(
             hmac.HMAC(key, body, hashlib.sha1).digest()))
         self.client._conn.getresponse.return_value = response
