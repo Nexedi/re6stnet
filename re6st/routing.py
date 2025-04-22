@@ -252,7 +252,7 @@ class Babel:
         unidentified = set(n)
         self.neighbours = neighbours = {}
         a = len(self.network)
-        logging.debug("Routes: %r", routes)
+        logging.trace("Routes: %r", routes)
         for route in routes:
             assert route.flags & 1, route # installed
             if route.prefix.startswith(b'\0\0\0\0\0\0\0\0\0\0\xff\xff'):
@@ -263,14 +263,14 @@ class Babel:
             neigh_routes = n[address]
             ip = utils.binFromRawIp(route.prefix)
             if ip[:a] == self.network:
-                logging.debug("Route is on the network: %r", route)
+                logging.trace("Route is on the network: %r", route)
                 prefix = ip[a:route.plen]
                 if prefix and not route.refmetric:
                     neighbours[prefix] = neigh_routes
                     try:
                         unidentified.remove(address)
                     except KeyError:
-                        logging.debug("Buggy neighbour %s%%%s with multiple"
+                        logging.info("Buggy neighbour %s%%%s with multiple"
                             " subnets within the same re6st network"
                             " (one of them is %s/%s).",
                             socket.inet_ntop(socket.AF_INET6, address[0]),
@@ -278,9 +278,9 @@ class Babel:
                             socket.inet_ntop(socket.AF_INET6, route.prefix),
                             route.plen)
             else:
-                logging.debug("Route is not on the network: %r", route)
+                logging.trace("Route is not on the network: %r", route)
                 prefix = None
-            logging.debug("Adding route %r to %r", route, neigh_routes)
+            logging.trace("Adding route %r to %r", route, neigh_routes)
             neigh_routes[1][prefix] = route
         self.locked.clear()
         if unidentified:

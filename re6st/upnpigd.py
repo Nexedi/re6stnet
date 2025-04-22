@@ -72,12 +72,18 @@ class Forwarder:
                 logging.debug("UPnP failure", exc_info=True)
                 self.clear()
         try:
-            self.discover()
+            try:
+                self.discover()
+            except UPnPException as e:
+                if str(e) != 'Success':
+                    raise
+                # WKRD: it likely found no device but let selectigd raise
+                #       with a good message
             self.selectigd()
             return self._refresh()
         except UPnPException as e:
             self.next_refresh = self._next_retry = time.time() + 60
-            logging.info(str(e))
+            logging.info(e)
             self.clear()
 
     def _refresh(self):
