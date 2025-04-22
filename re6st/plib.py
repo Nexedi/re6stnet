@@ -69,7 +69,7 @@ def client(iface: str, address_list: list[tuple[str, int, str]],
 
 
 def router(ip: tuple[str, int], ip4, rt6: tuple[str, bool, bool],
-           hello_interval: int, log_path: str, state_path: str, pidfile: str,
+           hello_interval: int, log_path: str, state_path: str,
            control_socket: str, default: str,
            hmac: tuple[bytes | None, bytes | None], *args, **kw) -> utils.Popen:
     network, gateway, has_ipv6_subtrees = rt6
@@ -83,7 +83,7 @@ def router(ip: tuple[str, int], ip4, rt6: tuple[str, bool, bool],
             '-H', str(hello_interval),
             '-L', log_path,
             '-S', state_path,
-            '-I', pidfile,
+            '-I', '',
             '-s',
             '-C', 'redistribute local deny',
             '-C', 'redistribute ip %s/%s eq %s' % (ip, n, n)]
@@ -137,11 +137,5 @@ def router(ip: tuple[str, int], ip4, rt6: tuple[str, bool, bool],
     if control_socket:
         cmd += '-X', '%s' % control_socket
     cmd += args
-    # WKRD: babeld fails to start if pidfile already exists
-    try:
-        os.remove(pidfile)
-    except OSError as e:
-        if e.errno != errno.ENOENT:
-            raise
     logging.info('%r', cmd)
     return utils.Popen(cmd, **kw)

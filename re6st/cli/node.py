@@ -34,7 +34,6 @@ def getConfig():
              "- <iface>.log: 1 file per spawned OpenVPN\n")
     _('-r', '--run', default='/var/run/re6stnet',
         help="Path to re6stnet runtime directory:\n"
-             "- babeld.pid (option -I of babeld)\n"
              "- babeld.sock (option -R of babeld)\n")
     _('-s', '--state', default='/var/lib/re6stnet',
         help="Path to re6stnet state directory:\n"
@@ -383,7 +382,6 @@ def main():
                 cache.hello,
                 os.path.join(config.log, 'babeld.log'),
                 os.path.join(config.state, 'babeld.state'),
-                os.path.join(config.run, 'babeld.pid'),
                 control_socket, cache.babel_default,
                 tuple(getattr(cache, k, None) for k in
                       ('babel_hmac_sign', 'babel_hmac_accept')),
