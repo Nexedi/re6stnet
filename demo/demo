@@ -470,7 +470,7 @@ if args.port:
 
     class Handler(http.server.SimpleHTTPRequestHandler):
 
-        _path_match = re.compile('/(.+)\.(html|svg)$').match
+        _path_match = re.compile(r'/(.+)\.(html|svg)$').match
         pages = 'ipv6', 'ipv4', 'tunnels'
 
         def do_GET(self):
