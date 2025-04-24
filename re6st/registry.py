@@ -364,7 +364,7 @@ class RegistryServer:
             cert = self.getCert(client_prefix)
             key = utils.newHmacSecret()
             self.sessions.setdefault(client_prefix, [])[1:] = (key, int(protocol)),
-        key = x509.encrypt(cert, key)
+        key = x509.encrypt(x509.load_pem_x509_certificate(cert), key)
         sign = self.cert.sign(key)
         assert len(key) == len(sign)
         return key + sign
@@ -627,7 +627,8 @@ class RegistryServer:
             hmac = [self.getConfig(k, None) for k in BABEL_HMAC]
             for i, v in enumerate(v for v in hmac if v is not None):
                 config[('babel_hmac_sign', 'babel_hmac_accept')[i]] = \
-                    v and base64.b64encode(x509.encrypt(cert, v)).decode()
+                    v and base64.b64encode(x509.encrypt(
+                        x509.load_pem_x509_certificate(cert), v)).decode()
         return zlib.compress(json.dumps(config).encode("utf-8"))
 
     def _queryAddress(self, peer: str) -> str:
@@ -685,7 +686,7 @@ class RegistryServer:
             cert = self.getCert(cn)
         msg = "%s %s" % (peer, msg)
         logging.info("Sending bootstrap peer: %s", msg)
-        return x509.encrypt(cert, msg.encode())
+        return x509.encrypt(x509.load_pem_x509_certificate(cert), msg.encode())
 
     @rpc_private
     def revoke(self, cn_or_serial: int | str):

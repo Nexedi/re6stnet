@@ -1,10 +1,7 @@
-import sys
-import os
 import time
-import subprocess
 from OpenSSL import crypto
 
-from re6st import registry
+from re6st import registry, x509
 
 
 def generate_csr():
@@ -98,9 +95,6 @@ def prefix2cn(prefix: str) -> str:
 def serial2prefix(serial: int) -> str:
     return bin(serial)[2:].rjust(16, '0')
 
-# pkey: private key
 def decrypt(pkey: bytes, incontent: bytes) -> bytes:
-    with open("node.key", 'wb') as f:
-        f.write(pkey)
-    args = "openssl rsautl -decrypt -inkey node.key".split()
-    return subprocess.run(args, input=incontent, stdout=subprocess.PIPE).stdout
+    pkey = x509.load_pem_private_key(pkey, password=None)
+    return pkey.decrypt(incontent, x509.PADDING)

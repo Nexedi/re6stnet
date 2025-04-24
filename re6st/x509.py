@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-import calendar, hashlib, hmac, logging, os, struct, subprocess, threading, time
-from typing import Callable, Any
+import calendar, hashlib, hmac, logging, os, struct, subprocess, time
+from typing import Callable
 
 from OpenSSL import crypto
 from cryptography.exceptions import InvalidSignature
@@ -13,7 +13,8 @@ from cryptography.x509 import \
 from . import utils
 from .version import protocol
 
-PADDING_HASH = padding.PKCS1v15(), hashes.SHA512()
+PADDING = padding.PKCS1v15()
+PADDING_HASH = PADDING, hashes.SHA512()
 
 def newHmacSecret() -> bytes:
     return utils.newHmacSecret(int(time.time() * 1000000))
@@ -33,27 +34,8 @@ def notAfter(cert: crypto.X509) -> int:
     return calendar.timegm(time.strptime(cert.get_notAfter().decode(),
                                          '%Y%m%d%H%M%SZ'))
 
-def openssl(*args: str, fds=[]) -> utils.Popen:
-    return utils.Popen(('openssl',) + args,
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE, pass_fds=fds)
-
-def encrypt(cert: bytes, data: bytes) -> bytes:
-    def write_cert():
-        os.write(w, cert)
-        os.close(w)
-    r, w = os.pipe()
-    try:
-        threading.Thread(target=write_cert, daemon=True).start()
-        p = openssl('rsautl', '-encrypt', '-certin',
-                    '-inkey', '/proc/self/fd/%u' % r, fds=[r])
-    finally:
-        os.close(r)
-    out, err = p.communicate(data)
-    if p.returncode:
-        raise subprocess.CalledProcessError(p.returncode, 'openssl', err)
-    return out
+def encrypt(cert, data):
+    return cert.public_key().encrypt(data, PADDING)
 
 def fingerprint(cert: crypto.X509, alg='sha1'):
     return hashlib.new(alg, crypto.dump_certificate(crypto.FILETYPE_ASN1, cert))
@@ -118,8 +100,8 @@ class Cert:
             self.key = crypto.load_privatekey(crypto.FILETYPE_PEM, key_pem)
             self.key_crypto = load_pem_private_key(key_pem, password=None)
         if cert:
-            with open(cert) as f:
-                self.cert = self.loadVerify(f.read().encode())
+            with open(cert, "rb") as f:
+                self.cert = self.loadVerify(f.read())
 
     @property
     def prefix(self) -> str:
@@ -150,15 +132,17 @@ class Cert:
     def loadVerify(self, cert, strict=False, type=crypto.FILETYPE_PEM):
         try:
             r = crypto.load_certificate(type, cert)
-        except crypto.Error:
-            raise VerifyError(None, None, 'unable to load certificate')
+        except crypto.Error as e:
+            raise VerifyError(None, None, 'unable to load certificate') from e
         if type != crypto.FILETYPE_PEM:
             cert = crypto.dump_certificate(crypto.FILETYPE_PEM, r)
-        args = ['verify', '-CAfile', self.ca_path]
+        args = ['openssl', 'verify', '-CAfile', self.ca_path]
         if not strict:
             args += '-attime', str(min(int(time.time()),
                 max(notBefore(self.ca), notBefore(r))))
-        p = openssl(*args)
+        p = utils.Popen(args, stdin=subprocess.PIPE,
+                              stdout=subprocess.PIPE,
+                              stderr=subprocess.PIPE)
         out, err = p.communicate(cert)
         if 1: # BBB: Old OpenSSL could return 0 in case of errors.
           if err is None: # utils.Popen failed with ENOMEM
@@ -181,18 +165,14 @@ class Cert:
         return self.key_crypto.sign(data, *PADDING_HASH)
 
     def decrypt(self, data: bytes) -> bytes:
-        p = openssl('rsautl', '-decrypt', '-inkey', self.key_path)
-        out, err = p.communicate(data)
-        if p.returncode:
-            raise subprocess.CalledProcessError(p.returncode, 'openssl', err)
-        return out
+        return self.key_crypto.decrypt(data, PADDING)
 
     def verifyVersion(self, version):
         try:
             n = 1 + (version[0] >> 5) # see utils.unpackInteger
             self.verify(version[n:], version[:n])
-        except (IndexError, InvalidSignature):
-            raise VerifyError(None, None, 'invalid network version')
+        except (IndexError, InvalidSignature) as e:
+            raise VerifyError('invalid network version') from e
 
 
 PACKED_PROTOCOL = utils.packInteger(protocol)
@@ -265,8 +245,7 @@ class Peer:
 
     def hello(self, cert: Cert, protocol: int) -> bytes:
         key = self._key = newHmacSecret()
-        h = encrypt(crypto.dump_certificate(crypto.FILETYPE_PEM, self.cert),
-                    key)
+        h = encrypt(self.cert_crypto, key)
         self._i = self._j = 2
         self._last = 0
         self.protocol = protocol
