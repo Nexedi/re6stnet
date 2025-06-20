@@ -16,6 +16,7 @@ def openvpn(iface: str, encrypt, *args, **kw) -> utils.Popen:
         '--persist-key',
         '--script-security', '2',
         '--up', ovpn_client,
+        '--setenv', 'PATH', os.environ['PATH'],
         #'--user', 'nobody', '--group', 'nogroup',
         ] + list(args)
     if ovpn_log:
