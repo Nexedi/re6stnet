@@ -6,8 +6,12 @@ if script_type == 'up':
     # OpenVPN only brings the interface up when it's called with --ifconfig
     # i.e. when IPv4 mode is enabled in re6st.
     # OpenVPN unsets PATH before calling hooks
-    # which is equivalent to set /bin:/usr/bin
-    os.environ['PATH'] = '/bin:/sbin:/usr/bin:/usr/sbin'
+    # We only keep 'ip' in PATH
+    for path in os.environ['PATH'].split(':'):
+        if 'ip' in path:
+            os.environ['PATH'] = path
+            break
+
     os.execlp('ip', 'ip', 'link', 'set', os.environ['dev'], 'up',
               'mtu', os.environ['tun_mtu'])
 

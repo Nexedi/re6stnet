@@ -2,6 +2,7 @@ import binascii
 import logging, errno, os
 from typing import Optional
 from . import utils
+from os import environ
 
 here = os.path.realpath(os.path.dirname(__file__))
 ovpn_server = os.path.join(here, 'ovpn-server')
@@ -16,6 +17,7 @@ def openvpn(iface: str, encrypt, *args, **kw) -> utils.Popen:
         '--persist-key',
         '--script-security', '2',
         '--up', ovpn_client,
+        '--setenv', 'PATH', environ['PATH'],
         #'--user', 'nobody', '--group', 'nogroup',
         ] + list(args)
     if ovpn_log:
