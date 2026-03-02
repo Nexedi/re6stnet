@@ -58,7 +58,8 @@ Requirements
 - Babel_ (with Nexedi patches)
 - geoip2: `python library`_ and `country lite database`_ (optional)
 - python-miniupnpc for UPnP support (optional)
-- for the demo: miniupnpd_, Graphviz, Screen_, Nemu_, MultiPing_, psutil_
+- for the demo: miniupnpd_, Graphviz with neato plugin,
+  Screen_, Nemu_, MultiPing_, psutil_
 - for multicast: pim-dm_ and PyYAML_
 
 See also `setup.py` for Python dependencies.
