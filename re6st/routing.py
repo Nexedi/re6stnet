@@ -148,7 +148,7 @@ Dump = Packet(1,
   Struct("B"),
   Struct((
     Array(Struct((Struct("I", "index", "index"), String), "interface", "index name")),
-    Array(Struct("16sIHHHHHiHH", "neighbour", "address ifindex reach rxcost txcost rtt rttcost channel if_up cost_multiplier")),
+    Array(Struct("16sIHHHHHHH", "neighbour", "address ifindex reach rxcost txcost rtt rttcost if_up cost_multiplier")),
     Array(Struct("16sBH", "xroute", "prefix plen metric")),
     Array(Struct("16sBHHH8siiI16s16sB", "route", "prefix plen metric smoothed_metric refmetric id seqno age ifindex neigh_address nexthop flags")),
     ), "dump", "interfaces neighbours xroutes routes"))
