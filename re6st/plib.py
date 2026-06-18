@@ -132,12 +132,12 @@ def router(ip: tuple[str, int], ip4, rt6: tuple[str, bool, bool],
             # because we could be a black hole in case of misconfiguration.
             '-C', 'out ip ::/0 eq 0 deny',
         )
+    cmd += args
     cmd += ('-C', 'redistribute deny',
             '-C', 'install pref-src ' + ip)
     if ip4:
         cmd += '-C', 'install pref-src ' + ip4
     if control_socket:
         cmd += '-X', '%s' % control_socket
-    cmd += args
     logging.info('%r', cmd)
     return utils.Popen(cmd, **kw)
