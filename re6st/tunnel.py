@@ -1,9 +1,10 @@
+from __future__ import annotations
 import errno, json, logging, os, platform, random, socket
 import subprocess, struct, sys, time, weakref
 from collections import defaultdict, deque
 from bisect import bisect, insort
 from collections.abc import Iterator, Sequence
-from typing import Callable, TYPE_CHECKING
+from typing import Callable, Optional, TYPE_CHECKING
 
 from OpenSSL import crypto
 from . import plib, routing, utils, version, x509
@@ -28,7 +29,7 @@ proto_dict['tcp'] = proto_dict['tcp4']
 proto_dict['udp'] = proto_dict['udp4']
 
 def resolve(ip, port, proto: str) \
-        -> tuple[socket.AddressFamily | None, Iterator[str]]:
+        -> tuple[Optional[socket.AddressFamily], Iterator[str]]:
     try:
         family, proto = proto_dict[proto]
     except KeyError:

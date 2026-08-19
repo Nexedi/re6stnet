@@ -1,5 +1,7 @@
+from __future__ import annotations
 import base64, json, logging, os, sqlite3, socket, subprocess, sys, time, zlib
 from itertools import chain
+from typing import Optional
 from .registry import RegistryClient
 from . import utils, version, x509
 
@@ -268,7 +270,7 @@ class Cache:
                 q("INSERT OR REPLACE INTO peer VALUES (?,?)", (prefix, address))
             q("INSERT OR REPLACE INTO volatile.stat VALUES (?,0)", (prefix,))
 
-    def getCountry(self, ip: str) -> str | None:
+    def getCountry(self, ip: str) -> Optional[str]:
         country = self._registry.getCountry(self._prefix, ip)
         if country is not None:
             try:

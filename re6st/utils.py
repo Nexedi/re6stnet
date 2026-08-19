@@ -1,7 +1,9 @@
+from __future__ import annotations
 import argparse, errno, fcntl, hashlib, logging, os, select as _select
 import shlex, signal, socket, sqlite3, struct, subprocess
 import sys, textwrap, threading, time, traceback
 from collections.abc import Iterator, Mapping
+from typing import Optional
 
 HMAC_LEN = len(hashlib.sha1(b'').digest())
 
@@ -31,7 +33,7 @@ class FileHandler(logging.FileHandler):
         if self.lock.acquire(False):
             self.release()
 
-def setupLog(log_level: int, filename: str | None=None, **kw):
+def setupLog(log_level: int, filename: Optional[str]=None, **kw):
     if log_level and filename:
         makedirs(os.path.dirname(filename))
         handler = FileHandler(filename)
@@ -259,7 +261,7 @@ def packInteger(i: int) -> bytes:
         i -= x
     raise OverflowError
 
-def unpackInteger(x: bytes) -> tuple[int, int] | None:
+def unpackInteger(x: bytes) -> Optional[tuple[int, int]]:
     n = x[0] >> 5
     try:
         i, = struct.unpack("!Q", b'\0' * (7 - n) + x[:n+1])

@@ -1,3 +1,4 @@
+from __future__ import annotations
 import logging, socket, struct
 from collections import namedtuple
 from . import utils

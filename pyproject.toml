@@ -15,7 +15,7 @@ classifiers = [
   "Topic :: Internet",
   "Topic :: System :: Networking",
 ]
-requires-python = ">= 3.11"
+requires-python = ">= 3.7"
 dependencies = [
   "pyOpenSSL >= 0.13",
   "miniupnpc",

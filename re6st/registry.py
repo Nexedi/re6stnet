@@ -18,6 +18,7 @@ Authenticated communication:
   - the last one that was really used by the client (!hello)
   - the one of the last handshake (hello)
 """
+from __future__ import annotations
 import base64, hmac, hashlib, http.client, inspect, json, logging
 import mailbox, os, platform, random, select, smtplib, socket, sqlite3
 import string, sys, threading, time, weakref, zlib
@@ -28,7 +29,7 @@ from http import HTTPStatus
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from email.mime.text import MIMEText
 from operator import itemgetter
-from typing import Tuple
+from typing import Optional
 
 from OpenSSL import crypto
 from urllib.parse import urlparse, unquote, urlencode
@@ -147,7 +148,7 @@ class RegistryServer:
         if self.geoip_db:
             from geoip2 import database, errors
             country = database.Reader(self.geoip_db).country
-            def geoiplookup(ip: str) -> Tuple[str, str]:
+            def geoiplookup(ip: str) -> tuple[str, str]:
                 try:
                     req = country(ip)
                     return req.country.iso_code, req.continent.code
@@ -252,7 +253,7 @@ class RegistryServer:
     def babel_dump(self):
         self._wait_dump = False
 
-    def iterCert(self) -> Iterator[Tuple[crypto.X509, str, str]]:
+    def iterCert(self) -> Iterator[tuple[crypto.X509, str, str]]:
         for prefix, email, cert in self.db.execute(
                 "SELECT * FROM cert WHERE cert IS NOT NULL"):
             try:
@@ -392,7 +393,7 @@ class RegistryServer:
             self.db.execute("DELETE FROM token WHERE token = ?", (token,))
 
     @rpc_private
-    def addToken(self, email: str, token: str | None) -> str:
+    def addToken(self, email: str, token: Optional[str]) -> str:
         prefix_len = self.config.prefix_length
         if not prefix_len:
             raise HTTPError(HTTPStatus.FORBIDDEN)
@@ -520,7 +521,7 @@ class RegistryServer:
             q("UPDATE cert SET cert = 'reserved' WHERE prefix = ?", (prefix,))
 
     @rpc
-    def requestCertificate(self, token: str | None, req: bytes,
+    def requestCertificate(self, token: Optional[str], req: bytes,
                            location: str='', ip: str=''):
         logging.debug("Requesting certificate with token %s", token)
         req = crypto.load_certificate_request(crypto.FILETYPE_PEM, req)
@@ -649,12 +650,12 @@ class RegistryServer:
                      int(peer, 2), len(peer))
 
     @rpc
-    def getCountry(self, cn: str, address: str) -> str | None:
+    def getCountry(self, cn: str, address: str) -> Optional[str]:
         country = self._geoiplookup(address)[0]
         return None if country == '*' else country
 
     @rpc
-    def getBootstrapPeer(self, cn: str) -> bytes | None:
+    def getBootstrapPeer(self, cn: str) -> Optional[bytes]:
         logging.info("Answering bootstrap peer for %s", cn)
         with self.peers_lock:
             age, peers = self.peers
@@ -748,7 +749,7 @@ class RegistryServer:
         self.sendto(self.prefix, 0)
 
     @rpc_private
-    def getNodePrefix(self, email: str) -> str | None:
+    def getNodePrefix(self, email: str) -> Optional[str]:
         with self.lock, self.db:
             try:
                 cert, = next(
@@ -768,7 +769,7 @@ class RegistryServer:
                 + utils.binFromSubnet(cn))
 
     @rpc_private
-    def getIPv4Information(self, email: str) -> str | None:
+    def getIPv4Information(self, email: str) -> Optional[str]:
         peer = self.getNodePrefix(email)
         if peer:
             peer = utils.binFromSubnet(peer)
@@ -872,7 +873,7 @@ class RegistryClient:
 
     def __getattr__(self, name: str):
         getcallargs = getattr(RegistryServer, name).getcallargs
-        def rpc(*args, **kw) -> bytes | None:
+        def rpc(*args, **kw) -> Optional[bytes]:
             kw = getcallargs(*args, **kw)
             query = '/' + name
             if kw:

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
+from __future__ import annotations
 import calendar, hashlib, hmac, logging, os, struct, subprocess, time
-from typing import Callable
+from typing import Callable, Optional, Union
 
 from OpenSSL import crypto
 from cryptography.exceptions import InvalidSignature
@@ -86,7 +87,7 @@ class NewSessionError(Exception):
 
 class Cert:
 
-    def __init__(self, ca: str, key: str, cert: str | None=None):
+    def __init__(self, ca: str, key: str, cert: Optional[str]=None):
         self.ca_path = ca
         self.cert_path = cert
         self.key_path = key
@@ -269,7 +270,7 @@ class Peer:
     seqno_struct = struct.Struct("!L")
 
     def decode(self, msg: bytes, _unpack=seqno_struct.unpack) \
-            -> tuple[int, bytes, int | None] | bytes:
+            -> Union[tuple[int, bytes, Optional[int]], bytes]:
         seqno, = _unpack(msg[:4])
         if seqno <= 2:
             msg = msg[4:]

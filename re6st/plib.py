@@ -1,3 +1,4 @@
+from __future__ import annotations
 import binascii
 import logging, errno, os
 from typing import Optional
@@ -72,7 +73,7 @@ def client(iface: str, address_list: list[tuple[str, int, str]],
 def router(ip: tuple[str, int], ip4, rt6: tuple[str, bool, bool],
            hello_interval: int, log_path: str, state_path: str,
            control_socket: str, default: str,
-           hmac: tuple[bytes | None, bytes | None], *args, **kw) -> utils.Popen:
+           hmac: tuple[Optional[bytes], Optional[bytes]], *args, **kw) -> utils.Popen:
     network, gateway, has_ipv6_subtrees = rt6
     network_mask = int(network[network.index('/')+1:])
     ip, n = ip
