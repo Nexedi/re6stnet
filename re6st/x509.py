@@ -7,9 +7,16 @@ from OpenSSL import crypto
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
-from cryptography.hazmat.primitives.serialization import load_pem_private_key
-from cryptography.x509 import \
-    load_der_x509_certificate, load_pem_x509_certificate
+try: # BBB: old cryptography
+    from cryptography.hazmat.backends.openssl.backend import backend
+    load_pem_private_key =  backend.load_pem_private_key
+except AttributeError:
+    from cryptography.hazmat.primitives.serialization import load_pem_private_key
+    from cryptography.x509 import \
+        load_der_x509_certificate, load_pem_x509_certificate
+else:
+    load_der_x509_certificate = backend.load_der_x509_certificate
+    load_pem_x509_certificate = backend.load_pem_x509_certificate
 
 from . import utils
 from .version import protocol

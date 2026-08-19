@@ -17,7 +17,7 @@ classifiers = [
 ]
 requires-python = ">= 3.7"
 dependencies = [
-  "pyOpenSSL >= 0.13",
+  "pyOpenSSL >= 19",
   "miniupnpc",
 ]
 dynamic = ["readme", "version"]
