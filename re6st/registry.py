@@ -524,7 +524,7 @@ class RegistryServer:
     def requestCertificate(self, token: Optional[str], req: bytes,
                            location: str='', ip: str=''):
         logging.debug("Requesting certificate with token %s", token)
-        req = crypto.load_certificate_request(crypto.FILETYPE_PEM, req)
+        subject, pubkey = x509.parse_csr(req)
         with self.lock:
             with self.db:
                 if token:
@@ -555,9 +555,8 @@ class RegistryServer:
                     self.prefix = prefix
                     self.setConfig('prefix', prefix)
                     self.updateNetworkConfig()
-                subject = req.get_subject()
                 subject.serialNumber = str(self.getSubjectSerial())
-                return self.createCertificate(prefix, subject, req.get_pubkey())
+                return self.createCertificate(prefix, subject, pubkey)
 
     def getSubjectSerial(self):
         # Smallest unique number, for IPv4 support.
