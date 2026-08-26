@@ -1,5 +1,9 @@
 import time
 from OpenSSL import crypto
+from cryptography import x509 as cx509
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.x509.oid import NameOID
 
 from re6st import registry, x509
 
@@ -8,16 +12,18 @@ def generate_csr():
     """generate a certificate request
 
     return:
-        crypto.Pekey and crypto.X509Req  both in pem format
+        pkey and csr both in pem format
     """
-    key = crypto.PKey()
-    key.generate_key(crypto.TYPE_RSA, 2048)
-    req = crypto.X509Req()
-    req.set_pubkey(key)
-    req.get_subject().CN = "test ca"
-    req.sign(key, 'sha256')
-    csr = crypto.dump_certificate_request(crypto.FILETYPE_PEM, req)
-    pkey = crypto.dump_privatekey(crypto.FILETYPE_PEM, key)
+    key = rsa.generate_private_key(65537, 2048)
+    req = cx509.CertificateSigningRequestBuilder().subject_name(
+        cx509.Name([cx509.NameAttribute(NameOID.COMMON_NAME, "test ca")])
+    ).sign(key, hashes.SHA256())
+    csr = req.public_bytes(serialization.Encoding.PEM)
+    pkey = key.private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.TraditionalOpenSSL,
+        serialization.NoEncryption(),
+    )
     return pkey, csr
 
 
@@ -31,7 +37,7 @@ def generate_cert(ca, ca_key, csr, prefix, serial, not_after=None):
         ca = crypto.load_certificate(crypto.FILETYPE_PEM, ca)
     if type(ca_key) is bytes:
         ca_key = crypto.load_privatekey(crypto.FILETYPE_PEM, ca_key)
-    req = crypto.load_certificate_request(crypto.FILETYPE_PEM, csr)
+    csr_obj = cx509.load_pem_x509_csr(csr)
 
     cert = crypto.X509()
     cert.gmtime_adj_notBefore(0)
@@ -40,12 +46,21 @@ def generate_cert(ca, ca_key, csr, prefix, serial, not_after=None):
             time.strftime("%Y%m%d%H%M%SZ", time.gmtime(not_after)).encode())
     else:
         cert.gmtime_adj_notAfter(registry.RegistryServer.cert_duration)
-    subject = req.get_subject()
+    subject = crypto.X509Name(crypto.X509().get_subject())
+    for attr in csr_obj.subject:
+        setattr(subject, attr.oid._name, attr.value)
     if prefix:
         subject.CN = prefix2cn(prefix)
-    cert.set_subject(req.get_subject())
+    cert.set_subject(subject)
     cert.set_issuer(ca.get_subject())
-    cert.set_pubkey(req.get_pubkey())
+    pubkey = crypto.load_publickey(
+        crypto.FILETYPE_PEM,
+        csr_obj.public_key().public_bytes(
+            serialization.Encoding.PEM,
+            serialization.PublicFormat.SubjectPublicKeyInfo,
+        ),
+    )
+    cert.set_pubkey(pubkey)
     cert.set_serial_number(serial)
     cert.sign(ca_key, 'sha512')
     return crypto.dump_certificate(crypto.FILETYPE_PEM, cert)
