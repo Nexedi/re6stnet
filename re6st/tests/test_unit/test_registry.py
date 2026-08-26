@@ -13,9 +13,10 @@ from argparse import Namespace
 from http import HTTPStatus
 from sqlite3 import Cursor
 
-from OpenSSL import crypto
 from mock import Mock, patch
 from pathlib import Path
+from cryptography import x509 as cx509
+from cryptography.x509.oid import NameOID
 
 from re6st import registry, x509
 from re6st.tests.tools import *
@@ -230,10 +231,8 @@ class TestRegistryServer(unittest.TestCase):
 
         res = self.server.hello(prefix, protocol=protocol)
 
-        # decrypt
-        length = len(res) // 2
-        key, sign = res[:length], res[length:]
-        key = decrypt(pkey, key)
+        pkey = x509.load_pem_private_key(pkey, password=None)
+        key = pkey.decrypt(res[:len(res)//2], x509.PADDING)
         self.assertEqual(self.server.sessions[prefix][-1][0], key,
                          "different hmac key")
         self.assertEqual(self.server.sessions[prefix][-1][1], protocol)
@@ -273,6 +272,7 @@ class TestRegistryServer(unittest.TestCase):
         token = self.server.addToken(self.email, None)
         fake_token = "aaaabbbb"
         _, csr = generate_csr()
+        csr = csr.decode() # RPC takes str
 
         # unvalide token
         self.server.requestCertificate(fake_token, csr)
@@ -283,11 +283,11 @@ class TestRegistryServer(unittest.TestCase):
         mock_func.assert_called_once()
         # check the call parameter
         prefix, subject, pubkey = mock_func.call_args[0]
-        self.assertIsNotNone(subject.serialNumber)
+        self.assertTrue(subject.get_attributes_for_oid(NameOID.SERIAL_NUMBER))
 
     def test_requestCertificate_anoymous(self):
         _, csr = generate_csr()
-
+        csr = csr.decode() # RPC takes str
         if self.config.anonymous_prefix_length is None:
             with self.assertRaises(registry.HTTPError):
                 self.server.requestCertificate(None, csr)
@@ -299,24 +299,27 @@ class TestRegistryServer(unittest.TestCase):
         # test the smallest unique possible
         nb_less = 0
         for cert in self.server.iterCert():
-            s = cert[0].get_subject().serialNumber
-            if s and int(s) <= serial:
+            attrs = cert[0].subject.get_attributes_for_oid(
+                NameOID.SERIAL_NUMBER)
+            if attrs and int(attrs[0].value) <= serial:
                 nb_less += 1
         self.assertEqual(nb_less, serial)
 
     def test_createCertificate(self):
         _, csr = generate_csr()
-        req = crypto.load_certificate_request(crypto.FILETYPE_PEM, csr)
+        csr = x509.load_pem_x509_csr(csr)
         prefix = "00011111101001110"
-        subject = req.get_subject()
-        subject.serialNumber = str(self.server.getSubjectSerial())
+        serial = str(self.server.getSubjectSerial())
+        subject = cx509.Name(list(csr.subject) + [
+            cx509.NameAttribute(NameOID.SERIAL_NUMBER, serial)])
         self.server.db.execute("INSERT INTO cert VALUES (?,null,null)", (prefix,))
 
-        cert = self.server.createCertificate(prefix, subject, req.get_pubkey())
+        cert = self.server.createCertificate(prefix, subject, csr.public_key())
 
-        cert = crypto.load_certificate(crypto.FILETYPE_PEM, cert)
-        self.assertEqual(cert.get_subject().CN, prefix2cn(prefix))
-        self.assertEqual(cert.get_serial_number(), self.server.getConfig('serial', 0))
+        cert = x509.load_pem_x509_certificate(cert)
+        cn_attrs = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+        self.assertEqual(cn_attrs[0].value, prefix2cn(prefix))
+        self.assertEqual(cert.serial_number, self.server.getConfig('serial', 0))
         self.assertIsNotNone(get_cert(self.server.db, prefix))
 
     @patch("re6st.registry.RegistryServer.createCertificate")

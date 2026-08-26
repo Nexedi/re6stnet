@@ -11,6 +11,9 @@ try:
 except AttributeError: # BBB: Python < 3.8
     shlex_join = lambda split_command: ' '.join(map(shlex.quote, split_command))
 
+sys.path[0] = os.path.dirname(sys.path[0])
+from re6st import x509
+
 IPTABLES = 'iptables'
 SCREEN = 'screen'
 VERBOSE = 4
@@ -247,17 +250,16 @@ gateway1.screen(['miniupnpd', '-d', '-f', 'miniupnpd.conf', '-P',
 
 @contextmanager
 def new_network(registry: Re6stNode, reg_addr: str, serial: str, ca: str):
-    from OpenSSL import crypto
-    import hashlib, sqlite3
+    import sqlite3
+    from cryptography.hazmat.primitives import hashes
     os.path.exists(ca) or subprocess.check_call(
         "openssl req -nodes -new -x509 -key %s/ca.key -out %s"
         " -subj /CN=re6st.example.com/emailAddress=re6st@example.com"
         " -set_serial %s -days %u"
         % (registry.name, ca, serial, CA_DAYS), shell=True)
     with open(ca, "rb") as f:
-        cert = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
-    fingerprint = "sha256:" + hashlib.sha256(
-        crypto.dump_certificate(crypto.FILETYPE_ASN1, cert)).hexdigest()
+        cert = x509.load_pem_x509_certificate(f.read())
+    fingerprint = "sha256:" + cert.fingerprint(hashes.SHA256()).hex()
     db_path = "%s/registry.db" % registry.name
     registry.screen([
         sys.executable, './py', 're6st-registry',
