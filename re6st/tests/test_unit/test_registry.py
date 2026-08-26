@@ -13,11 +13,12 @@ from argparse import Namespace
 from http import HTTPStatus
 from sqlite3 import Cursor
 
-from OpenSSL import crypto
 from mock import Mock, patch
 from pathlib import Path
+from cryptography import x509 as cx509
 
 from re6st import registry, x509
+from re6st.x509 import load_pem_x509_certificate
 from re6st.tests.tools import *
 from re6st.tests import DEMO_PATH
 
@@ -56,7 +57,7 @@ def insert_cert(cur: Cursor, ca: x509.Cert, prefix: str,
     return key, cert
 
 
-insert_cert.serial = 0
+insert_cert.serial = 1
 
 
 def delete_cert(cur: Cursor, prefix: str):
@@ -283,7 +284,8 @@ class TestRegistryServer(unittest.TestCase):
         mock_func.assert_called_once()
         # check the call parameter
         prefix, subject, pubkey = mock_func.call_args[0]
-        self.assertIsNotNone(subject.serialNumber)
+        serial_attrs = subject.get_attributes_for_oid(cx509.oid.NameOID.SERIAL_NUMBER)
+        self.assertTrue(len(serial_attrs) > 0)
 
     def test_requestCertificate_anoymous(self):
         _, csr = generate_csr()
@@ -299,24 +301,29 @@ class TestRegistryServer(unittest.TestCase):
         # test the smallest unique possible
         nb_less = 0
         for cert in self.server.iterCert():
-            s = cert[0].get_subject().serialNumber
+            attrs = cert[0].subject.get_attributes_for_oid(
+                cx509.oid.NameOID.SERIAL_NUMBER)
+            s = attrs[0].value if attrs else None
             if s and int(s) <= serial:
                 nb_less += 1
         self.assertEqual(nb_less, serial)
 
     def test_createCertificate(self):
         _, csr = generate_csr()
-        req = crypto.load_certificate_request(crypto.FILETYPE_PEM, csr)
+        csr_subject, pubkey = x509.parse_csr(csr)
         prefix = "00011111101001110"
-        subject = req.get_subject()
-        subject.serialNumber = str(self.server.getSubjectSerial())
+        serial = str(self.server.getSubjectSerial())
+        name_attrs = list(csr_subject) + [
+            cx509.NameAttribute(cx509.oid.NameOID.SERIAL_NUMBER, serial)]
+        subject = cx509.Name(name_attrs)
         self.server.db.execute("INSERT INTO cert VALUES (?,null,null)", (prefix,))
 
-        cert = self.server.createCertificate(prefix, subject, req.get_pubkey())
+        cert = self.server.createCertificate(prefix, subject, pubkey)
 
-        cert = crypto.load_certificate(crypto.FILETYPE_PEM, cert)
-        self.assertEqual(cert.get_subject().CN, prefix2cn(prefix))
-        self.assertEqual(cert.get_serial_number(), self.server.getConfig('serial', 0))
+        cert = load_pem_x509_certificate(cert)
+        cn_attrs = cert.subject.get_attributes_for_oid(cx509.oid.NameOID.COMMON_NAME)
+        self.assertEqual(cn_attrs[0].value, prefix2cn(prefix))
+        self.assertEqual(cert.serial_number, self.server.getConfig('serial', 0))
         self.assertIsNotNone(get_cert(self.server.db, prefix))
 
     @patch("re6st.registry.RegistryServer.createCertificate")
