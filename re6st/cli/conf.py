@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 import argparse, atexit, binascii, hashlib
 import os, subprocess, sqlite3, sys, time
-from OpenSSL import crypto
 if 're6st' not in sys.modules:
     sys.path[0] = os.path.dirname(os.path.dirname(sys.path[0]))
 from re6st import registry, utils, x509
+from re6st.x509 import load_pem_x509_certificate, load_pem_private_key
+from cryptography.hazmat.primitives.serialization import Encoding, PrivateFormat, NoEncryption
+from cryptography.hazmat.primitives.asymmetric import rsa
 
 def create(path, text=None, mode=0o666):
     fd = os.open(path, os.O_CREAT | os.O_WRONLY | os.O_TRUNC, mode)
@@ -14,7 +16,7 @@ def create(path, text=None, mode=0o666):
         os.close(fd)
 
 def loadCert(pem: bytes):
-    return crypto.load_certificate(crypto.FILETYPE_PEM, pem)
+    return load_pem_x509_certificate(pem)
 
 def main():
     parser = argparse.ArgumentParser(
@@ -83,29 +85,28 @@ def main():
         sys.exit(err or route and
             utils.binFromIp(route.split()[8]).startswith(network))
 
-    create(ca_path, crypto.dump_certificate(crypto.FILETYPE_PEM, ca))
+    create(ca_path, ca.public_bytes(Encoding.PEM))
     if config.ca_only:
         sys.exit()
 
     reserved = 'CN', 'serial'
-    req = crypto.X509Req()
+    subject_attrs = {}
     try:
         with open(cert_path, "rb") as f:
             cert = loadCert(f.read())
-        components = \
-            {k.decode(): v for k, v in cert.get_subject().get_components()}
+        components = {x509._OID_SHORT_MAP.get(a.oid, a.oid._name): a.value
+                      for a in cert.subject}
         for k in reserved:
             components.pop(k, None)
     except FileNotFoundError:
         components = {}
     if config.req:
         components.update(config.req)
-    subj = req.get_subject()
     for k, v in components.items():
         if k in reserved:
             sys.exit(k + " field is reserved.")
         if v:
-            setattr(subj, k, v)
+            subject_attrs[k] = v
 
     cert_fd = token_advice = None
     try:
@@ -123,21 +124,23 @@ def main():
                 token = input('Please enter your token: ')
 
         try:
-            with open(key_path) as f:
-                pkey = crypto.load_privatekey(crypto.FILETYPE_PEM, f.read())
+            with open(key_path, 'rb') as f:
+                pkey_pem = f.read()
+            pkey = load_pem_private_key(pkey_pem, password=None)
             key = None
             print("Reusing existing key.")
         except FileNotFoundError:
-            bits = ca.get_pubkey().bits()
+            bits = ca.public_key().key_size
             print("Generating %s-bit key ..." % bits)
-            pkey = crypto.PKey()
-            pkey.generate_key(crypto.TYPE_RSA, bits)
-            key = crypto.dump_privatekey(crypto.FILETYPE_PEM, pkey)
+            pkey = rsa.generate_private_key(65537, bits)
+            pkey_pem = pkey.private_bytes(
+                Encoding.PEM,
+                PrivateFormat.TraditionalOpenSSL,
+                NoEncryption())
+            key = pkey_pem
             create(key_path, key, 0o600)
 
-        req.set_pubkey(pkey)
-        req.sign(pkey, 'sha512')
-        req = crypto.dump_certificate_request(crypto.FILETYPE_PEM, req).decode()
+        req = x509.create_csr_pem(pkey_pem, subject_attrs)
 
         # First make sure we can open certificate file for writing,
         # to avoid using our token for nothing.
