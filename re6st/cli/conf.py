@@ -88,12 +88,12 @@ def main():
         sys.exit()
 
     reserved = 'CN', 'serial'
-    req = crypto.X509Req()
+    subject_attrs = {}
     try:
         with open(cert_path, "rb") as f:
             cert = loadCert(f.read())
         components = \
-            {k.decode(): v for k, v in cert.get_subject().get_components()}
+            {k.decode(): v.decode() for k, v in cert.get_subject().get_components()}
         for k in reserved:
             components.pop(k, None)
     except IOError as e:
@@ -102,12 +102,11 @@ def main():
         components = {}
     if config.req:
         components.update(config.req)
-    subj = req.get_subject()
     for k, v in components.items():
         if k in reserved:
             sys.exit(k + " field is reserved.")
         if v:
-            setattr(subj, k, v)
+            subject_attrs[k] = v
 
     cert_fd = token_advice = None
     try:
@@ -125,8 +124,9 @@ def main():
                 token = input('Please enter your token: ')
 
         try:
-            with open(key_path) as f:
-                pkey = crypto.load_privatekey(crypto.FILETYPE_PEM, f.read())
+            with open(key_path, 'rb') as f:
+                pkey_pem = f.read()
+            pkey = crypto.load_privatekey(crypto.FILETYPE_PEM, pkey_pem)
             key = None
             print("Reusing existing key.")
         except IOError as e:
@@ -136,12 +136,11 @@ def main():
             print("Generating %s-bit key ..." % bits)
             pkey = crypto.PKey()
             pkey.generate_key(crypto.TYPE_RSA, bits)
-            key = crypto.dump_privatekey(crypto.FILETYPE_PEM, pkey)
+            pkey_pem = crypto.dump_privatekey(crypto.FILETYPE_PEM, pkey)
+            key = pkey_pem
             create(key_path, key, 0o600)
 
-        req.set_pubkey(pkey)
-        req.sign(pkey, 'sha512')
-        req = crypto.dump_certificate_request(crypto.FILETYPE_PEM, req).decode()
+        req = x509.create_csr_pem(pkey_pem, subject_attrs)
 
         # First make sure we can open certificate file for writing,
         # to avoid using our token for nothing.
