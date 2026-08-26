@@ -1,2 +1,3 @@
 from pathlib import Path
-DEMO_PATH = Path(__file__).resolve().parent.parent.parent / "demo"
+TEST_PATH = Path(__file__).resolve().parent
+DEMO_PATH = TEST_PATH.parent.parent / "demo"
