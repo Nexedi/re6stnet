@@ -8,7 +8,8 @@ import unittest
 from shutil import rmtree
 from io import StringIO
 from mock import patch
-from OpenSSL import crypto
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.serialization import Encoding
 
 from re6st.cli import conf
 from re6st.tests.tools import generate_cert, serial2prefix, create_ca_file
@@ -36,9 +37,9 @@ class TestConf(unittest.TestCase):
 
         # mocked server cert and pkey
         cls.pkey, cls.cert = create_ca_file(os.devnull, os.devnull)
-        cls.fingerprint = "".join(cls.cert.digest("sha1").decode().split(":"))
+        cls.fingerprint = cls.cert.fingerprint(hashes.SHA1()).hex().upper()
         # client.getCa should return a string form cert
-        cls.cert = crypto.dump_certificate(crypto.FILETYPE_PEM, cls.cert)
+        cls.cert = cls.cert.public_bytes(Encoding.PEM)
 
         cls.command = "re6st-conf --registry http://localhost/" \
             " --dir %s" % cls.work_dir

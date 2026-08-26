@@ -24,16 +24,19 @@ import mailbox, os, platform, random, select, smtplib, socket, sqlite3
 import string, sys, threading, time, weakref, zlib
 from collections import defaultdict, deque
 from collections.abc import Iterator
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from email.mime.text import MIMEText
 from operator import itemgetter
 from typing import Optional
 
-from OpenSSL import crypto
 from urllib.parse import urlparse, unquote, urlencode
 from . import routing, tunnel, utils, version, x509
+from .x509 import load_pem_x509_certificate
+from cryptography import x509 as cx509
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.serialization import Encoding
 
 HMAC_HEADER = "Re6stHMAC"
 RENEW_PERIOD = 30 * 86400
@@ -138,7 +141,11 @@ class RegistryServer:
         self.network = self.cert.network
         logging.info("Network: %s/%u", utils.ipFromBin(self.network),
                                        len(self.network))
-        self.email = self.cert.ca.get_subject().emailAddress
+        self.email = None
+        for attr in self.cert.ca.subject:
+            if attr.oid == cx509.oid.NameOID.EMAIL_ADDRESS:
+                self.email = attr.value
+                break
 
         self.peers_lock = threading.Lock()
         self.routing = routing.Babel(os.path.join(config.run, 'babeld.sock'),
@@ -253,13 +260,13 @@ class RegistryServer:
     def babel_dump(self):
         self._wait_dump = False
 
-    def iterCert(self) -> Iterator[tuple[crypto.X509, str, str]]:
+    def iterCert(self) -> Iterator[tuple[cx509.Certificate, str, str]]:
         for prefix, email, cert in self.db.execute(
                 "SELECT * FROM cert WHERE cert IS NOT NULL"):
             try:
-                yield (crypto.load_certificate(crypto.FILETYPE_PEM, cert),
+                yield (load_pem_x509_certificate(cert.encode()),
                        prefix, email)
-            except crypto.Error:
+            except x509.LoadError:
                 pass
 
     def onTimeout(self):
@@ -289,8 +296,8 @@ class RegistryServer:
                     logging.info("Delete %s: %s (invalid since %s)",
                         "certificate requested by '%s'" % email
                         if email else "anonymous certificate",
-                        ", ".join("%s=%s" % x for x in
-                                  cert.get_subject().get_components()),
+                        ", ".join("%s=%s" % (a.oid._name, a.value)
+                                  for a in cert.subject),
                         datetime.utcfromtimestamp(x).isoformat())
                     q("UPDATE cert SET email=null, cert=null WHERE prefix=?",
                       (prefix,))
@@ -524,7 +531,7 @@ class RegistryServer:
     def requestCertificate(self, token: Optional[str], req: bytes,
                            location: str='', ip: str=''):
         logging.debug("Requesting certificate with token %s", token)
-        req = crypto.load_certificate_request(crypto.FILETYPE_PEM, req)
+        csr_subject, pubkey = x509.parse_csr(req)
         with self.lock:
             with self.db:
                 if token:
@@ -555,17 +562,20 @@ class RegistryServer:
                     self.prefix = prefix
                     self.setConfig('prefix', prefix)
                     self.updateNetworkConfig()
-                subject = req.get_subject()
-                subject.serialNumber = str(self.getSubjectSerial())
-                return self.createCertificate(prefix, subject, req.get_pubkey())
+                serial = str(self.getSubjectSerial())
+                name_attrs = list(csr_subject) + [
+                    cx509.NameAttribute(cx509.oid.NameOID.SERIAL_NUMBER, serial)]
+                subject = cx509.Name(name_attrs)
+                return self.createCertificate(prefix, subject, pubkey)
 
     def getSubjectSerial(self):
         # Smallest unique number, for IPv4 support.
         serials = []
         for x in self.iterCert():
-            serial = x[0].get_subject().serialNumber
-            if serial:
-                serials.append(int(serial))
+            attrs = x[0].subject.get_attributes_for_oid(
+                cx509.oid.NameOID.SERIAL_NUMBER)
+            if attrs:
+                serials.append(int(attrs[0].value))
         serials.sort()
         for serial, x in enumerate(serials):
             if serial != x:
@@ -573,47 +583,56 @@ class RegistryServer:
         return len(serials)
 
     def createCertificate(self, client_prefix, subject, pubkey, not_after=None):
-        cert = crypto.X509()
-        cert.gmtime_adj_notBefore(0)
+        now = datetime.now(timezone.utc)
+        builder = cx509.CertificateBuilder()
+        builder = builder.issuer_name(self.cert.ca.subject)
+        # Set CN from client_prefix, replacing any existing CN
+        cn_value = "%u/%u" % (int(client_prefix, 2), len(client_prefix))
+        name_attrs = [a for a in subject if a.oid != cx509.oid.NameOID.COMMON_NAME]
+        name_attrs.append(cx509.NameAttribute(cx509.oid.NameOID.COMMON_NAME, cn_value))
+        builder = builder.subject_name(cx509.Name(name_attrs))
+        builder = builder.public_key(pubkey)
+        builder = builder.not_valid_before(now)
         if not_after:
-            cert.set_notAfter(not_after)
+            if isinstance(not_after, bytes):
+                not_after = datetime.strptime(
+                    not_after.decode(), '%Y%m%d%H%M%SZ').replace(
+                        tzinfo=timezone.utc)
+            builder = builder.not_valid_after(not_after)
         else:
-            cert.gmtime_adj_notAfter(self.cert_duration)
-        cert.set_issuer(self.cert.ca.get_subject())
-        subject.CN = "%u/%u" % (int(client_prefix, 2), len(client_prefix))
-        cert.set_subject(subject)
-        cert.set_pubkey(pubkey)
+            builder = builder.not_valid_after(
+                now + timedelta(seconds=self.cert_duration))
         # Certificate serial, for revocation support. Contrary to
         # subject serial, it does not need to be as small as possible.
         serial = 1 + self.getConfig('serial', 0)
         self.setConfig('serial', serial)
-        cert.set_serial_number(serial)
-        cert.sign(self.cert.key, 'sha512')
-        cert = crypto.dump_certificate(crypto.FILETYPE_PEM, cert)
+        builder = builder.serial_number(serial)
+        cert = builder.sign(self.cert.key, hashes.SHA512())
+        cert_pem = cert.public_bytes(Encoding.PEM)
         self.db.execute("UPDATE cert SET cert = ? WHERE prefix = ?",
-                        (cert.decode(), client_prefix))
+                        (cert_pem.decode(), client_prefix))
         self.timeout = 1
-        return cert
+        return cert_pem
 
     @rpc
     def renewCertificate(self, cn: str) -> bytes:
         with self.lock:
             with self.db as db:
                 pem = self.getCert(cn)
-                cert = crypto.load_certificate(crypto.FILETYPE_PEM, pem)
+                cert = load_pem_x509_certificate(pem)
                 if x509.notAfter(cert) - RENEW_PERIOD < time.time():
                     not_after = None
                 elif db.execute("SELECT count(*) FROM crl WHERE serial=?",
-                                (cert.get_serial_number(),)).fetchone()[0]:
-                    not_after = cert.get_notAfter()
+                                (cert.serial_number,)).fetchone()[0]:
+                    not_after = cert.not_valid_after_utc
                 else:
                     return pem
                 return self.createCertificate(cn,
-                    cert.get_subject(), cert.get_pubkey(), not_after)
+                    cert.subject, cert.public_key(), not_after)
 
     @rpc
     def getCa(self) -> bytes:
-        return crypto.dump_certificate(crypto.FILETYPE_PEM, self.cert.ca)
+        return self.cert.ca.public_bytes(Encoding.PEM)
 
     @rpc
     def getDh(self, cn: str) -> bytes:
@@ -700,12 +719,12 @@ class RegistryServer:
                 cert = self.getCert(prefix)
                 q("UPDATE cert SET email=null, cert=null WHERE prefix=?",
                   (prefix,))
-                cert = crypto.load_certificate(crypto.FILETYPE_PEM, cert)
-                serial = cert.get_serial_number()
+                cert = load_pem_x509_certificate(cert)
+                serial = cert.serial_number
                 self.sessions.pop(prefix, None)
             else:
                 cert, = (cert for cert, prefix, email in self.iterCert()
-                              if cert.get_serial_number() == serial)
+                              if cert.serial_number == serial)
             not_after = x509.notAfter(cert)
             if time.time() < not_after:
                 q("INSERT INTO crl VALUES (?,?)", (serial, not_after))
@@ -757,7 +776,7 @@ class RegistryServer:
                                         (email,)))
             except StopIteration:
                 return
-        certificate = crypto.load_certificate(crypto.FILETYPE_PEM, cert)
+        certificate = load_pem_x509_certificate(cert.encode())
         return x509.subnetFromCert(certificate)
 
     @rpc_private
