@@ -4,9 +4,11 @@ import calendar, hashlib, hmac, logging, os, struct, subprocess, time
 from typing import Callable, Optional, Union
 
 from OpenSSL import crypto
+from cryptography import x509 as cx509
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives.serialization import Encoding, NoEncryption, PublicFormat
 try: # BBB: old cryptography
     from cryptography.hazmat.backends.openssl.backend import backend
     load_pem_private_key =  backend.load_pem_private_key
@@ -23,6 +25,47 @@ from .version import protocol
 
 PADDING = padding.PKCS1v15()
 PADDING_HASH = PADDING, hashes.SHA512()
+
+_NAME_OID_MAP = {
+    'C': cx509.oid.NameOID.COUNTRY_NAME,
+    'ST': cx509.oid.NameOID.STATE_OR_PROVINCE_NAME,
+    'L': cx509.oid.NameOID.LOCALITY_NAME,
+    'O': cx509.oid.NameOID.ORGANIZATION_NAME,
+    'OU': cx509.oid.NameOID.ORGANIZATIONAL_UNIT_NAME,
+    'CN': cx509.oid.NameOID.COMMON_NAME,
+    'emailAddress': cx509.oid.NameOID.EMAIL_ADDRESS,
+    'serialNumber': cx509.oid.NameOID.SERIAL_NUMBER,
+}
+_OID_SHORT_MAP = {v: k for k, v in _NAME_OID_MAP.items()}
+
+def create_csr_pem(pkey_pem: bytes, subject_attrs: dict) -> bytes:
+    if isinstance(pkey_pem, str):
+        pkey_pem = pkey_pem.encode()
+    key = load_pem_private_key(pkey_pem, password=None)
+    name_attrs = []
+    for k, v in subject_attrs.items():
+        oid = _NAME_OID_MAP.get(k)
+        if oid is None:
+            raise ValueError("Unknown subject attribute: %s" % k)
+        name_attrs.append(cx509.NameAttribute(oid, v))
+    csr = cx509.CertificateSigningRequestBuilder().subject_name(
+        cx509.Name(name_attrs)
+    ).sign(key, hashes.SHA512())
+    return csr.public_bytes(Encoding.PEM)
+
+def parse_csr(csr_pem):
+    if isinstance(csr_pem, str):
+        csr_pem = csr_pem.encode()
+    csr = cx509.load_pem_x509_csr(csr_pem)
+    subject = crypto.X509Name(crypto.X509().get_subject())
+    for attr in csr.subject:
+        short_name = _OID_SHORT_MAP.get(attr.oid)
+        if short_name:
+            setattr(subject, short_name, attr.value)
+    pubkey_pem = csr.public_key().public_bytes(
+        Encoding.PEM, PublicFormat.SubjectPublicKeyInfo)
+    pubkey = crypto.load_publickey(crypto.FILETYPE_PEM, pubkey_pem)
+    return subject, pubkey
 
 def newHmacSecret() -> bytes:
     return utils.newHmacSecret(int(time.time() * 1000000))

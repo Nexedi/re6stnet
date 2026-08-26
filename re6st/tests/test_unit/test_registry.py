@@ -306,13 +306,12 @@ class TestRegistryServer(unittest.TestCase):
 
     def test_createCertificate(self):
         _, csr = generate_csr()
-        req = crypto.load_certificate_request(crypto.FILETYPE_PEM, csr)
+        subject, pubkey = x509.parse_csr(csr)
         prefix = "00011111101001110"
-        subject = req.get_subject()
         subject.serialNumber = str(self.server.getSubjectSerial())
         self.server.db.execute("INSERT INTO cert VALUES (?,null,null)", (prefix,))
 
-        cert = self.server.createCertificate(prefix, subject, req.get_pubkey())
+        cert = self.server.createCertificate(prefix, subject, pubkey)
 
         cert = crypto.load_certificate(crypto.FILETYPE_PEM, cert)
         self.assertEqual(cert.get_subject().CN, prefix2cn(prefix))
