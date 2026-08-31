@@ -2,13 +2,16 @@ Source: re6stnet
 Maintainer: Julien Muchembled <jm@nexedi.com>
 Section: net
 Priority: optional
-Build-Depends: debhelper-compat (= 13), pybuild-plugin-pyproject, python3, python3-hatchling, python3-docutils
+Build-Depends: debhelper-compat (= 13), pybuild-plugin-pyproject, python3,
+  python3-docutils, python3-hatchling,
+  python3-openssl (>= 19) <!nocheck>,
+  python3-openssl (<< 26) <!nocheck>
 Standards-Version: 4.7.0
 X-Python3-Version: >= 3.7
 
 Package: re6stnet
 Architecture: all
-Depends: ${misc:Depends}, ${python3:Depends}, python3-openssl (>= 19), openvpn (>= 2.4), openpvn (<< 2.5~), babeld (= 1.13.1+nxd1), iproute2, openssl
+Depends: ${misc:Depends}, ${python3:Depends}, python3-openssl (>= 19), python3-openssl (<< 26), openvpn (>= 2.4), openpvn (<< 2.5~), babeld (= 1.13.1+nxd1), iproute2, openssl
 Recommends: ${python3:Recommends}, logrotate
 Suggests: ${python3:Suggests}, ndisc6
 Conflicts: re6st-node

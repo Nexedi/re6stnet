@@ -15,4 +15,7 @@ debian/changelog:
 	echo "$$CHANGELOG" >$@
 endif
 
-override_dh_auto_test:
+override_dh_auto_test: $(foreach x, conf node registry, re6st.cli.$(x))
+
+re6st.cli.%:
+	python3 -m $@ --help >/dev/null

@@ -9,7 +9,7 @@ VERSION = $(shell python3 re6st/version.py)
 # that's why you can't use `dpkg-buildpackage` directly: run `debian/rules`
 # instead.
 build-package: debian/changelog
-	dpkg-buildpackage -us -uc -b
+	dpkg-buildpackage -uc -b
 
 include debian/common.mk
 
