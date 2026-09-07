@@ -6,8 +6,8 @@ from bisect import bisect, insort
 from collections.abc import Iterator, Sequence
 from typing import Callable, Optional, TYPE_CHECKING
 
-from OpenSSL import crypto
 from . import plib, routing, utils, version, x509
+from .x509 import load_der_x509_certificate
 if TYPE_CHECKING:
     from . import cache
 
@@ -432,10 +432,9 @@ class BaseTunnelManager:
                 seqno = msg.startswith(h)
                 msg = msg[len(h):]
             try:
-                cert = self.cert.loadVerify(msg,
-                    True, crypto.FILETYPE_ASN1)
+                cert = self.cert.loadVerify(msg, True)
                 stop_date = x509.notAfter(cert)
-                serial = cert.get_serial_number()
+                serial = cert.serial_number
                 if serial in self.cache.crl:
                     raise ValueError("revoked")
             except (x509.VerifyError, ValueError) as e:
@@ -453,7 +452,6 @@ class BaseTunnelManager:
                 peer = x509.Peer(p)
                 insort(self._peers, peer)
             peer.cert = cert
-            peer.cert_crypto = x509.load_der_x509_certificate(msg)
             peer.serial = serial
             peer.stop_date = stop_date
             self.selectTimeout(stop_date, self.invalidatePeers, False)
@@ -600,7 +598,7 @@ class BaseTunnelManager:
         for i in reversed([i for i, peer in enumerate(self._peers)
                              if peer.serial in crl]):
             del self._peers[i]
-        if self.cert.cert.get_serial_number() in crl:
+        if self.cert.cert.serial_number in crl:
             raise utils.ReexecException("Our certificate has just been revoked."
                 " Let's try to renew it.")
         if (not self.NEED_RESTART.isdisjoint(changed)
