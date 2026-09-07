@@ -1,6 +1,5 @@
 from __future__ import annotations
-import binascii
-import logging, errno, os
+import binascii, logging, os
 from typing import Optional
 from . import utils
 

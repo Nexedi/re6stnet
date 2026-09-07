@@ -1,4 +1,4 @@
-import errno, os, socket, stat, threading
+import os, socket, stat, threading
 
 
 class Socket:
@@ -37,9 +37,7 @@ class Socket:
         try:
             self._socket.recv(0)
             return True
-        except socket.error as e:
-            if e.errno != errno.EAGAIN:
-                raise
+        except BlockingIOError:
             self._socket.setblocking(1)
         return False
 
@@ -52,9 +50,8 @@ class Console:
             socket.SOCK_STREAM | socket.SOCK_CLOEXEC)
         try:
             self._removeSocket()
-        except OSError as e:
-            if e.errno != errno.ENOENT:
-                raise
+        except FileNotFoundError:
+            pass
         s.bind(path)
         s.listen(5)
         def accept():

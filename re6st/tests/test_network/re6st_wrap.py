@@ -1,7 +1,6 @@
 """wrap the deploy of re6st node, ease the creation of cert
 file and run of the node
 """
-import errno
 import ipaddress
 import json
 import logging
@@ -131,9 +130,8 @@ class Re6stRegistry:
         """remove the file created last time"""
         try:
             self.log.unlink()
-        except OSError as e:
-            if e.errno != errno.ENOENT:
-                raise
+        except FileNotFoundError:
+            pass
 
     def terminate(self):
         try:
@@ -258,13 +256,12 @@ class Re6stNode:
 
     def clean(self):
         """remove the file created last time"""
-        for name in ["re6stnet.log", "babeld.state", "cache.db", "babeld.log"]:
+        for name in "re6stnet.log", "babeld.state", "cache.db", "babeld.log":
             f = self.path / name
             try:
                 f.unlink()
-            except OSError as e:
-                if e.errno != errno.ENOENT:
-                    raise
+            except FileNotFoundError:
+                pass
 
     def stop(self):
         """stop running re6stnet process"""

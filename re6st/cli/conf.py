@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import argparse, atexit, binascii, errno, hashlib
+import argparse, atexit, binascii, hashlib
 import os, subprocess, sqlite3, sys, time
 from OpenSSL import crypto
 if 're6st' not in sys.modules:
@@ -96,9 +96,7 @@ def main():
             {k.decode(): v for k, v in cert.get_subject().get_components()}
         for k in reserved:
             components.pop(k, None)
-    except IOError as e:
-        if e.errno != errno.ENOENT:
-            raise
+    except FileNotFoundError:
         components = {}
     if config.req:
         components.update(config.req)
@@ -129,9 +127,7 @@ def main():
                 pkey = crypto.load_privatekey(crypto.FILETYPE_PEM, f.read())
             key = None
             print("Reusing existing key.")
-        except IOError as e:
-            if e.errno != errno.ENOENT:
-                raise
+        except FileNotFoundError:
             bits = ca.get_pubkey().bits()
             print("Generating %s-bit key ..." % bits)
             pkey = crypto.PKey()

@@ -180,13 +180,8 @@ def setCloexec(fd):
     fcntl.fcntl(fd, fcntl.F_SETFD, flags | fcntl.FD_CLOEXEC)
 
 def select(R: Mapping, W: Mapping, T):
-    try:
-        r, w, _ = _select.select(R, W, (),
-            max(0, min(T)[0] - time.time()) if T else None)
-    except _select.error as e:
-        if e.args[0] != errno.EINTR:
-            raise
-        return
+    r, w, _ = _select.select(R, W, (),
+        max(0, min(T)[0] - time.time()) if T else None)
     for r in r:
         R[r]()
     for w in w:
@@ -199,9 +194,8 @@ def select(R: Mapping, W: Mapping, T):
 def makedirs(*args):
     try:
         os.makedirs(*args)
-    except OSError as e:
-        if e.errno != errno.EEXIST:
-            raise
+    except FileExistsError:
+        pass
 
 def binFromIp(ip: str) -> str:
     return binFromRawIp(socket.inet_pton(socket.AF_INET6, ip))
