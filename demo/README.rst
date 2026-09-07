@@ -13,7 +13,7 @@ Troubleshooting
 If the demo crashes and fails to clean up its resources properly,
 run the following commands::
 
-  for b in $(sudo ip l | grep -Po 'NETNS\w\w[\d\-a-f]+'); do sudo ip l del $b; done
+  (cd /sys/class/net && find * -regex 'NETNS\(if\|br\)-[0-9a-f]+' -exec ip l del '{}' ';')
   pkill screen
   killall python
   killall python3
