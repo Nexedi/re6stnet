@@ -40,6 +40,8 @@ RENEW_PERIOD = 30 * 86400
 BABEL_HMAC = 'babel_hmac0', 'babel_hmac1', 'babel_hmac2'
 NETCONF_TEMP = 3600
 
+# The typing of RPC args is always str. The return value is one of:
+#   str, bytes or anything false
 def rpc(f):
     argspec = inspect.getfullargspec(f)
     assert not (argspec.varargs or argspec.varkw), f
@@ -53,7 +55,7 @@ def rpc(f):
 def rpc_private(f):
     f._private = None
     return rpc(f)
-
+###
 
 class HTTPError(Exception):
     pass
@@ -360,7 +362,7 @@ class RegistryServer:
         return session[1]
 
     @rpc
-    def hello(self, client_prefix: str, protocol='1') -> bytes:
+    def hello(self, client_prefix, protocol='1') -> bytes:
         with self.lock:
             cert = self.getCert(client_prefix)
             key = utils.newHmacSecret()
@@ -381,19 +383,19 @@ class RegistryServer:
         raise HTTPError(HTTPStatus.NOT_FOUND)
 
     @rpc_private
-    def isToken(self, token: str):
+    def isToken(self, token):
         with self.lock:
             if self.db.execute("SELECT 1 FROM token WHERE token = ?",
                                (token,)).fetchone():
                 return b"1"
 
     @rpc_private
-    def deleteToken(self, token: str):
+    def deleteToken(self, token):
         with self.lock:
             self.db.execute("DELETE FROM token WHERE token = ?", (token,))
 
     @rpc_private
-    def addToken(self, email: str, token: Optional[str]) -> str:
+    def addToken(self, email, token) -> str:
         prefix_len = self.config.prefix_length
         if not prefix_len:
             raise HTTPError(HTTPStatus.FORBIDDEN)
@@ -521,8 +523,7 @@ class RegistryServer:
             q("UPDATE cert SET cert = 'reserved' WHERE prefix = ?", (prefix,))
 
     @rpc
-    def requestCertificate(self, token: Optional[str], req: bytes,
-                           location: str='', ip: str=''):
+    def requestCertificate(self, token, req, location='', ip=''):
         logging.debug("Requesting certificate with token %s", token)
         req = crypto.load_certificate_request(crypto.FILETYPE_PEM, req)
         with self.lock:
@@ -596,7 +597,7 @@ class RegistryServer:
         return cert
 
     @rpc
-    def renewCertificate(self, cn: str) -> bytes:
+    def renewCertificate(self, cn) -> bytes:
         with self.lock:
             with self.db as db:
                 pem = self.getCert(cn)
@@ -616,12 +617,12 @@ class RegistryServer:
         return crypto.dump_certificate(crypto.FILETYPE_PEM, self.cert.ca)
 
     @rpc
-    def getDh(self, cn: str) -> bytes:
+    def getDh(self, cn) -> bytes:
         with open(self.config.dh, "rb") as f:
             return f.read()
 
     @rpc
-    def getNetworkConfig(self, cn: str) -> bytes:
+    def getNetworkConfig(self, cn) -> bytes:
         with self.lock:
             cert = self.getCert(cn)
             config = self.network_config.copy()
@@ -650,12 +651,12 @@ class RegistryServer:
                      int(peer, 2), len(peer))
 
     @rpc
-    def getCountry(self, cn: str, address: str) -> Optional[str]:
+    def getCountry(self, cn, address) -> Optional[str]:
         country = self._geoiplookup(address)[0]
         return None if country == '*' else country
 
     @rpc
-    def getBootstrapPeer(self, cn: str) -> Optional[bytes]:
+    def getBootstrapPeer(self, cn) -> Optional[bytes]:
         logging.info("Answering bootstrap peer for %s", cn)
         with self.peers_lock:
             age, peers = self.peers
@@ -690,7 +691,7 @@ class RegistryServer:
         return x509.encrypt(x509.load_pem_x509_certificate(cert), msg.encode())
 
     @rpc_private
-    def revoke(self, cn_or_serial: int | str):
+    def revoke(self, cn_or_serial):
         with self.lock, self.db:
             q = self.db.execute
             try:
@@ -749,7 +750,7 @@ class RegistryServer:
         self.sendto(self.prefix, 0)
 
     @rpc_private
-    def getNodePrefix(self, email: str) -> Optional[str]:
+    def getNodePrefix(self, email) -> Optional[str]:
         with self.lock, self.db:
             try:
                 cert, = next(
@@ -761,7 +762,7 @@ class RegistryServer:
         return x509.subnetFromCert(certificate)
 
     @rpc_private
-    def getIPv6Address(self, email: str) -> str:
+    def getIPv6Address(self, email) -> str:
         cn = self.getNodePrefix(email)
         if cn:
             return utils.ipFromBin(
@@ -769,7 +770,7 @@ class RegistryServer:
                 + utils.binFromSubnet(cn))
 
     @rpc_private
-    def getIPv4Information(self, email: str) -> Optional[str]:
+    def getIPv4Information(self, email) -> Optional[str]:
         peer = self.getNodePrefix(email)
         if peer:
             peer = utils.binFromSubnet(peer)
