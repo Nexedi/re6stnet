@@ -6,7 +6,7 @@ After Re6st is stable, this script logs when it does not get response from a
 machine in a csv file stored in the directory of the machine in this format:
 time, sequence number, number of non-responding machines, ip of these machines
 '''
-import argparse, time, sys
+import argparse, socket, time, sys
 from multiping import MultiPing
 
 PING_INTERVAL = 10
@@ -26,7 +26,7 @@ class MultiPing(MultiPing):
                     p = self._sock6.recv(128)
                     pkts.append((bytearray(p), time.time()))
                     self._sock6.settimeout(0)
-            except TimeoutError:
+            except socket.timeout: # BBB: Python 3.10+ can use TimeoutError
                 pass
             except BlockingIOError:
                 pass
