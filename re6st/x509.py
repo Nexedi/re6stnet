@@ -1,25 +1,28 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
-import calendar, hashlib, hmac, logging, os, struct, subprocess, time
+import hashlib, hmac, logging, os, struct, subprocess, time
+from datetime import timezone
 from typing import Callable, Optional, Union
 
-from OpenSSL import crypto
+from cryptography import x509 as cx509
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
-from cryptography.hazmat.primitives.serialization import load_pem_private_key
+from cryptography.hazmat.primitives.serialization import \
+    Encoding, load_pem_private_key
 from cryptography.x509 import \
-    load_der_x509_certificate, load_pem_x509_certificate
+    load_der_x509_certificate, load_pem_x509_certificate, load_pem_x509_csr
+from cryptography.x509.oid import NameOID
 # BBB: old cryptography
 from cryptography.hazmat.backends.openssl.backend import backend
-try:
+try: # ordered by date of removal from backend, descending
     load_pem_private_key =  backend.load_pem_private_key
+    load_pem_x509_csr = backend.load_pem_x509_csr
     load_der_x509_certificate = backend.load_der_x509_certificate
     load_pem_x509_certificate = backend.load_pem_x509_certificate
 except AttributeError:
-    pass
+    backend = None
 ###
-
 from . import utils
 from .version import protocol
 
@@ -29,30 +32,38 @@ PADDING_HASH = PADDING, hashes.SHA512()
 def newHmacSecret() -> bytes:
     return utils.newHmacSecret(int(time.time() * 1000000))
 
-def networkFromCa(ca: crypto.X509) -> str:
-    # TODO: will be ca.serial_number after migration to cryptography
-    return bin(ca.get_serial_number())[3:]
+def networkFromCa(ca) -> str:
+    return bin(ca.serial_number)[3:]
 
-def subnetFromCert(cert: crypto.X509) -> str:
-    return cert.get_subject().CN
+def subnetFromCert(cert) -> str:
+    attr, = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+    return attr.value
 
-def notBefore(cert: crypto.X509) -> int:
-    return calendar.timegm(time.strptime(cert.get_notBefore().decode(),
-                                         '%Y%m%d%H%M%SZ'))
+def notBefore(cert) -> int:
+    try:
+        dt = cert.not_valid_before_utc
+    except AttributeError: # BBB: cryptography < 42
+        dt = cert.not_valid_before.replace(tzinfo=timezone.utc)
+    return int(dt.timestamp())
 
-def notAfter(cert: crypto.X509) -> int:
-    return calendar.timegm(time.strptime(cert.get_notAfter().decode(),
-                                         '%Y%m%d%H%M%SZ'))
+def notAfterDT(cert):
+    try:
+        return cert.not_valid_after_utc
+    except AttributeError: # BBB: cryptography < 42
+        return cert.not_valid_after.replace(tzinfo=timezone.utc)
+
+def notAfter(cert) -> int:
+    return int(notAfterDT(cert).timestamp())
 
 def encrypt(cert, data):
     return cert.public_key().encrypt(data, PADDING)
 
-def fingerprint(cert: crypto.X509, alg='sha1'):
-    return hashlib.new(alg, crypto.dump_certificate(crypto.FILETYPE_ASN1, cert))
+def fingerprint(cert: cx509.Certificate):
+    return cert.fingerprint(hashes.SHA1())
 
-def maybe_renew(path: str, cert: crypto.X509, info: str,
+def maybe_renew(path: str, cert, info: str,
                 renew: Callable[[], bytes],
-                force=False) -> tuple[crypto.X509, int]:
+                force=False) -> tuple:
     from .registry import RENEW_PERIOD
     while True:
         if force:
@@ -63,11 +74,10 @@ def maybe_renew(path: str, cert: crypto.X509, info: str,
                 return cert, next_renew
         try:
             pem = renew()
-            if not pem or pem == crypto.dump_certificate(
-                  crypto.FILETYPE_PEM, cert):
+            if not pem or pem == cert.public_bytes(Encoding.PEM):
                 exc_info = 0
                 break
-            cert = crypto.load_certificate(crypto.FILETYPE_PEM, pem)
+            cert = load_pem_x509_certificate(pem)
         except Exception:
             exc_info = 1
             break
@@ -100,15 +110,10 @@ class Cert:
         self.ca_path = ca
         self.cert_path = cert
         self.key_path = key
-        # TODO: finish migration from old OpenSSL module to cryptography
         with open(ca, "rb") as f:
-            ca_pem = f.read()
-            self.ca = crypto.load_certificate(crypto.FILETYPE_PEM, ca_pem)
-            self.ca_crypto = load_pem_x509_certificate(ca_pem)
+            self.ca = load_pem_x509_certificate(f.read())
         with open(key, "rb") as f:
-            key_pem = f.read()
-            self.key = crypto.load_privatekey(crypto.FILETYPE_PEM, key_pem)
-            self.key_crypto = load_pem_private_key(key_pem, password=None)
+            self.key = load_pem_private_key(f.read(), password=None)
         if cert:
             with open(cert, "rb") as f:
                 self.cert = self.loadVerify(f.read())
@@ -123,7 +128,8 @@ class Cert:
 
     @property
     def subject_serial(self) -> int:
-        return int(self.cert.get_subject().serialNumber)
+        attrs = self.cert.subject.get_attributes_for_oid(NameOID.SERIAL_NUMBER)
+        return int(attrs[0].value) if attrs else 0
 
     @property
     def openvpn_args(self) -> tuple[str, ...]:
@@ -134,18 +140,19 @@ class Cert:
     def maybeRenew(self, registry, crl) -> int:
         self.cert, next_renew = maybe_renew(self.cert_path, self.cert,
               "Certificate", lambda: registry.renewCertificate(self.prefix),
-              self.cert.get_serial_number() in crl)
+              self.cert.serial_number in crl)
         self.ca, ca_renew = maybe_renew(self.ca_path, self.ca,
               "CA Certificate", registry.getCa)
         return min(next_renew, ca_renew)
 
-    def loadVerify(self, cert, strict=False, type=crypto.FILETYPE_PEM):
+    def loadVerify(self, cert, strict=False, is_der=False):
         try:
-            r = crypto.load_certificate(type, cert)
-        except crypto.Error as e:
+            r = (load_der_x509_certificate if is_der else
+                 load_pem_x509_certificate)(cert)
+        except ValueError as e:
             raise VerifyError(None, None, 'unable to load certificate') from e
-        if type != crypto.FILETYPE_PEM:
-            cert = crypto.dump_certificate(crypto.FILETYPE_PEM, r)
+        if is_der:
+            cert = r.public_bytes(Encoding.PEM)
         args = ['openssl', 'verify', '-CAfile', self.ca_path]
         if not strict:
             args += '-attime', str(min(int(time.time()),
@@ -160,8 +167,8 @@ class Cert:
                 "error running openssl, assuming cert is invalid")
           # BBB: With old versions of openssl, detailed
           #      error is printed to standard output.
-          for stream in err, out:
-            for x in stream.decode(errors='replace').splitlines():
+          for err in err, out:
+            for x in err.decode(errors='replace').splitlines():
                 if x.startswith('error '):
                     x, msg = x.split(':', 1)
                     _, code, _, depth, _ = x.split(None, 4)
@@ -169,13 +176,13 @@ class Cert:
         return r
 
     def verify(self, *args):
-        self.ca_crypto.public_key().verify(*args, *PADDING_HASH)
+        self.ca.public_key().verify(*args, *PADDING_HASH)
 
     def sign(self, data: bytes) -> bytes:
-        return self.key_crypto.sign(data, *PADDING_HASH)
+        return self.key.sign(data, *PADDING_HASH)
 
     def decrypt(self, data: bytes) -> bytes:
-        return self.key_crypto.decrypt(data, PADDING)
+        return self.key.decrypt(data, PADDING)
 
     def verifyVersion(self, version):
         try:
@@ -220,7 +227,7 @@ class Peer:
     serial = None
     stop_date = float('inf')
     version = b''
-    cert: crypto.X509
+    cert: cx509.Certificate
 
     def __init__(self, prefix: str):
         self.prefix = prefix
@@ -238,24 +245,24 @@ class Peer:
     def __lt__(self, other):
         return self.prefix < (other if type(other) is str else other.prefix)
 
-    def hello0(self, cert: crypto.X509) -> bytes:
+    def hello0(self, cert: cx509.Certificate) -> bytes:
         if self._hello < time.time():
             try:
                 # Always assume peer is not old, in case it has just upgraded,
                 # else we would be stuck with the old protocol.
                 msg = (b'\0\0\0\1'
                     + PACKED_PROTOCOL
-                    + fingerprint(self.cert).digest())
+                    + fingerprint(self.cert))
             except AttributeError:
                 msg = b'\0\0\0\0'
-            return msg + crypto.dump_certificate(crypto.FILETYPE_ASN1, cert)
+            return msg + cert.public_bytes(Encoding.DER)
 
     def hello0Sent(self):
         self._hello = time.time() + 60
 
     def hello(self, cert: Cert, protocol: int) -> bytes:
         key = self._key = newHmacSecret()
-        h = encrypt(self.cert_crypto, key)
+        h = encrypt(self.cert, key)
         self._i = self._j = 2
         self._last = 0
         self.protocol = protocol
@@ -274,7 +281,7 @@ class Peer:
         self.protocol = protocol
 
     def verify(self, *args):
-        self.cert_crypto.public_key().verify(*args, *PADDING_HASH)
+        self.cert.public_key().verify(*args, *PADDING_HASH)
 
     seqno_struct = struct.Struct("!L")
 
