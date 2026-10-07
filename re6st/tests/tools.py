@@ -1,54 +1,63 @@
 import time
-from OpenSSL import crypto
-
+from datetime import datetime, timedelta, timezone
+from cryptography import x509 as cx509
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.x509.oid import NameOID
 from re6st import registry, x509
-
 
 def generate_csr():
     """generate a certificate request
 
     return:
-        crypto.Pekey and crypto.X509Req  both in pem format
+        pkey and csr both in pem format
     """
-    key = crypto.PKey()
-    key.generate_key(crypto.TYPE_RSA, 2048)
-    req = crypto.X509Req()
-    req.set_pubkey(key)
-    req.get_subject().CN = "test ca"
-    req.sign(key, 'sha256')
-    csr = crypto.dump_certificate_request(crypto.FILETYPE_PEM, req)
-    pkey = crypto.dump_privatekey(crypto.FILETYPE_PEM, key)
-    return pkey, csr
-
+    key = rsa.generate_private_key(65537, 2048, backend=x509.backend)
+    req = cx509.CertificateSigningRequestBuilder().subject_name(
+        cx509.Name([cx509.NameAttribute(NameOID.COMMON_NAME, "test ca")])
+    ).sign(key, hashes.SHA256(), backend=x509.backend)
+    return key.private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.TraditionalOpenSSL,
+        serialization.NoEncryption(),
+    ), req.public_bytes(serialization.Encoding.PEM)
 
 def generate_cert(ca, ca_key, csr, prefix, serial, not_after=None):
     """generate a certificate
 
     return
-        crypto.X509Cert in pem format
+        certificate in pem format (bytes)
     """
     if type(ca) is bytes:
-        ca = crypto.load_certificate(crypto.FILETYPE_PEM, ca)
+        ca = x509.load_pem_x509_certificate(ca)
     if type(ca_key) is bytes:
-        ca_key = crypto.load_privatekey(crypto.FILETYPE_PEM, ca_key)
-    req = crypto.load_certificate_request(crypto.FILETYPE_PEM, csr)
+        ca_key = x509.load_pem_private_key(ca_key, password=None)
+    csr_obj = x509.load_pem_x509_csr(csr)
 
-    cert = crypto.X509()
-    cert.gmtime_adj_notBefore(0)
-    if not_after:
-        cert.set_notAfter(
-            time.strftime("%Y%m%d%H%M%SZ", time.gmtime(not_after)).encode())
-    else:
-        cert.gmtime_adj_notAfter(registry.RegistryServer.cert_duration)
-    subject = req.get_subject()
+    subject = csr_obj.subject
     if prefix:
-        subject.CN = prefix2cn(prefix)
-    cert.set_subject(req.get_subject())
-    cert.set_issuer(ca.get_subject())
-    cert.set_pubkey(req.get_pubkey())
-    cert.set_serial_number(serial)
-    cert.sign(ca_key, 'sha512')
-    return crypto.dump_certificate(crypto.FILETYPE_PEM, cert)
+        x = [x for x in subject if x.oid != NameOID.COMMON_NAME]
+        x.append(cx509.NameAttribute(NameOID.COMMON_NAME, prefix2cn(prefix)))
+        subject = cx509.Name(x)
+
+    now = datetime.now(timezone.utc)
+    if not_after:
+        not_after = datetime.fromtimestamp(not_after, tz=timezone.utc)
+    else:
+        not_after = now + timedelta(
+            seconds=registry.RegistryServer.cert_duration)
+
+    cert = cx509.CertificateBuilder(
+        issuer_name=ca.subject,
+        subject_name=subject,
+        public_key=csr_obj.public_key(),
+        not_valid_before=now,
+        not_valid_after=not_after,
+        serial_number=serial,
+    ).add_extension(
+        cx509.BasicConstraints(ca=False, path_length=None), critical=True
+    ).sign(ca_key, hashes.SHA512(), backend=x509.backend)
+    return cert.public_bytes(serialization.Encoding.PEM)
 
 def create_cert_file(pkey_file, cert_file, ca, ca_key, prefix, serial):
     pkey, csr = generate_csr()
@@ -60,41 +69,42 @@ def create_cert_file(pkey_file, cert_file, ca, ca_key, prefix, serial):
 
     return pkey, cert
 
-
-
 def create_ca_file(pkey_file, cert_file, serial=0x120010db80042):
     """create key and ca file with specify name
-    return key, cert in pem format """
-    key = crypto.PKey()
-    key.generate_key(crypto.TYPE_RSA, 2048)
-    cert = crypto.X509()
-    cert.gmtime_adj_notBefore(0)
-    cert.gmtime_adj_notAfter(registry.RegistryServer.cert_duration)
-    subject= cert.get_subject()
-    subject.C = "FR"
-    subject.ST = "Lille"
-    subject.L = "Lille"
-    subject.O = "nexedi"
-    subject.CN = "TEST-CA"
-    cert.set_issuer(cert.get_subject())
-    cert.set_serial_number(serial)
-    cert.set_pubkey(key)
-    cert.sign(key, "sha512")
+    return key, cert (cryptography objects) """
+    key = rsa.generate_private_key(65537, 2048, backend=x509.backend)
+    now = datetime.now(timezone.utc)
+    subject = cx509.Name([
+        cx509.NameAttribute(NameOID.COUNTRY_NAME, "FR"),
+        cx509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, "Lille"),
+        cx509.NameAttribute(NameOID.LOCALITY_NAME, "Lille"),
+        cx509.NameAttribute(NameOID.ORGANIZATION_NAME, "nexedi"),
+        cx509.NameAttribute(NameOID.COMMON_NAME, "TEST-CA"),
+    ])
+    cert = cx509.CertificateBuilder(
+        issuer_name=subject,
+        subject_name=subject,
+        public_key=key.public_key(),
+        not_valid_before=now,
+        not_valid_after=now + timedelta(
+            seconds=registry.RegistryServer.cert_duration),
+        serial_number=serial,
+    ).add_extension(
+        cx509.BasicConstraints(ca=True, path_length=None), critical=True
+    ).sign(key, hashes.SHA512(), backend=x509.backend)
 
-    with open(pkey_file, 'wb') as pkey_file:
-        pkey_file.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, key))
-    with open(cert_file, 'wb') as cert_file:
-        cert_file.write(crypto.dump_certificate(crypto.FILETYPE_PEM, cert))
+    with open(pkey_file, 'wb') as f:
+        f.write(key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.TraditionalOpenSSL,
+            serialization.NoEncryption()))
+    with open(cert_file, 'wb') as f:
+        f.write(cert.public_bytes(serialization.Encoding.PEM))
 
     return key, cert
-
 
 def prefix2cn(prefix: str) -> str:
     return "%u/%u" % (int(prefix, 2), len(prefix))
 
 def serial2prefix(serial: int) -> str:
     return bin(serial)[2:].rjust(16, '0')
-
-def decrypt(pkey: bytes, incontent: bytes) -> bytes:
-    pkey = x509.load_pem_private_key(pkey, password=None)
-    return pkey.decrypt(incontent, x509.PADDING)

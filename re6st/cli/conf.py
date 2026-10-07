@@ -1,10 +1,24 @@
 #!/usr/bin/env python3
-import argparse, atexit, binascii, hashlib
-import os, subprocess, sqlite3, sys, time
-from OpenSSL import crypto
+import argparse, atexit, hashlib, inspect, os, subprocess, sqlite3, sys, time
+from datetime import timedelta
 if 're6st' not in sys.modules:
     sys.path[0] = os.path.dirname(os.path.dirname(sys.path[0]))
+from cryptography import x509 as cx509
+from cryptography.hazmat.primitives.serialization import \
+    Encoding, PrivateFormat, NoEncryption
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.x509.oid import NameOID, ObjectIdentifier
 from re6st import registry, utils, x509
+
+NAME_OIDS = {
+    v._name: v
+    for k, v in inspect.getmembers(NameOID)
+    if isinstance(v, ObjectIdentifier)
+}
+# BBB: cryptography < 37 does not have _NAME_TO_NAMEOID
+from cryptography.x509.name import _NAMEOID_TO_NAME
+NAME_OIDS.update((v, k) for k, v in _NAMEOID_TO_NAME.items())
 
 def create(path, text=None, mode=0o666):
     fd = os.open(path, os.O_CREAT | os.O_WRONLY | os.O_TRUNC, mode)
@@ -12,9 +26,6 @@ def create(path, text=None, mode=0o666):
         os.write(fd, text)
     finally:
         os.close(fd)
-
-def loadCert(pem: bytes):
-    return crypto.load_certificate(crypto.FILETYPE_PEM, pem)
 
 def main():
     parser = argparse.ArgumentParser(
@@ -61,16 +72,17 @@ def main():
     s = registry.RegistryClient(config.registry)
 
     # Get CA
-    ca = loadCert(s.getCa())
+    ca = x509.load_pem_x509_certificate(s.getCa())
     if config.fingerprint:
         try:
             alg, fingerprint = config.fingerprint.split(':', 1)
-            fingerprint = binascii.a2b_hex(fingerprint)
+            fingerprint = bytes.fromhex(fingerprint)
             if hashlib.new(alg).digest_size != len(fingerprint):
                 raise ValueError("wrong size")
         except Exception as e:
             parser.error("invalid fingerprint: %s" % e)
-        if x509.fingerprint(ca, alg).digest() != fingerprint:
+        if fingerprint != hashlib.new(
+                alg, ca.public_bytes(Encoding.DER)).digest():
             sys.exit("CA fingerprint doesn't match")
     else:
         print("WARNING: it is strongly recommended to use --fingerprint option.")
@@ -83,29 +95,28 @@ def main():
         sys.exit(err or route and
             utils.binFromIp(route.split()[8]).startswith(network))
 
-    create(ca_path, crypto.dump_certificate(crypto.FILETYPE_PEM, ca))
+    create(ca_path, ca.public_bytes(Encoding.PEM))
     if config.ca_only:
         sys.exit()
 
-    reserved = 'CN', 'serial'
-    req = crypto.X509Req()
+    reserved = 'commonName', 'serialNumber'
     try:
         with open(cert_path, "rb") as f:
-            cert = loadCert(f.read())
-        components = \
-            {k.decode(): v for k, v in cert.get_subject().get_components()}
+            cert = x509.load_pem_x509_certificate(f.read())
+        attrs = {x.oid._name: x for x in cert.subject}
         for k in reserved:
-            components.pop(k, None)
+            attrs.pop(k, None)
     except FileNotFoundError:
-        components = {}
-    if config.req:
-        components.update(config.req)
-    subj = req.get_subject()
-    for k, v in components.items():
+        attrs = {}
+    for k, v in config.req or ():
+        try:
+            x = NAME_OIDS[k]
+        except KeyError:
+            raise ValueError("Unknown subject attribute: " + k)
+        k = x._name
         if k in reserved:
             sys.exit(k + " field is reserved.")
-        if v:
-            setattr(subj, k, v)
+        attrs[k] = cx509.NameAttribute(x, v)
 
     cert_fd = token_advice = None
     try:
@@ -123,21 +134,23 @@ def main():
                 token = input('Please enter your token: ')
 
         try:
-            with open(key_path) as f:
-                pkey = crypto.load_privatekey(crypto.FILETYPE_PEM, f.read())
-            key = None
+            with open(key_path, 'rb') as f:
+                pkey = x509.load_pem_private_key(f.read(), password=None)
             print("Reusing existing key.")
         except FileNotFoundError:
-            bits = ca.get_pubkey().bits()
+            bits = ca.public_key().key_size
             print("Generating %s-bit key ..." % bits)
-            pkey = crypto.PKey()
-            pkey.generate_key(crypto.TYPE_RSA, bits)
-            key = crypto.dump_privatekey(crypto.FILETYPE_PEM, pkey)
+            pkey = rsa.generate_private_key(65537, bits, backend=x509.backend)
+            key = pkey.private_bytes(
+                Encoding.PEM,
+                PrivateFormat.TraditionalOpenSSL,
+                NoEncryption())
             create(key_path, key, 0o600)
 
-        req.set_pubkey(pkey)
-        req.sign(pkey, 'sha512')
-        req = crypto.dump_certificate_request(crypto.FILETYPE_PEM, req).decode()
+        csr = cx509.CertificateSigningRequestBuilder(
+            subject_name=cx509.Name(attrs.values()),
+        ).sign(pkey, hashes.SHA512(), backend=x509.backend)
+        req = csr.public_bytes(Encoding.PEM)
 
         # First make sure we can open certificate file for writing,
         # to avoid using our token for nothing.
@@ -160,14 +173,14 @@ def main():
     os.ftruncate(cert_fd, len(cert))
     os.close(cert_fd)
 
-    cert = loadCert(cert)
-    not_after = x509.notAfter(cert)
+    cert = x509.load_pem_x509_certificate(cert)
+    not_after = x509.notAfterDT(cert)
     print("Setup complete. Certificate is valid until %s UTC"
           " and will be automatically renewed after %s UTC.\n"
           "Do not forget to backup to your private key (%s) or"
           " you will lose your assigned subnet." % (
-        time.asctime(time.gmtime(not_after)),
-        time.asctime(time.gmtime(not_after - registry.RENEW_PERIOD)),
+        not_after.ctime(),
+        (not_after - timedelta(seconds=registry.RENEW_PERIOD)).ctime(),
         key_path))
 
     if not os.path.lexists(conf_path):
