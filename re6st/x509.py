@@ -10,12 +10,15 @@ from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
 from cryptography.x509 import \
     load_der_x509_certificate, load_pem_x509_certificate
-# BBB: old cryptography
+# BBB: for cryptography < 3.1, which required a 'backend' parameter
 from cryptography.hazmat.backends.openssl.backend import backend
 try:
-    load_pem_private_key =  backend.load_pem_private_key
+    # removed in version 35
     load_der_x509_certificate = backend.load_der_x509_certificate
     load_pem_x509_certificate = backend.load_pem_x509_certificate
+    # backend required an extra parameter in version 39,
+    # method removed in version 42
+    load_pem_private_key = backend.load_pem_private_key
 except AttributeError:
     pass
 ###
