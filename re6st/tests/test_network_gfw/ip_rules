@@ -1,0 +1,50 @@
+#!/usr/sbin/nft -f
+
+table inet filter {
+    set blocked_ip {
+        type ipv4_addr;
+        elements = {
+            10.0.10.5
+        };
+    }
+
+    set tcp_connection {
+        type ipv4_addr;
+        flags dynamic;
+        size 65536;
+        timeout 10m;
+    }
+    set bad_service {
+        type ipv4_addr;
+        flags dynamic;
+        size 65536;
+        timeout 5m;
+        elements = {
+            10.0.11.3
+        };
+    }
+
+    chain input {
+        type filter hook input priority filter;
+    }
+
+    chain forward_ipv4 {
+        # gfw mainly prevent china people from connecting outside
+        ip daddr @blocked_ip drop
+        # 50 percent to drop packet
+        ip daddr @bad_service numgen random mod 10 < 5 drop
+
+        ct state new ip protocol tcp \
+                update @tcp_connection {ip saddr} \
+                update @tcp_connection {ip daddr}
+        ip daddr @tcp_connection queue num 1
+    }
+    chain forward_ipv6 {
+    }
+
+	chain forward {
+        # base chain
+        type filter hook forward priority 0;
+        meta protocol vmap {ip: jump forward_ipv4, ip6: jump forward_ipv6 }
+    }
+}
